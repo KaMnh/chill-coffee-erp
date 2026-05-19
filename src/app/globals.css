@@ -1,1 +1,82 @@
 @import "tailwindcss";
+
+@theme {
+  /* ===== Fonts ===== */
+  --font-sans: var(--font-sans, system-ui), sans-serif;
+  --font-display: var(--font-display, var(--font-sans)), sans-serif;
+
+  /* ===== Radius ===== */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  /* ===== Shadows (tông nâu ấm, opacity thấp) ===== */
+  --shadow-hover: 0 1px 2px rgba(58, 30, 15, 0.05);
+  --shadow-raised: 0 4px 12px rgba(58, 30, 15, 0.06);
+  --shadow-modal: 0 24px 48px -12px rgba(58, 30, 15, 0.12);
+  --shadow-popover: 0 8px 32px rgba(58, 30, 15, 0.10);
+  --shadow-bento: 0 30px 60px -15px rgba(58, 30, 15, 0.10);
+
+  /* ===== Colors — light theme ===== */
+  --color-bg-app-from: #FAF7F2;
+  --color-bg-app-to: #F4ECE0;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F7F4EF;
+  --color-ink: #1A1410;
+  --color-ink-2: #5A4A3F;
+  --color-muted: #9C8B7E;
+  --color-border: #EDE6DC;
+  --color-border-strong: #2A1E16;
+
+  /* Pastel KPI palette */
+  --color-peach: #FFD9B8;
+  --color-peach-ink: #8B4513;
+  --color-blue: #C7D9F5;
+  --color-blue-ink: #1E3A8A;
+  --color-mint: #C5E8D5;
+  --color-mint-ink: #155E3B;
+  --color-lilac: #E1D1F0;
+  --color-lilac-ink: #5B21B6;
+
+  /* Semantic */
+  --color-success: #15803D;
+  --color-success-soft: #D1FAE5;
+  --color-warning: #B45309;
+  --color-warning-soft: #FEF3C7;
+  --color-danger: #B91C1C;
+  --color-danger-soft: #FEE2E2;
+}
+
+/* Background gradient cho toàn app — apply trên body */
+body {
+  background: linear-gradient(135deg, var(--color-bg-app-from) 0%, var(--color-bg-app-to) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Shimmer animation cho Skeleton + ProgressBar indeterminate */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* Toast slide-in animation */
+@keyframes toast-slide-in {
+  from { transform: translateX(calc(100% + 1rem)); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast-enter {
+  animation: toast-slide-in 200ms ease-out;
+}

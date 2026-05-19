@@ -510,7 +510,7 @@ git commit -m "chore: vendor self-hosted Supabase Docker stack"
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -528,10 +528,15 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+# HOSTNAME=0.0.0.0 — Next.js standalone server bind address. Docker auto-sets HOSTNAME
+# to the container ID; without this override the server binds the container IP only and
+# the in-container healthcheck (wget localhost:3000) fails forever.
+ENV HOSTNAME=0.0.0.0
 # postgresql-client cung cấp pg_dump cho /api/backup/full.
-RUN apk add --no-cache postgresql-client
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
-COPY --from=builder /app/public ./public
+RUN apk add --no-cache postgresql-client \
+    && addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
@@ -540,6 +545,21 @@ CMD ["node", "server.js"]
 ```
 
 > Build sẽ cần thư mục `public/` tồn tại. Nếu chưa có, tạo `public/.gitkeep` rỗng.
+
+- [ ] **Step 1b: Tạo `.dockerignore`** — `COPY . .` trong Dockerfile sẽ nuốt cả `supabase/` (bundle + volume data) lẫn `node_modules` nếu không loại trừ:
+
+```
+node_modules
+.next
+.git
+.env
+.env.*
+supabase
+database
+scripts
+docs
+*.md
+```
 
 - [ ] **Step 2: Tạo `docker-compose.yml`** (root — gộp Supabase + service `app`)
 
@@ -569,10 +589,12 @@ services:
     ports:
       - "${APP_PORT:-3009}:3000"
     depends_on:
-      - kong
-      - db
+      kong:
+        condition: service_healthy
+      db:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -781,15 +803,19 @@ if (accErr) throw new Error(`Tạo employee_account lỗi: ${accErr.message}`);
 console.log("✓ employee_account: owner/active");
 
 // 4) profiles
-await admin.from("profiles").upsert(
+const { error: profErr } = await admin.from("profiles").upsert(
   { id: authUserId, display_name: "Owner" },
   { onConflict: "id" }
 );
+if (profErr) throw new Error(`Tạo profile lỗi: ${profErr.message}`);
 
-// 5) integration_clients — dùng crypt() nên insert qua psql
+// 5) integration_clients — dùng crypt() nên insert qua psql.
+// Escape ' -> '' phòng trường hợp secret được set thủ công có ký tự đặc biệt.
+const safeId = INGEST_CLIENT_ID.replace(/'/g, "''");
+const safeSecret = INGEST_CLIENT_SECRET.replace(/'/g, "''");
 const sql =
   `insert into public.integration_clients (client_id, client_secret_hash, name, is_active) ` +
-  `values ('${INGEST_CLIENT_ID}', crypt('${INGEST_CLIENT_SECRET}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
+  `values ('${safeId}', crypt('${safeSecret}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
   `on conflict (client_id) do nothing;`;
 execFileSync(
   "docker",
@@ -849,11 +875,15 @@ const supabase = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const email = process.env.OWNER_EMAIL;
+const password = process.env.OWNER_PASSWORD;
+if (!email || !password) throw new Error("Thiếu OWNER_EMAIL hoặc OWNER_PASSWORD.");
+
 const { data: auth, error: authErr } = await supabase.auth.signInWithPassword({
-  email: process.env.OWNER_EMAIL,
-  password: process.env.OWNER_PASSWORD,
+  email,
+  password,
 });
-if (authErr || !auth.user) throw new Error(`Đăng nhập owner lỗi: ${authErr?.message}`);
+if (authErr || !auth.user) throw new Error(`Đăng nhập owner lỗi: ${authErr?.message ?? "user null (chưa confirm email?)"}`);
 console.log("✓ Owner đăng nhập OK:", auth.user.email);
 
 const { data, error } = await supabase

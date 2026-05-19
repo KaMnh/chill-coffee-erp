@@ -17,11 +17,15 @@ const supabase = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const email = process.env.OWNER_EMAIL;
+const password = process.env.OWNER_PASSWORD;
+if (!email || !password) throw new Error("Thiếu OWNER_EMAIL hoặc OWNER_PASSWORD.");
+
 const { data: auth, error: authErr } = await supabase.auth.signInWithPassword({
-  email: process.env.OWNER_EMAIL,
-  password: process.env.OWNER_PASSWORD,
+  email,
+  password,
 });
-if (authErr || !auth.user) throw new Error(`Đăng nhập owner lỗi: ${authErr?.message}`);
+if (authErr || !auth.user) throw new Error(`Đăng nhập owner lỗi: ${authErr?.message ?? "user null (chưa confirm email?)"}`);
 console.log("✓ Owner đăng nhập OK:", auth.user.email);
 
 const { data, error } = await supabase

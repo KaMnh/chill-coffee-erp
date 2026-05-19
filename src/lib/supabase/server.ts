@@ -6,12 +6,13 @@
  *
  * Env vars:
  *   NEXT_PUBLIC_SUPABASE_URL — public (set in client + server)
+ *   SUPABASE_INTERNAL_URL — optional; server-side URL override (e.g. http://kong:8000 inside Docker)
  *   SUPABASE_SERVICE_ROLE_KEY — server-only, NEVER expose to browser
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export function getServiceRoleClient(): SupabaseClient {
-  const url = process.env.SUPABASE_INTERNAL_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
     throw new Error(
@@ -29,7 +30,7 @@ export function getServiceRoleClient(): SupabaseClient {
  * RLS policies will apply as if the user is making the request directly.
  */
 export function getUserClient(authHeader: string | null): SupabaseClient {
-  const url = process.env.SUPABASE_INTERNAL_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {
     throw new Error("Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc NEXT_PUBLIC_SUPABASE_ANON_KEY env.");

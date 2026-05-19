@@ -320,8 +320,10 @@ Tìm (xuất hiện 2 lần):
 ```
 Thay bằng:
 ```ts
-  const url = process.env.SUPABASE_INTERNAL_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 ```
+
+Dùng `||` (KHÔNG `??`): khi dev `npm run dev`, `.env` có dòng `SUPABASE_INTERNAL_URL=` → giá trị là chuỗi rỗng `""`, không phải `undefined`; `??` sẽ giữ `""` và làm server client lỗi. `||` fallback đúng cho cả rỗng lẫn unset. Đồng thời cập nhật JSDoc đầu file `server.ts` để liệt kê thêm biến `SUPABASE_INTERNAL_URL`.
 
 > Lý do (deviation duy nhất khỏi "port nguyên"): browser luôn dùng `NEXT_PUBLIC_SUPABASE_URL` (URL công khai); nhưng app chạy trong container Docker phải gọi Supabase qua `http://kong:8000` trên network nội bộ. `SUPABASE_INTERNAL_URL` rỗng khi dev bằng `npm run dev` → fallback về URL công khai, không ảnh hưởng. `src/lib/supabase/client.ts` (browser) **không** đổi.
 
@@ -441,6 +443,13 @@ Copy-Item -Force "supabase\.env.example" "supabase\.env"
 Remove-Item -Recurse -Force ".tmp-supabase"
 ```
 Expected: `supabase\` có `docker-compose.yml`, `.env.example`, `.env`, `volumes/`, `utils/`.
+
+- [ ] **Step 1b: Bổ sung `.gitignore`** — thêm 2 dòng (thư mục log/pooler runtime của stack Supabase tạo lúc chạy):
+
+```
+supabase/volumes/logs/
+supabase/volumes/pooler/
+```
 
 - [ ] **Step 2: Pin image tags**
 

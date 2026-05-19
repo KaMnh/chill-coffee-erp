@@ -1,0 +1,220 @@
+﻿-- =============================================================================
+-- Chill Manager v2 — Row Level Security policies
+-- Apply order: 001 → 002 → 003 → 004
+-- Fully idempotent — drop + create pattern.
+--
+-- Quy tắc tổng quan:
+--   - app_role()       — JWT của user (owner/manager/staff_operator/employee_viewer)
+--   - app_is_owner_manager()    — admin role
+--   - app_is_staff_or_above()   — staff trở lên (loại trừ employee_viewer)
+--   - Sales* + Cash* + Audit*   — write qua security definer RPC, KHÔNG trực tiếp
+-- =============================================================================
+
+alter table public.profiles enable row level security;
+alter table public.employees enable row level security;
+alter table public.employee_accounts enable row level security;
+alter table public.signup_requests enable row level security;
+alter table public.expense_categories enable row level security;
+alter table public.expense_templates enable row level security;
+alter table public.expenses enable row level security;
+alter table public.expense_history_permissions enable row level security;
+alter table public.shift_assignments enable row level security;
+alter table public.shift_payroll_records enable row level security;
+alter table public.sales_sync_runs enable row level security;
+alter table public.sales_orders enable row level security;
+alter table public.sales_order_items enable row level security;
+alter table public.sales_payments enable row level security;
+alter table public.cash_day_openings enable row level security;
+alter table public.cash_counts enable row level security;
+alter table public.cash_drawer_events enable row level security;
+alter table public.cash_close_reports enable row level security;
+alter table public.app_settings enable row level security;
+alter table public.integration_clients enable row level security;
+alter table public.pos_sync_attempts enable row level security;
+alter table public.audit_log enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema public to anon;
+grant execute on all functions in schema public to anon, authenticated;
+
+-- profiles
+drop policy if exists profiles_self_select on public.profiles;
+create policy profiles_self_select on public.profiles for select to authenticated using (id = auth.uid() or public.app_is_owner_manager());
+drop policy if exists profiles_self_update on public.profiles;
+create policy profiles_self_update on public.profiles for update to authenticated using (id = auth.uid() or public.app_is_owner_manager()) with check (id = auth.uid() or public.app_is_owner_manager());
+drop policy if exists profiles_self_insert on public.profiles;
+create policy profiles_self_insert on public.profiles for insert to authenticated with check (id = auth.uid() or public.app_is_owner_manager());
+
+-- employee accounts and employees
+drop policy if exists employee_accounts_select on public.employee_accounts;
+create policy employee_accounts_select on public.employee_accounts for select to authenticated using (auth_user_id = auth.uid() or public.app_is_owner_manager());
+drop policy if exists employee_accounts_admin_write on public.employee_accounts;
+create policy employee_accounts_admin_write on public.employee_accounts for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+drop policy if exists employees_staff_read on public.employees;
+create policy employees_staff_read on public.employees for select to authenticated using (public.app_is_staff_or_above() or public.app_role() = 'employee_viewer');
+drop policy if exists employees_admin_write on public.employees;
+create policy employees_admin_write on public.employees for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- signup requests
+drop policy if exists signup_insert_self on public.signup_requests;
+create policy signup_insert_self on public.signup_requests for insert to authenticated with check (auth_user_id = auth.uid());
+drop policy if exists signup_select_self_admin on public.signup_requests;
+create policy signup_select_self_admin on public.signup_requests for select to authenticated using (auth_user_id = auth.uid() or public.app_is_owner_manager());
+drop policy if exists signup_admin_update on public.signup_requests;
+create policy signup_admin_update on public.signup_requests for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- expense categories/templates
+drop policy if exists expense_categories_read on public.expense_categories;
+create policy expense_categories_read on public.expense_categories for select to authenticated using (is_active or public.app_is_owner_manager());
+drop policy if exists expense_categories_admin_write on public.expense_categories;
+create policy expense_categories_admin_write on public.expense_categories for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+drop policy if exists expense_templates_read on public.expense_templates;
+create policy expense_templates_read on public.expense_templates for select to authenticated using (is_active or public.app_is_owner_manager());
+drop policy if exists expense_templates_admin_write on public.expense_templates;
+create policy expense_templates_admin_write on public.expense_templates for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- expenses
+drop policy if exists expenses_staff_read on public.expenses;
+create policy expenses_staff_read on public.expenses for select to authenticated using (
+  public.app_is_staff_or_above()
+  or (
+    public.app_role() = 'employee_viewer'
+    and exists (
+      select 1 from public.employee_accounts ea
+      join public.expense_history_permissions p on p.employee_id = ea.employee_id
+      where ea.auth_user_id = auth.uid()
+        and expenses.business_date between p.date_from and p.date_to
+    )
+  )
+);
+drop policy if exists expenses_staff_insert on public.expenses;
+create policy expenses_staff_insert on public.expenses for insert to authenticated with check (public.app_is_staff_or_above());
+drop policy if exists expenses_manager_update on public.expenses;
+create policy expenses_manager_update on public.expenses for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+drop policy if exists expenses_manager_delete on public.expenses;
+create policy expenses_manager_delete on public.expenses for delete to authenticated using (public.app_is_owner_manager());
+
+drop policy if exists expense_permissions_admin on public.expense_history_permissions;
+create policy expense_permissions_admin on public.expense_history_permissions for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- shifts and payroll
+drop policy if exists shifts_staff_read on public.shift_assignments;
+create policy shifts_staff_read on public.shift_assignments for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists shifts_staff_write on public.shift_assignments;
+create policy shifts_staff_write on public.shift_assignments for insert to authenticated with check (public.app_is_staff_or_above());
+drop policy if exists shifts_staff_update on public.shift_assignments;
+create policy shifts_staff_update on public.shift_assignments for update to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());
+
+drop policy if exists payroll_staff_read on public.shift_payroll_records;
+create policy payroll_staff_read on public.shift_payroll_records for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists payroll_staff_write on public.shift_payroll_records;
+create policy payroll_staff_write on public.shift_payroll_records for insert to authenticated with check (public.app_is_staff_or_above());
+drop policy if exists payroll_staff_update on public.shift_payroll_records;
+create policy payroll_staff_update on public.shift_payroll_records for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- sales read-only for app users, writes only through security definer RPC
+drop policy if exists sales_sync_staff_read on public.sales_sync_runs;
+create policy sales_sync_staff_read on public.sales_sync_runs for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists sales_orders_staff_read on public.sales_orders;
+create policy sales_orders_staff_read on public.sales_orders for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists sales_items_staff_read on public.sales_order_items;
+create policy sales_items_staff_read on public.sales_order_items for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists sales_payments_staff_read on public.sales_payments;
+create policy sales_payments_staff_read on public.sales_payments for select to authenticated using (public.app_is_staff_or_above());
+
+-- cash operations
+drop policy if exists cash_openings_staff on public.cash_day_openings;
+drop policy if exists cash_openings_staff_read on public.cash_day_openings;
+create policy cash_openings_staff_read on public.cash_day_openings for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists cash_openings_owner_manager_insert on public.cash_day_openings;
+create policy cash_openings_owner_manager_insert on public.cash_day_openings for insert to authenticated with check (public.app_role() in ('owner','manager'));
+drop policy if exists cash_openings_owner_update on public.cash_day_openings;
+create policy cash_openings_owner_update on public.cash_day_openings for update to authenticated using (public.app_role() = 'owner') with check (public.app_role() = 'owner');
+drop policy if exists cash_counts_staff on public.cash_counts;
+create policy cash_counts_staff on public.cash_counts for all to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());
+drop policy if exists cash_events_staff_read on public.cash_drawer_events;
+create policy cash_events_staff_read on public.cash_drawer_events for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists cash_events_staff_insert on public.cash_drawer_events;
+create policy cash_events_staff_insert on public.cash_drawer_events for insert to authenticated with check (public.app_is_staff_or_above());
+
+drop policy if exists cash_reports_staff_read on public.cash_close_reports;
+create policy cash_reports_staff_read on public.cash_close_reports for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists cash_reports_admin_update on public.cash_close_reports;
+create policy cash_reports_admin_update on public.cash_close_reports for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+-- settings and integrations
+drop policy if exists app_settings_read on public.app_settings;
+create policy app_settings_read on public.app_settings for select to authenticated using (is_public or public.app_is_owner_manager());
+drop policy if exists app_settings_admin_write on public.app_settings;
+create policy app_settings_admin_write on public.app_settings for all to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+
+drop policy if exists integration_clients_no_direct_read on public.integration_clients;
+create policy integration_clients_no_direct_read on public.integration_clients for select to authenticated using (false);
+drop policy if exists integration_clients_admin_insert on public.integration_clients;
+create policy integration_clients_admin_insert on public.integration_clients for insert to authenticated with check (public.app_is_owner_manager());
+drop policy if exists integration_clients_admin_update on public.integration_clients;
+create policy integration_clients_admin_update on public.integration_clients for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
+drop policy if exists integration_clients_admin_delete on public.integration_clients;
+create policy integration_clients_admin_delete on public.integration_clients for delete to authenticated using (public.app_is_owner_manager());
+
+drop policy if exists pos_sync_attempts_admin_read on public.pos_sync_attempts;
+create policy pos_sync_attempts_admin_read on public.pos_sync_attempts for select to authenticated using (public.app_is_owner_manager());
+drop policy if exists pos_sync_attempts_self_insert on public.pos_sync_attempts;
+create policy pos_sync_attempts_self_insert on public.pos_sync_attempts for insert to authenticated with check (auth.uid() = user_id);
+
+drop policy if exists audit_log_admin_read on public.audit_log;
+create policy audit_log_admin_read on public.audit_log for select to authenticated using (public.app_is_owner_manager());
+drop policy if exists audit_log_no_direct_write on public.audit_log;
+create policy audit_log_no_direct_write on public.audit_log for insert to authenticated with check (false);
+
+-- Sổ quỹ — owner only đọc trực tiếp. Manager + staff đọc được balance qua
+-- safe_balance_now() RPC (function security definer bypass RLS). Trực tiếp
+-- table → owner only. Insert/update đi qua security definer RPCs → không
+-- cần policy write.
+alter table public.safe_transactions enable row level security;
+alter table public.safe_counts enable row level security;
+
+drop policy if exists safe_transactions_owner_read on public.safe_transactions;
+create policy safe_transactions_owner_read on public.safe_transactions
+  for select to authenticated using (public.app_role() = 'owner');
+drop policy if exists safe_transactions_no_direct_write on public.safe_transactions;
+create policy safe_transactions_no_direct_write on public.safe_transactions
+  for insert to authenticated with check (false);
+
+drop policy if exists safe_counts_owner_read on public.safe_counts;
+create policy safe_counts_owner_read on public.safe_counts
+  for select to authenticated using (public.app_role() = 'owner');
+drop policy if exists safe_counts_no_direct_write on public.safe_counts;
+create policy safe_counts_no_direct_write on public.safe_counts
+  for insert to authenticated with check (false);
+
+-- safe_attachments → owner only. Insert/delete đi qua RPC security definer.
+alter table public.safe_attachments enable row level security;
+
+drop policy if exists safe_attachments_owner_read on public.safe_attachments;
+create policy safe_attachments_owner_read on public.safe_attachments
+  for select to authenticated using (public.app_role() = 'owner');
+drop policy if exists safe_attachments_no_direct_write on public.safe_attachments;
+create policy safe_attachments_no_direct_write on public.safe_attachments
+  for insert to authenticated with check (false);
+
+
+alter table public.handover_sessions enable row level security;
+alter table public.handover_tasks enable row level security;
+
+drop policy if exists handover_sessions_staff_read on public.handover_sessions;
+create policy handover_sessions_staff_read on public.handover_sessions for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists handover_sessions_staff_insert on public.handover_sessions;
+create policy handover_sessions_staff_insert on public.handover_sessions for insert to authenticated with check (public.app_is_staff_or_above());
+drop policy if exists handover_sessions_staff_update on public.handover_sessions;
+create policy handover_sessions_staff_update on public.handover_sessions for update to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());
+
+drop policy if exists handover_tasks_staff_read on public.handover_tasks;
+create policy handover_tasks_staff_read on public.handover_tasks for select to authenticated using (public.app_is_staff_or_above());
+drop policy if exists handover_tasks_staff_insert on public.handover_tasks;
+create policy handover_tasks_staff_insert on public.handover_tasks for insert to authenticated with check (public.app_is_staff_or_above());
+drop policy if exists handover_tasks_staff_update on public.handover_tasks;
+create policy handover_tasks_staff_update on public.handover_tasks for update to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());

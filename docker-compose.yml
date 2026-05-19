@@ -1,0 +1,37 @@
+name: chill-coffee-erp
+
+# Gộp nguyên stack Supabase self-hosted. Yêu cầu Docker Compose >= 2.23.
+include:
+  - path: supabase/docker-compose.yml
+    env_file: supabase/.env
+
+services:
+  app:
+    container_name: chill-app
+    restart: unless-stopped
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3009}
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      SUPABASE_INTERNAL_URL: http://kong:8000
+    ports:
+      - "${APP_PORT:-3009}:3000"
+    depends_on:
+      - kong
+      - db
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

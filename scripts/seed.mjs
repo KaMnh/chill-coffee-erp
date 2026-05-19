@@ -59,15 +59,19 @@ if (accErr) throw new Error(`Tạo employee_account lỗi: ${accErr.message}`);
 console.log("✓ employee_account: owner/active");
 
 // 4) profiles
-await admin.from("profiles").upsert(
+const { error: profErr } = await admin.from("profiles").upsert(
   { id: authUserId, display_name: "Owner" },
   { onConflict: "id" }
 );
+if (profErr) throw new Error(`Tạo profile lỗi: ${profErr.message}`);
 
-// 5) integration_clients — dùng crypt() nên insert qua psql
+// 5) integration_clients — dùng crypt() nên insert qua psql.
+// Escape ' -> '' phòng trường hợp secret được set thủ công có ký tự đặc biệt.
+const safeId = INGEST_CLIENT_ID.replace(/'/g, "''");
+const safeSecret = INGEST_CLIENT_SECRET.replace(/'/g, "''");
 const sql =
   `insert into public.integration_clients (client_id, client_secret_hash, name, is_active) ` +
-  `values ('${INGEST_CLIENT_ID}', crypt('${INGEST_CLIENT_SECRET}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
+  `values ('${safeId}', crypt('${safeSecret}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
   `on conflict (client_id) do nothing;`;
 execFileSync(
   "docker",

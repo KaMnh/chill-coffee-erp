@@ -13,5 +13,7 @@ supabase/.env
 # Supabase runtime data (tạo lúc chạy)
 supabase/volumes/db/data/
 supabase/volumes/storage/
+supabase/volumes/logs/
+supabase/volumes/pooler/
 
 .DS_Store

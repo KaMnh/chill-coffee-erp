@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# Env — KHÔNG commit secrets
+.env
+.env.local
+supabase/.env
+
+# Supabase runtime data (tạo lúc chạy)
+supabase/volumes/db/data/
+supabase/volumes/storage/
+
+.DS_Store

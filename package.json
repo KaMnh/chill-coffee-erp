@@ -1,0 +1,29 @@
+{
+  "name": "chill-coffee-erp",
+  "version": "4.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3009",
+    "build": "next build",
+    "start": "next start -p 3009",
+    "db:init": "node scripts/db-init.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "smoke": "node scripts/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "@tanstack/react-query": "^5.100.7",
+    "lucide-react": "^1.14.0",
+    "next": "^15.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.8.3"
+  }
+}

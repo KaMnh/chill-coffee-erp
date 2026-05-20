@@ -59,8 +59,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               if (!open) setToasts((curr) => curr.filter((x) => x.id !== t.id));
             }}
             className={cn(
-              "bg-surface rounded-md shadow-popover px-4 py-3 flex items-start gap-3 toast-enter",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]"
+              "bg-surface rounded-md shadow-popover px-4 py-3 flex items-start gap-3 toast-enter transition-transform",
+              "data-[state=open]:animate-in data-[state=closed]:animate-out",
+              "data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]",
+              "data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[calc(100%+1rem)] data-[swipe=end]:duration-100"
             )}
           >
             <Icon name={semanticIcon[t.semantic]} size={20} className={cn("shrink-0 mt-0.5", semanticColor[t.semantic])} />

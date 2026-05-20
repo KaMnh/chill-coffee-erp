@@ -21,6 +21,14 @@ const variantClass: Record<AlertVariant, { bg: string; text: string; icon: IconN
   danger: { bg: "bg-danger-soft", text: "text-danger", icon: "alertCircle" },
 };
 
+// danger/warning = alert (assertive), info/success = status (polite). A11y cho screen reader.
+const variantRole: Record<AlertVariant, "alert" | "status"> = {
+  info: "status",
+  success: "status",
+  warning: "alert",
+  danger: "alert",
+};
+
 export function AlertBanner({
   variant = "info",
   title,
@@ -30,7 +38,7 @@ export function AlertBanner({
 }: AlertBannerProps) {
   const v = variantClass[variant];
   return (
-    <div className={cn("flex items-start gap-3 rounded-md px-4 py-3", v.bg, className)}>
+    <div role={variantRole[variant]} className={cn("flex items-start gap-3 rounded-md px-4 py-3", v.bg, className)}>
       <Icon name={v.icon} size={20} className={cn("shrink-0 mt-0.5", v.text)} />
       <div className={cn("flex-1 text-sm", v.text)}>
         {title && <span className="font-semibold">{title} </span>}

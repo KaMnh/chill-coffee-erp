@@ -22,6 +22,7 @@ import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { ExpensesView } from "@/features/expenses/expenses-view";
 import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
+import { ShiftsView } from "@/features/shifts/shifts-view";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -186,11 +187,14 @@ export default function HomePage() {
         {view === "expenses" && (
           <ExpensesView businessDate={businessDate} role={account.role} />
         )}
-        {(view === "shifts" || view === "cash") && (
+        {view === "shifts" && (
+          <ShiftsView businessDate={businessDate} role={account.role} />
+        )}
+        {view === "cash" && (
           <EmptyState
             icon="lock"
-            title="Module này sẵn sàng ở Phase 3B.2"
-            subtitle="Ca & lương / Chốt két sẽ port ở phase tới."
+            title="Module này sẵn sàng ở Phase 3B.2b"
+            subtitle="Chốt két sẽ port ở phase tới."
           />
         )}
         {(view === "safe" || view === "settings") && (

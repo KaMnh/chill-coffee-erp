@@ -19,7 +19,11 @@ export function Stepper({ steps, current, className }: StepperProps) {
         const isCurrent = i === current;
         const isLast = i === steps.length - 1;
         return (
-          <li key={i} className="flex-1 flex flex-col items-center">
+          <li
+            key={i}
+            aria-current={isCurrent ? "step" : undefined}
+            className="flex-1 flex flex-col items-center"
+          >
             <div className="flex items-center w-full">
               <div
                 className={cn(

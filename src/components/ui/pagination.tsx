@@ -22,7 +22,12 @@ export function Pagination({ total, current, onChange, className }: PaginationPr
         <Icon name="chevronLeft" size={16} />
       </PageButton>
       {pages.map((p) => (
-        <PageButton key={p} active={p === current} onClick={() => onChange(p)}>
+        <PageButton
+          key={p}
+          active={p === current}
+          aria-current={p === current ? "page" : undefined}
+          onClick={() => onChange(p)}
+        >
           {p}
         </PageButton>
       ))}

@@ -58,8 +58,8 @@ Qua brainstorm 2026-05-20:
     "@radix-ui/react-toast": "^1.x",
     "@radix-ui/react-tooltip": "^1.x",
     "clsx": "^2.x",
-    "recharts": "^2.x",
-    "tailwind-merge": "^2.x"
+    "recharts": "^3.x",
+    "tailwind-merge": "^3.x"
   }
 }
 ```

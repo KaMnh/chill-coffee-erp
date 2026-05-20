@@ -155,7 +155,14 @@ export const display = Bricolage_Grotesque({
 @import "tailwindcss";
 
 @theme {
-  /* ===== Fonts ===== */
+  /* ===== Fonts =====
+   * `--font-sans` self-reference: next/font injects a CSS variable named
+   * `--font-sans` on <html> (via className on layout.tsx). That injected value
+   * cascades and overrides the @theme fallback chain at runtime. Same for
+   * --font-display. Do NOT "simplify" away the var() call — both refs are
+   * needed: Tailwind's @theme value as the family-chain default, next/font's
+   * injection as the actual loaded family.
+   */
   --font-sans: var(--font-sans, system-ui), sans-serif;
   --font-display: var(--font-display, var(--font-sans)), sans-serif;
 
@@ -166,8 +173,10 @@ export const display = Bricolage_Grotesque({
   --radius-lg: 16px;
   --radius-xl: 24px;
   --radius-2xl: 32px;
+  --radius-full: 9999px;
 
   /* ===== Shadows (tông nâu ấm, opacity thấp) ===== */
+  --shadow-none: none;
   --shadow-hover: 0 1px 2px rgba(58, 30, 15, 0.05);
   --shadow-raised: 0 4px 12px rgba(58, 30, 15, 0.06);
   --shadow-modal: 0 24px 48px -12px rgba(58, 30, 15, 0.12);
@@ -181,7 +190,7 @@ export const display = Bricolage_Grotesque({
   --color-surface-muted: #F7F4EF;
   --color-ink: #1A1410;
   --color-ink-2: #5A4A3F;
-  --color-muted: #9C8B7E;
+  --color-muted: #6B5C52;          /* darkened from #9C8B7E để pass WCAG AA (~4.5:1 trên trắng) */
   --color-border: #EDE6DC;
   --color-border-strong: #2A1E16;
 
@@ -196,7 +205,7 @@ export const display = Bricolage_Grotesque({
   --color-lilac-ink: #5B21B6;
 
   /* Semantic */
-  --color-success: #15803D;
+  --color-success: #146A34;        /* darkened from #15803D để đạt 4.5:1 trên --color-success-soft */
   --color-success-soft: #D1FAE5;
   --color-warning: #B45309;
   --color-warning-soft: #FEF3C7;
@@ -204,13 +213,15 @@ export const display = Bricolage_Grotesque({
   --color-danger-soft: #FEE2E2;
 }
 
-/* Background gradient cho toàn app — apply trên body */
+/* Background gradient cho toàn app — apply trên body.
+ * font-family áp qua Tailwind class `font-sans` trên <body> ở layout.tsx,
+ * không cần khai báo lại ở đây.
+ */
 body {
   background: linear-gradient(135deg, var(--color-bg-app-from) 0%, var(--color-bg-app-to) 100%);
   background-attachment: fixed;
   min-height: 100vh;
   color: var(--color-ink);
-  font-family: var(--font-sans);
 }
 
 /* Shimmer animation cho Skeleton + ProgressBar indeterminate */
@@ -432,25 +443,44 @@ interface NavItemProps {
   className?: string;
 }
 
+const baseClass =
+  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors duration-200 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2";
+
+const activeClass = "rounded-full bg-ink text-white";
+const inactiveClass = "rounded-md text-ink-2 hover:bg-surface-muted hover:text-ink";
+
 export function NavItem({ icon, label, active, onClick, href, className }: NavItemProps) {
-  const Component = href ? "a" : "button";
-  return (
-    <Component
-      onClick={onClick}
-      href={href}
-      type={href ? undefined : "button"}
-      className={cn(
-        "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors duration-200",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2",
-        active
-          ? "rounded-full bg-ink text-white"
-          : "rounded-md text-ink-2 hover:bg-surface-muted hover:text-ink",
-        className
-      )}
-    >
+  const content = (
+    <>
       {icon && <Icon name={icon} size={20} />}
       <span>{label}</span>
-    </Component>
+    </>
+  );
+
+  // Split element returns thay vì dynamic Component — TypeScript narrow đúng theo element,
+  // aria attribute đúng per-branch (page vs pressed).
+  if (href) {
+    return (
+      <a
+        href={href}
+        onClick={onClick}
+        aria-current={active ? "page" : undefined}
+        className={cn(baseClass, active ? activeClass : inactiveClass, className)}
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(baseClass, active ? activeClass : inactiveClass, className)}
+    >
+      {content}
+    </button>
   );
 }
 ```
@@ -488,6 +518,7 @@ export function SearchBar({
       <input
         type="search"
         placeholder={placeholder}
+        aria-label="Tìm kiếm"
         className="w-full h-10 pl-11 pr-16 rounded-full bg-surface-muted border border-transparent text-sm placeholder:text-muted focus-visible:outline-none focus-visible:border-border-strong focus-visible:border-2"
       />
       <kbd className="absolute right-3 px-1.5 py-0.5 text-xs text-muted bg-surface rounded-xs border border-border">
@@ -552,12 +583,13 @@ const sizeClass: Record<ButtonSize, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", loading, leadingIcon, trailingIcon, square, className, children, disabled, ...rest },
+  { variant = "primary", size = "md", loading, leadingIcon, trailingIcon, square, className, children, disabled, type = "button", ...rest },
   ref
 ) {
   return (
     <button
       ref={ref}
+      type={type}
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center gap-2 font-medium transition-colors duration-200",
@@ -571,7 +603,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
     >
       {loading ? <Icon name="loader" size={16} className="animate-spin" /> : leadingIcon}
-      <span>{children}</span>
+      {children && <span>{children}</span>}
       {trailingIcon}
     </button>
   );
@@ -590,7 +622,7 @@ import type { ButtonVariant } from "./button";
 
 export type IconButtonSize = 32 | 40 | 48;
 
-export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: IconName;
   size?: IconButtonSize;
   variant?: ButtonVariant;
@@ -598,10 +630,10 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const variantClass: Record<ButtonVariant, string> = {
-  primary: "bg-ink text-white hover:bg-ink-2",
-  secondary: "border border-border text-ink hover:bg-surface-muted",
-  destructive: "bg-danger text-white hover:bg-danger/90",
-  ghost: "text-ink hover:bg-surface-muted",
+  primary: "bg-ink text-white hover:bg-ink-2 active:bg-ink/90",
+  secondary: "border border-border text-ink hover:bg-surface-muted active:bg-surface-muted/80",
+  destructive: "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",
+  ghost: "text-ink hover:bg-surface-muted active:bg-surface-muted/80",
 };
 
 const iconSize: Record<IconButtonSize, 16 | 20 | 24> = {
@@ -611,12 +643,13 @@ const iconSize: Record<IconButtonSize, 16 | 20 | 24> = {
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, size = 40, variant = "primary", className, disabled, ...rest },
+  { icon, size = 40, variant = "primary", className, disabled, type = "button", ...rest },
   ref
 ) {
   return (
     <button
       ref={ref}
+      type={type}
       disabled={disabled}
       style={{ width: size, height: size }}
       className={cn(
@@ -815,16 +848,23 @@ export const Radio = forwardRef<React.ElementRef<typeof RadixRadio.Item>, RadioP
 "use client";
 
 import * as RadixSwitch from "@radix-ui/react-switch";
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 import { cn } from "@/lib/cn";
+
+export interface SwitchProps extends React.ComponentPropsWithoutRef<typeof RadixSwitch.Root> {
+  label?: React.ReactNode;
+}
 
 export const Switch = forwardRef<
   React.ElementRef<typeof RadixSwitch.Root>,
-  React.ComponentPropsWithoutRef<typeof RadixSwitch.Root>
->(function Switch({ className, ...rest }, ref) {
-  return (
+  SwitchProps
+>(function Switch({ label, id, className, ...rest }, ref) {
+  const autoId = useId();
+  const switchId = id ?? autoId;
+  const root = (
     <RadixSwitch.Root
       ref={ref}
+      id={switchId}
       className={cn(
         "relative inline-flex h-6 w-11 items-center rounded-full bg-border transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2",
@@ -836,6 +876,15 @@ export const Switch = forwardRef<
     >
       <RadixSwitch.Thumb className="block h-5 w-5 translate-x-0.5 rounded-full bg-white transition-transform duration-200 data-[state=checked]:translate-x-[1.375rem]" />
     </RadixSwitch.Root>
+  );
+  if (!label) return root;
+  return (
+    <div className="inline-flex items-center gap-2">
+      {root}
+      <label htmlFor={switchId} className="text-sm text-ink select-none cursor-pointer">
+        {label}
+      </label>
+    </div>
   );
 });
 ```
@@ -879,12 +928,14 @@ export const Slider = forwardRef<
         <RadixSlider.Thumb
           key={i}
           className={cn(
-            "block h-[18px] w-[18px] rounded-full bg-white border-2 border-ink shadow-hover transition-shadow",
+            "group relative block h-[18px] w-[18px] rounded-full bg-white border-2 border-ink shadow-hover transition-shadow",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2",
             "hover:shadow-raised"
           )}
         >
-          <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-sm bg-ink text-white text-xs px-2 py-1 whitespace-nowrap opacity-0 group-data-[dragging=true]:opacity-100">
+          {/* Tooltip pill — visible on hover, drag (:active), keyboard focus. Radix Slider Thumb không có data-dragging,
+             dùng :active để bắt drag (mousedown/touchstart giữ class trong toàn quá trình drag). */}
+          <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-sm bg-ink text-white text-xs px-2 py-1 whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100 group-focus-visible:opacity-100">
             {formatValue ? formatValue(current[i]) : current[i]}
           </span>
         </RadixSlider.Thumb>
@@ -1112,7 +1163,11 @@ export function Stepper({ steps, current, className }: StepperProps) {
         const isCurrent = i === current;
         const isLast = i === steps.length - 1;
         return (
-          <li key={i} className="flex-1 flex flex-col items-center">
+          <li
+            key={i}
+            aria-current={isCurrent ? "step" : undefined}
+            className="flex-1 flex flex-col items-center"
+          >
             <div className="flex items-center w-full">
               <div
                 className={cn(
@@ -1176,7 +1231,12 @@ export function Pagination({ total, current, onChange, className }: PaginationPr
         <Icon name="chevronLeft" size={16} />
       </PageButton>
       {pages.map((p) => (
-        <PageButton key={p} active={p === current} onClick={() => onChange(p)}>
+        <PageButton
+          key={p}
+          active={p === current}
+          aria-current={p === current ? "page" : undefined}
+          onClick={() => onChange(p)}
+        >
           {p}
         </PageButton>
       ))}
@@ -1518,26 +1578,34 @@ interface ListItemProps {
   className?: string;
 }
 
+const baseClass =
+  "w-full flex items-center gap-3 py-3 px-2 border-b border-border last:border-b-0 transition-colors";
+
 export function ListItem({ avatar, title, subtitle, action, onClick, className }: ListItemProps) {
-  const Component = onClick ? "button" : "div";
-  return (
-    <Component
-      onClick={onClick}
-      type={onClick ? "button" : undefined}
-      className={cn(
-        "w-full flex items-center gap-3 py-3 px-2 border-b border-border last:border-b-0 transition-colors",
-        onClick && "hover:bg-surface-muted text-left",
-        className
-      )}
-    >
+  const content = (
+    <>
       {avatar && <div className="shrink-0">{avatar}</div>}
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-ink truncate">{title}</div>
         {subtitle && <div className="text-xs text-muted truncate mt-0.5">{subtitle}</div>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
-    </Component>
+    </>
   );
+
+  // Split element returns — TypeScript narrow đúng theo element, tránh polymorphic spread.
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(baseClass, "hover:bg-surface-muted text-left", className)}
+      >
+        {content}
+      </button>
+    );
+  }
+  return <div className={cn(baseClass, className)}>{content}</div>;
 }
 ```
 
@@ -1750,8 +1818,8 @@ export function DataTable<T>({
 
   const sorted = sortKey
     ? [...data].sort((a, b) => {
-        const av = (a as any)[sortKey];
-        const bv = (b as any)[sortKey];
+        const av = (a as Record<string, unknown>)[sortKey] as string | number;
+        const bv = (b as Record<string, unknown>)[sortKey] as string | number;
         if (av === bv) return 0;
         const cmp = av < bv ? -1 : 1;
         return sortDir === "asc" ? cmp : -cmp;
@@ -1786,8 +1854,11 @@ export function DataTable<T>({
                   >
                     {col.header}
                     {sortKey === col.key && (
-                      <Icon name={sortDir === "asc" ? "chevronDown" : "chevronDown"} size={16}
-                            className={cn(sortDir === "asc" && "rotate-180")} />
+                      <Icon
+                        name="chevronDown"
+                        size={16}
+                        className={cn(sortDir === "asc" && "rotate-180")}
+                      />
                     )}
                   </button>
                 ) : (
@@ -1809,7 +1880,7 @@ export function DataTable<T>({
               <tr key={rowKey(row)} className="border-t border-border tabular-nums">
                 {columns.map((col) => (
                   <td key={col.key} className={cn("px-4 py-3 text-ink", col.className)}>
-                    {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
+                    {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? "")}
                   </td>
                 ))}
               </tr>
@@ -2002,6 +2073,14 @@ const variantClass: Record<AlertVariant, { bg: string; text: string; icon: IconN
   danger: { bg: "bg-danger-soft", text: "text-danger", icon: "alertCircle" },
 };
 
+// danger/warning = alert (assertive), info/success = status (polite). A11y cho screen reader.
+const variantRole: Record<AlertVariant, "alert" | "status"> = {
+  info: "status",
+  success: "status",
+  warning: "alert",
+  danger: "alert",
+};
+
 export function AlertBanner({
   variant = "info",
   title,
@@ -2011,7 +2090,7 @@ export function AlertBanner({
 }: AlertBannerProps) {
   const v = variantClass[variant];
   return (
-    <div className={cn("flex items-start gap-3 rounded-md px-4 py-3", v.bg, className)}>
+    <div role={variantRole[variant]} className={cn("flex items-start gap-3 rounded-md px-4 py-3", v.bg, className)}>
       <Icon name={v.icon} size={20} className={cn("shrink-0 mt-0.5", v.text)} />
       <div className={cn("flex-1 text-sm", v.text)}>
         {title && <span className="font-semibold">{title} </span>}
@@ -2181,8 +2260,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               if (!open) setToasts((curr) => curr.filter((x) => x.id !== t.id));
             }}
             className={cn(
-              "bg-surface rounded-md shadow-popover px-4 py-3 flex items-start gap-3 toast-enter",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]"
+              "bg-surface rounded-md shadow-popover px-4 py-3 flex items-start gap-3 toast-enter transition-transform",
+              "data-[state=open]:animate-in data-[state=closed]:animate-out",
+              "data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]",
+              "data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[calc(100%+1rem)] data-[swipe=end]:duration-100"
             )}
           >
             <Icon name={semanticIcon[t.semantic]} size={20} className={cn("shrink-0 mt-0.5", semanticColor[t.semantic])} />
@@ -2213,6 +2294,8 @@ git commit -m "feat(phase-2): feedback — Modal, Toast, AlertBanner, ProgressBa
 
 **Files:**
 - Create: `src/components/charts/{bar-chart,line-chart}.tsx`
+
+> **Recharts v3 type bridges (đã apply ở code thật):** `recharts ^3.x` thay đổi typing của `dataKey` (sang `TypedDataKey<T, any>`) và `<Tooltip content>` (stricter `ContentType`). Ba điểm cần cast trong mỗi chart file (BarChart + LineChart): `<XAxis dataKey={xKey as any}>`, `<Bar/Line dataKey={yKey as any}>`, `content={(<CustomTooltip ... />) as any}`. Mỗi cast kèm `// eslint-disable-next-line @typescript-eslint/no-explicit-any`. Public component API (generic `<T extends Record<string, unknown>>`, `keyof T & string` cho key props) vẫn typed đầy đủ. Code template dưới giữ phong cách v2 cho rõ ý — khi implement, áp các cast như mô tả trên. File ground-truth là `src/components/charts/{bar,line}-chart.tsx` đã commit (`3ed464c`).
 
 - [ ] **Step 1: Tạo `src/components/charts/bar-chart.tsx`**
 

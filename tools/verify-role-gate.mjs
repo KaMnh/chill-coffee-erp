@@ -32,4 +32,18 @@ for (const [role, expectedLen] of Object.entries(EXPECTED_LENGTHS)) {
   assert.equal(actual[0], EXPECTED_FIRST[role], `${role}: first item should be ${EXPECTED_FIRST[role]}`);
 }
 
+// Content assertions for the most business-critical permission boundaries.
+// `safe` (sổ quỹ) is owner-ONLY — leaking to any other role exposes finances.
+// `pivot` + `settings` must remain hidden from employee_viewer.
+assert.ok(DEFAULT_SIDEBAR_BY_ROLE.owner.includes("safe"),
+  "owner must have 'safe' (sổ quỹ)");
+assert.ok(!DEFAULT_SIDEBAR_BY_ROLE.manager.includes("safe"),
+  "manager must NOT have 'safe' — safe is owner-only");
+assert.ok(!DEFAULT_SIDEBAR_BY_ROLE.staff_operator.includes("safe"),
+  "staff_operator must NOT have 'safe'");
+assert.ok(!DEFAULT_SIDEBAR_BY_ROLE.employee_viewer.includes("pivot"),
+  "employee_viewer must NOT have 'pivot'");
+assert.ok(!DEFAULT_SIDEBAR_BY_ROLE.employee_viewer.includes("settings"),
+  "employee_viewer must NOT have 'settings'");
+
 console.log("✓ role-gate matrix matches v3 expectations");

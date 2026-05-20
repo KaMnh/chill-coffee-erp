@@ -1,12 +1,16 @@
 "use client";
 
 import { useSupabase } from "@/hooks/use-supabase";
-import { useDashboardQuery } from "@/hooks/queries";
+import { useDashboardQuery, useHandoverQuery } from "@/hooks/queries";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { EmptyState } from "@/components/ui/empty-state";
 import type { DashboardData } from "@/lib/types";
 import { KpiBar } from "./kpi-bar";
+import { ShortcutGrid } from "./shortcut-grid";
+import { ExpenseLogCard } from "./expense-log-card";
+import { SalesFeedCard } from "./sales-feed-card";
+import { StoreStatusCard } from "./store-status-card";
+import { HandoverPanel } from "./handover-panel";
 
 const EMPTY: DashboardData = {
   business_date: "",
@@ -23,13 +27,15 @@ const EMPTY: DashboardData = {
 
 interface DashboardViewProps {
   businessDate: string;
+  onGoReports(): void;
 }
 
-export function DashboardView({ businessDate }: DashboardViewProps) {
+export function DashboardView({ businessDate, onGoReports }: DashboardViewProps) {
   const supabase = useSupabase();
-  const query = useDashboardQuery(supabase, businessDate, true);
+  const dashboardQuery = useDashboardQuery(supabase, businessDate, true);
+  const handoverQuery = useHandoverQuery(supabase, businessDate, true);
 
-  if (query.isLoading) {
+  if (dashboardQuery.isLoading) {
     return (
       <div className="flex justify-center py-12">
         <Spinner size={32} />
@@ -37,25 +43,37 @@ export function DashboardView({ businessDate }: DashboardViewProps) {
     );
   }
 
-  if (query.isError) {
+  if (dashboardQuery.isError) {
     return (
       <AlertBanner variant="danger" title="Không tải được dashboard">
-        {query.error instanceof Error ? query.error.message : String(query.error)}
+        {dashboardQuery.error instanceof Error
+          ? dashboardQuery.error.message
+          : String(dashboardQuery.error)}
       </AlertBanner>
     );
   }
 
-  const data = query.data ?? { ...EMPTY, business_date: businessDate };
+  const data = dashboardQuery.data ?? { ...EMPTY, business_date: businessDate };
+  const handover = handoverQuery.data ?? null;
 
   return (
     <div className="space-y-6">
       <KpiBar data={data} />
-      {/* Task 8 fills in: shortcut grid, expense log, sales feed, store status, handover */}
-      <EmptyState
-        icon="sparkles"
-        title="Các thẻ chi tiết sẽ vào ở Task 8"
-        subtitle="Đang còn thiếu: shortcut grid, expense log, sales feed, store status, handover panel."
-      />
+      <ShortcutGrid onGoReports={onGoReports} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <ExpenseLogCard expenses={data.expenses} total={data.total_expenses} />
+          <StoreStatusCard
+            activeStaff={data.active_staff}
+            latestSync={data.latest_sync}
+            latestCashCount={data.latest_cash_count}
+          />
+        </div>
+        <div className="space-y-6">
+          <HandoverPanel handover={handover} />
+          <SalesFeedCard orders={data.sales_orders} totalSales={data.total_sales} />
+        </div>
+      </div>
     </div>
   );
 }

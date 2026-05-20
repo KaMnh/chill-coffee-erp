@@ -171,7 +171,12 @@ export default function HomePage() {
       }
     >
       <div className="space-y-6">
-        {view === "dashboard" && <DashboardView businessDate={businessDate} />}
+        {view === "dashboard" && (
+          <DashboardView
+            businessDate={businessDate}
+            onGoReports={() => setView("reports")}
+          />
+        )}
         {view === "reports" && (
           <EmptyState
             icon="fileText"

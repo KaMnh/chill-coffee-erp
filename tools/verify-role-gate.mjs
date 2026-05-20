@@ -1,9 +1,10 @@
 // One-shot sanity check for the role-gate matrix. Run via `node tools/verify-role-gate.mjs`.
 // Expectations come from v3 production behavior — don't change without updating navigation.ts.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
-// Import .ts via tsx is not set up; instead, mirror the matrix here and assert lengths
-// (we trust TS for type wiring; this is a behavior assertion).
 const EXPECTED_LENGTHS = {
   owner: 8,
   manager: 7,           // owner minus 'safe'
@@ -18,13 +19,53 @@ const EXPECTED_FIRST = {
   employee_viewer: "dashboard",
 };
 
-// Re-state the matrix here (mirrors src/features/navigation/navigation.ts DEFAULT_SIDEBAR_BY_ROLE).
-const DEFAULT_SIDEBAR_BY_ROLE = {
-  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "reports", "pivot", "settings"],
-  manager:         ["dashboard", "expenses", "shifts", "cash", "reports", "pivot", "settings"],
-  staff_operator:  ["dashboard", "expenses", "shifts", "cash", "reports"],
-  employee_viewer: ["dashboard"],
-};
+// Drift guard: parse the actual DEFAULT_SIDEBAR_BY_ROLE block out of navigation.ts
+// at runtime. If someone edits navigation.ts, the parsed matrix below diverges
+// from the implementation and the assertions catch it. Without this step, the
+// script would only be testing its own hardcoded literal.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const navTsPath = resolve(__dirname, "../src/features/navigation/navigation.ts");
+const navSource = readFileSync(navTsPath, "utf8");
+
+function parseMatrix(src) {
+  // Match the const block:
+  //   export const DEFAULT_SIDEBAR_BY_ROLE: Record<...> = {
+  //     owner:           [...],
+  //     manager:         [...],
+  //     ...
+  //   };
+  const blockMatch = src.match(
+    /export\s+const\s+DEFAULT_SIDEBAR_BY_ROLE[^{]*\{([\s\S]*?)\};/
+  );
+  if (!blockMatch) {
+    throw new Error("Could not find DEFAULT_SIDEBAR_BY_ROLE export in navigation.ts");
+  }
+  const body = blockMatch[1];
+  const out = {};
+  // For each role: capture identifier + the [...] literal that follows.
+  const roleRe = /(owner|manager|staff_operator|employee_viewer)\s*:\s*\[([^\]]*)\]/g;
+  let m;
+  while ((m = roleRe.exec(body)) !== null) {
+    const role = m[1];
+    const items = m[2]
+      .split(",")
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+    out[role] = items;
+  }
+  return out;
+}
+
+const DEFAULT_SIDEBAR_BY_ROLE = parseMatrix(navSource);
+
+// Sanity: all 4 roles found.
+for (const role of ["owner", "manager", "staff_operator", "employee_viewer"]) {
+  assert.ok(
+    Array.isArray(DEFAULT_SIDEBAR_BY_ROLE[role]),
+    `Failed to parse '${role}' from navigation.ts — regex out of date?`
+  );
+}
 
 for (const [role, expectedLen] of Object.entries(EXPECTED_LENGTHS)) {
   const actual = DEFAULT_SIDEBAR_BY_ROLE[role];

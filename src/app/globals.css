@@ -1,7 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  /* ===== Fonts ===== */
+  /* ===== Fonts =====
+   * `--font-sans` self-reference: next/font injects a CSS variable named
+   * `--font-sans` on <html> (via className on layout.tsx). That injected value
+   * cascades and overrides the @theme fallback chain at runtime. Same for
+   * --font-display. Do NOT "simplify" away the var() call — both refs are
+   * needed: Tailwind's @theme value as the family-chain default, next/font's
+   * injection as the actual loaded family.
+   */
   --font-sans: var(--font-sans, system-ui), sans-serif;
   --font-display: var(--font-display, var(--font-sans)), sans-serif;
 
@@ -12,8 +19,10 @@
   --radius-lg: 16px;
   --radius-xl: 24px;
   --radius-2xl: 32px;
+  --radius-full: 9999px;
 
   /* ===== Shadows (tông nâu ấm, opacity thấp) ===== */
+  --shadow-none: none;
   --shadow-hover: 0 1px 2px rgba(58, 30, 15, 0.05);
   --shadow-raised: 0 4px 12px rgba(58, 30, 15, 0.06);
   --shadow-modal: 0 24px 48px -12px rgba(58, 30, 15, 0.12);
@@ -27,7 +36,7 @@
   --color-surface-muted: #F7F4EF;
   --color-ink: #1A1410;
   --color-ink-2: #5A4A3F;
-  --color-muted: #9C8B7E;
+  --color-muted: #6B5C52;
   --color-border: #EDE6DC;
   --color-border-strong: #2A1E16;
 
@@ -42,7 +51,7 @@
   --color-lilac-ink: #5B21B6;
 
   /* Semantic */
-  --color-success: #15803D;
+  --color-success: #146A34;
   --color-success-soft: #D1FAE5;
   --color-warning: #B45309;
   --color-warning-soft: #FEF3C7;
@@ -50,13 +59,15 @@
   --color-danger-soft: #FEE2E2;
 }
 
-/* Background gradient cho toàn app — apply trên body */
+/* Background gradient cho toàn app — apply trên body.
+ * font-family áp qua Tailwind class `font-sans` trên <body> ở layout.tsx,
+ * không cần khai báo lại ở đây.
+ */
 body {
   background: linear-gradient(135deg, var(--color-bg-app-from) 0%, var(--color-bg-app-to) 100%);
   background-attachment: fixed;
   min-height: 100vh;
   color: var(--color-ink);
-  font-family: var(--font-sans);
 }
 
 /* Shimmer animation cho Skeleton + ProgressBar indeterminate */

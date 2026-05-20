@@ -19,6 +19,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
+import { ExpensesView } from "@/features/expenses/expenses-view";
 import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -181,12 +182,15 @@ export default function HomePage() {
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}
         {view === "pivot" && <PivotView businessDate={businessDate} />}
-        {/* 3B/3C views — show locked placeholder. */}
-        {(view === "expenses" || view === "shifts" || view === "cash") && (
+        {/* 3B/3C views — expenses now live; shifts + cash still locked. */}
+        {view === "expenses" && (
+          <ExpensesView businessDate={businessDate} role={account.role} />
+        )}
+        {(view === "shifts" || view === "cash") && (
           <EmptyState
             icon="lock"
-            title="Module này sẵn sàng ở Phase 3B"
-            subtitle="Chi phí / Ca & lương / Chốt két sẽ port + redesign ở phase tới."
+            title="Module này sẵn sàng ở Phase 3B.2"
+            subtitle="Ca & lương / Chốt két sẽ port ở phase tới."
           />
         )}
         {(view === "safe" || view === "settings") && (

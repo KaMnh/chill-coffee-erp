@@ -4,6 +4,11 @@ import {
   ArrowRight, ArrowUpRight, Bell, Check, ChevronDown, ChevronLeft,
   ChevronRight, Filter, Info, Loader2, Search, X, Plus, Minus,
   AlertTriangle, AlertCircle, CheckCircle2, Sparkles,
+  // Phase 3A — nav icons
+  LayoutDashboard, Wallet, Users, Banknote, PiggyBank, FileText,
+  BarChart3, Settings,
+  // Phase 3A — action icons
+  LogOut, Menu, RefreshCw, Download, Clock, Lock, Printer,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -27,6 +32,23 @@ export const Icons = {
   alertCircle: AlertCircle,
   checkCircle: CheckCircle2,
   sparkles: Sparkles,
+  // Phase 3A nav
+  layoutDashboard: LayoutDashboard,
+  wallet: Wallet,
+  users: Users,
+  banknote: Banknote,
+  piggyBank: PiggyBank,
+  fileText: FileText,
+  barChart3: BarChart3,
+  settings: Settings,
+  // Phase 3A actions
+  logOut: LogOut,
+  menu: Menu,
+  refreshCw: RefreshCw,
+  download: Download,
+  clock: Clock,
+  lock: Lock,
+  printer: Printer,
 } as const;
 
 export type IconName = keyof typeof Icons;

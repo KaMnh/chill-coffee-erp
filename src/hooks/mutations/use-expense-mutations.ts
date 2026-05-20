@@ -54,9 +54,11 @@ export function useCreateExpense(
       if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
       return createExpense(supabase, input as unknown as Record<string, unknown>);
     },
+    // Only invalidate dashboard — `create_expense` RPC doesn't mutate
+    // expense_templates (usage_count is not incremented as of Phase 1).
+    // If a future RPC starts incrementing it, add templates() back.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
     },
   });
 }
@@ -112,12 +114,12 @@ export function useDeleteExpense(
       if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
       return deleteExpense(supabase, id);
     },
+    // RPC delete_expense reverses cash_drawer_events as a side effect.
+    // cash_counts.total_theory is a snapshot column populated at count-create
+    // time (not live-computed from cash_drawer_events), so invalidating
+    // cashCounts is a no-op refetch. Dashboard invalidation alone is enough.
     onSuccess: () => {
-      // Both dashboard expenses list AND cash_drawer_events change → invalidate
-      // both. (RPC delete_expense reverses cash_drawer_events as a side effect
-      // per Phase 1 lib/data/expenses.ts comment.)
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashCounts(businessDate) });
     },
   });
 }

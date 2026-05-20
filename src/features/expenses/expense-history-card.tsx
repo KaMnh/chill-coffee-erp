@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatTime, formatVND } from "@/lib/format";
@@ -35,6 +35,12 @@ export function ExpenseHistoryCard({
   const editing = editingId
     ? expenses.find((e) => e.id === editingId) ?? null
     : null;
+
+  // If a refresh removes the expense being edited (e.g. delete from another
+  // tab), clear editingId so the modal closes instead of vanishing silently.
+  useEffect(() => {
+    if (editingId && !editing) setEditingId(null);
+  }, [editingId, editing]);
 
   function open(id: string) {
     if (canEdit) setEditingId(id);

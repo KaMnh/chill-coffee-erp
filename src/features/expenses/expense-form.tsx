@@ -171,7 +171,7 @@ export function ExpenseForm({
           {/* Category */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="form-category" className="text-xs font-medium text-ink-2">
-              Loại chi phí *
+              Loại chi phí
             </label>
             <Select
               value={categoryId}

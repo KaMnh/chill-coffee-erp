@@ -17,3 +17,7 @@ supabase/volumes/logs/
 supabase/volumes/pooler/
 
 .DS_Store
+
+# Production data dumps (Phase 3A verification artifacts)
+# Contains real customer / financial data — never commit.
+mirrors/

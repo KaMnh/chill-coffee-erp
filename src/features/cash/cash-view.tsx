@@ -136,6 +136,11 @@ export function CashView({ businessDate, role }: CashViewProps) {
       toast({ semantic: "danger", message: validation.message });
       return;
     }
+    // Track which step succeeded so error messages can be step-aware.
+    // If saveCashCount succeeds but finalizeCashCloseReport fails, we have
+    // an orphan cash_count without a report. Toast must tell the user clearly
+    // so they don't double-submit (spec §9 risk register).
+    let savedCountId: string | undefined;
     try {
       const saved = await saveCountM.mutateAsync({
         business_date: businessDate,
@@ -153,6 +158,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
             }
           : {}),
       });
+      savedCountId = saved.cash_count_id;
       let safeDeposit = 0;
       if (mode === "shift_close" && saved.cash_count_id) {
         const result = await finalizeM.mutateAsync({
@@ -176,10 +182,22 @@ export function CashView({ businessDate, role }: CashViewProps) {
         setLeaveForNextDay("");
       }
     } catch (err) {
-      toast({
-        semantic: "danger",
-        message: err instanceof Error ? err.message : "Không lưu được kiểm két.",
-      });
+      const baseMsg = err instanceof Error ? err.message : "Lỗi không xác định";
+      // Step-aware message: if savedCountId is set, the cash_count is already
+      // persisted (visible in history). Tell user to recover via admin menu,
+      // do NOT re-click submit (would create a duplicate count).
+      if (savedCountId && mode === "shift_close") {
+        toast({
+          semantic: "danger",
+          message: `Đã lưu kiểm két (${savedCountId.slice(0, 8)}) NHƯNG chốt báo cáo lỗi: ${baseMsg}. KHÔNG bấm "Chốt két" lại — vào lịch sử, dùng "Sửa count" hoặc void rồi chốt lại.`,
+        });
+        // Keep counts state so user can verify in history; do NOT reset.
+      } else {
+        toast({
+          semantic: "danger",
+          message: `Không lưu được kiểm két: ${baseMsg}`,
+        });
+      }
     }
   }
 

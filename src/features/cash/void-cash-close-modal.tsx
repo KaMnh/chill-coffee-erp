@@ -119,6 +119,18 @@ export function VoidCashCloseModal({
             <Spinner size={24} />
           </div>
         )}
+        {!isLoading && !report && (
+          <div className="mt-6 space-y-4">
+            <AlertBanner variant="warning">
+              Không tìm thấy báo cáo. Có thể đã bị hủy ở phiên khác.
+            </AlertBanner>
+            <ModalActions>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Đóng
+              </Button>
+            </ModalActions>
+          </div>
+        )}
         {!isLoading && report && (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <AlertBanner variant="warning">

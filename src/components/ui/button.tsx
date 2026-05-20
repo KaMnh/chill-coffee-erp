@@ -30,12 +30,13 @@ const sizeClass: Record<ButtonSize, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", loading, leadingIcon, trailingIcon, square, className, children, disabled, ...rest },
+  { variant = "primary", size = "md", loading, leadingIcon, trailingIcon, square, className, children, disabled, type = "button", ...rest },
   ref
 ) {
   return (
     <button
       ref={ref}
+      type={type}
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center gap-2 font-medium transition-colors duration-200",
@@ -49,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
     >
       {loading ? <Icon name="loader" size={16} className="animate-spin" /> : leadingIcon}
-      <span>{children}</span>
+      {children && <span>{children}</span>}
       {trailingIcon}
     </button>
   );

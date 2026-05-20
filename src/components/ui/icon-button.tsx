@@ -7,7 +7,7 @@ import type { ButtonVariant } from "./button";
 
 export type IconButtonSize = 32 | 40 | 48;
 
-export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: IconName;
   size?: IconButtonSize;
   variant?: ButtonVariant;
@@ -15,10 +15,10 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const variantClass: Record<ButtonVariant, string> = {
-  primary: "bg-ink text-white hover:bg-ink-2",
-  secondary: "border border-border text-ink hover:bg-surface-muted",
-  destructive: "bg-danger text-white hover:bg-danger/90",
-  ghost: "text-ink hover:bg-surface-muted",
+  primary: "bg-ink text-white hover:bg-ink-2 active:bg-ink/90",
+  secondary: "border border-border text-ink hover:bg-surface-muted active:bg-surface-muted/80",
+  destructive: "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",
+  ghost: "text-ink hover:bg-surface-muted active:bg-surface-muted/80",
 };
 
 const iconSize: Record<IconButtonSize, 16 | 20 | 24> = {
@@ -28,12 +28,13 @@ const iconSize: Record<IconButtonSize, 16 | 20 | 24> = {
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, size = 40, variant = "primary", className, disabled, ...rest },
+  { icon, size = 40, variant = "primary", className, disabled, type = "button", ...rest },
   ref
 ) {
   return (
     <button
       ref={ref}
+      type={type}
       disabled={disabled}
       style={{ width: size, height: size }}
       className={cn(

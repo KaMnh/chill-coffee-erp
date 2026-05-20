@@ -19,6 +19,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
+import { ReportsView } from "@/features/reports/reports-view";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -177,13 +178,7 @@ export default function HomePage() {
             onGoReports={() => setView("reports")}
           />
         )}
-        {view === "reports" && (
-          <EmptyState
-            icon="fileText"
-            title="Reports đang chờ Task 9"
-            subtitle="Báo cáo chốt két sẽ vào ở task tiếp theo."
-          />
-        )}
+        {view === "reports" && <ReportsView businessDate={businessDate} />}
         {view === "pivot" && (
           <EmptyState
             icon="barChart3"

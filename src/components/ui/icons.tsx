@@ -9,6 +9,8 @@ import {
   BarChart3, Settings,
   // Phase 3A — action icons
   LogOut, Menu, RefreshCw, Download, Clock, Lock, Printer,
+  // Phase 3B.1 — action icons
+  Trash2, Save,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -49,6 +51,9 @@ export const Icons = {
   clock: Clock,
   lock: Lock,
   printer: Printer,
+  // Phase 3B.1 actions
+  trash: Trash2,
+  save: Save,
 } as const;
 
 export type IconName = keyof typeof Icons;

@@ -142,15 +142,6 @@ export function useUpsertEmployee(supabase: SupabaseClient | null) {
   });
 }
 
-export function useDeactivateEmployee(supabase: SupabaseClient | null) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (employeeId: string) => {
-      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
-      return updateEmployee(supabase, employeeId, { is_active: false });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees() });
-    },
-  });
-}
+// Removed: useDeactivateEmployee. The current UI deactivates employees via
+// EmployeeFormModal's is_active checkbox (-> useUpsertEmployee). If a dedicated
+// "Tam dung" surface ships in a later phase, re-introduce this hook then.

@@ -194,7 +194,7 @@ export default function HomePage() {
           <EmptyState
             icon="lock"
             title="Module này sẵn sàng ở Phase 3B.2b"
-            subtitle="Chốt két sẽ port ở phase tới."
+            subtitle="Chốt két sẽ port ở Phase 3B.2b."
           />
         )}
         {(view === "safe" || view === "settings") && (

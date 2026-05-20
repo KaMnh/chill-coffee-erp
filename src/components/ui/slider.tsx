@@ -34,12 +34,14 @@ export const Slider = forwardRef<
         <RadixSlider.Thumb
           key={i}
           className={cn(
-            "block h-[18px] w-[18px] rounded-full bg-white border-2 border-ink shadow-hover transition-shadow",
+            "group relative block h-[18px] w-[18px] rounded-full bg-white border-2 border-ink shadow-hover transition-shadow",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2",
             "hover:shadow-raised"
           )}
         >
-          <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-sm bg-ink text-white text-xs px-2 py-1 whitespace-nowrap opacity-0 group-data-[dragging=true]:opacity-100">
+          {/* Tooltip pill — visible on hover, drag (:active), keyboard focus. Radix Slider Thumb không có data-dragging,
+             dùng :active để bắt drag (mousedown/touchstart giữ class trong toàn quá trình drag). */}
+          <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-sm bg-ink text-white text-xs px-2 py-1 whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100 group-focus-visible:opacity-100">
             {formatValue ? formatValue(current[i]) : current[i]}
           </span>
         </RadixSlider.Thumb>

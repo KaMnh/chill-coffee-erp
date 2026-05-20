@@ -20,6 +20,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { ReportsView } from "@/features/reports/reports-view";
+import { PivotView } from "@/features/pivot/pivot-view";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -179,13 +180,7 @@ export default function HomePage() {
           />
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}
-        {view === "pivot" && (
-          <EmptyState
-            icon="barChart3"
-            title="Pivot đang chờ Task 10"
-            subtitle="Doanh thu theo hóa đơn sẽ vào ở task tiếp theo."
-          />
-        )}
+        {view === "pivot" && <PivotView businessDate={businessDate} />}
         {/* 3B/3C views — show locked placeholder. */}
         {(view === "expenses" || view === "shifts" || view === "cash") && (
           <EmptyState

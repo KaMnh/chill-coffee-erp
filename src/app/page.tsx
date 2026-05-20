@@ -18,6 +18,7 @@ import { TopBar } from "@/components/layout/top-bar";
 import { IconButton } from "@/components/ui/icon-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
+import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -170,13 +171,7 @@ export default function HomePage() {
       }
     >
       <div className="space-y-6">
-        {view === "dashboard" && (
-          <EmptyState
-            icon="layoutDashboard"
-            title="Dashboard đang chờ Task 7-8"
-            subtitle="AppShell đã sẵn sàng; nội dung dashboard sẽ vào ở task tiếp theo."
-          />
-        )}
+        {view === "dashboard" && <DashboardView businessDate={businessDate} />}
         {view === "reports" && (
           <EmptyState
             icon="fileText"

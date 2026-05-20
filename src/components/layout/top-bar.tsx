@@ -28,6 +28,7 @@ export function SearchBar({
       <input
         type="search"
         placeholder={placeholder}
+        aria-label="Tìm kiếm"
         className="w-full h-10 pl-11 pr-16 rounded-full bg-surface-muted border border-transparent text-sm placeholder:text-muted focus-visible:outline-none focus-visible:border-border-strong focus-visible:border-2"
       />
       <kbd className="absolute right-3 px-1.5 py-0.5 text-xs text-muted bg-surface rounded-xs border border-border">

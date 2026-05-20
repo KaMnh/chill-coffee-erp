@@ -11,6 +11,8 @@ import {
   LogOut, Menu, RefreshCw, Download, Clock, Lock, Printer,
   // Phase 3B.1 — action icons
   Trash2, Save,
+  // Phase 3B.2b.i — action icons
+  Pencil, Calculator,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -54,6 +56,9 @@ export const Icons = {
   // Phase 3B.1 actions
   trash: Trash2,
   save: Save,
+  // Phase 3B.2b.i actions
+  pencil: Pencil,
+  calculator: Calculator,
 } as const;
 
 export type IconName = keyof typeof Icons;

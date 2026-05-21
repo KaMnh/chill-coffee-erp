@@ -1,7 +1,7 @@
 -- Phase 4.A — Ingredients CRUD RPCs.
 --
--- 6 assertions:
---   1. create_ingredient returns a uuid; row exists with trimmed name
+-- 7 assertions:
+--   1. create_ingredient returns a uuid; row exists with trimmed name  (2 assertions: ok + is)
 --   2. Duplicate name throws unique violation
 --   3. Blank name throws CHECK constraint violation
 --   4. update_ingredient can soft-delete (is_active = false)
@@ -9,7 +9,7 @@
 --   6. delete_ingredient hard-fails when stock_movement references
 
 begin;
-select plan(6);
+select plan(7);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$

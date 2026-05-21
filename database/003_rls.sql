@@ -218,3 +218,50 @@ drop policy if exists handover_tasks_staff_insert on public.handover_tasks;
 create policy handover_tasks_staff_insert on public.handover_tasks for insert to authenticated with check (public.app_is_staff_or_above());
 drop policy if exists handover_tasks_staff_update on public.handover_tasks;
 create policy handover_tasks_staff_update on public.handover_tasks for update to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());
+
+-- =====================================================================
+-- Phase 4.A — Inventory RLS
+-- =====================================================================
+
+alter table public.ingredients     enable row level security;
+alter table public.menu_items      enable row level security;
+alter table public.recipes         enable row level security;
+alter table public.recipe_items    enable row level security;
+alter table public.stock_movements enable row level security;
+
+-- SELECT: all authenticated users can read all 5 tables.
+drop policy if exists ingredients_select_all     on public.ingredients;
+drop policy if exists menu_items_select_all      on public.menu_items;
+drop policy if exists recipes_select_all         on public.recipes;
+drop policy if exists recipe_items_select_all    on public.recipe_items;
+drop policy if exists stock_movements_select_all on public.stock_movements;
+
+create policy ingredients_select_all on public.ingredients
+  for select to authenticated using (true);
+create policy menu_items_select_all on public.menu_items
+  for select to authenticated using (true);
+create policy recipes_select_all on public.recipes
+  for select to authenticated using (true);
+create policy recipe_items_select_all on public.recipe_items
+  for select to authenticated using (true);
+create policy stock_movements_select_all on public.stock_movements
+  for select to authenticated using (true);
+
+-- WRITE: deny direct INSERT/UPDATE/DELETE from authenticated clients.
+-- All writes go through SECURITY DEFINER RPCs (or the trigger which is also SECURITY DEFINER).
+drop policy if exists ingredients_no_direct_write     on public.ingredients;
+drop policy if exists menu_items_no_direct_write      on public.menu_items;
+drop policy if exists recipes_no_direct_write         on public.recipes;
+drop policy if exists recipe_items_no_direct_write    on public.recipe_items;
+drop policy if exists stock_movements_no_direct_write on public.stock_movements;
+
+create policy ingredients_no_direct_write on public.ingredients
+  for all to authenticated using (false) with check (false);
+create policy menu_items_no_direct_write on public.menu_items
+  for all to authenticated using (false) with check (false);
+create policy recipes_no_direct_write on public.recipes
+  for all to authenticated using (false) with check (false);
+create policy recipe_items_no_direct_write on public.recipe_items
+  for all to authenticated using (false) with check (false);
+create policy stock_movements_no_direct_write on public.stock_movements
+  for all to authenticated using (false) with check (false);

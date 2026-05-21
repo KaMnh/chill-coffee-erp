@@ -289,3 +289,85 @@ export type HandoverSession = {
   completed_at: string | null;
   tasks: HandoverTask[];
 };
+
+// =====================================================================
+// Phase 4.A — Inventory types
+// =====================================================================
+
+export type StockMovementReason =
+  | "purchase_received"
+  | "sale_theoretical"
+  | "manual_adjustment_in"
+  | "manual_adjustment_out"
+  | "count_correction"
+  | "waste";
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  unit: string;
+  low_stock_threshold: number | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  external_product_name: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  /** Returned by list_menu_items RPC */
+  recipe_count?: number;
+}
+
+export interface Recipe {
+  recipe_id: string;
+  menu_item_id: string;
+  menu_item_name: string;
+  is_active: boolean;
+  item_count: number;
+  notes: string | null;
+  updated_at: string;
+}
+
+export interface RecipeItem {
+  ingredient_id: string;
+  ingredient_name: string;
+  unit: string;
+  quantity: number;
+}
+
+export interface RecipeDetail {
+  recipe_id: string;
+  menu_item_id: string;
+  is_active: boolean;
+  notes: string | null;
+  items: RecipeItem[];
+}
+
+export interface StockMovement {
+  id: string;
+  ingredient_id: string;
+  ingredient_name: string;
+  quantity_delta: number;
+  reason: StockMovementReason;
+  occurred_at: string;
+  source_order_id: string | null;
+  source_recipe_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface StockBalance {
+  ingredient_id: string;
+  name: string;
+  unit: string;
+  theoretical_balance: number;
+  low_stock_threshold: number | null;
+  is_low: boolean;
+  last_movement_at: string | null;
+}

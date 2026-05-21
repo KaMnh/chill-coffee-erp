@@ -2353,7 +2353,715 @@ create trigger audit_safe_transactions
   after insert or update or delete on public.safe_transactions
   for each row execute function public._audit_row_change();
 
+-- =====================================================================
+-- Phase 4.A — Menu items CRUD
+-- =====================================================================
+
+create or replace function public.create_menu_item(
+  p_name                  text,
+  p_external_product_name text default null,
+  p_notes                 text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền tạo sản phẩm.';
+  end if;
+
+  insert into public.menu_items (name, external_product_name, notes, created_by)
+  values (
+    trim(p_name),
+    case when p_external_product_name is null then null else trim(p_external_product_name) end,
+    p_notes,
+    auth.uid()
+  )
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_created', 'menu_item', v_new_id,
+    jsonb_build_object('name', trim(p_name),
+                       'external_product_name', p_external_product_name)
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.update_menu_item(
+  p_id                    uuid,
+  p_name                  text,
+  p_external_product_name text,
+  p_notes                 text,
+  p_is_active             boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa sản phẩm.';
+  end if;
+
+  update public.menu_items
+     set name = trim(p_name),
+         external_product_name = case when p_external_product_name is null then null else trim(p_external_product_name) end,
+         notes = p_notes,
+         is_active = p_is_active
+   where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy sản phẩm với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_updated', 'menu_item', p_id,
+    jsonb_build_object('name', trim(p_name), 'is_active', p_is_active)
+  );
+end;
+$$;
+
+create or replace function public.delete_menu_item(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa sản phẩm.';
+  end if;
+
+  if exists (select 1 from public.recipes where menu_item_id = p_id) then
+    raise exception 'Không thể xóa: sản phẩm đang có công thức. Hãy xóa công thức trước.';
+  end if;
+
+  delete from public.menu_items where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy sản phẩm với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_deleted', 'menu_item', p_id,
+    jsonb_build_object()
+  );
+end;
+$$;
+
+create or replace function public.list_menu_items()
+returns table (
+  id                    uuid,
+  name                  text,
+  external_product_name text,
+  is_active             boolean,
+  notes                 text,
+  created_at            timestamptz,
+  recipe_count          bigint
+)
+language sql
+stable
+set search_path = public
+as $$
+  select m.id, m.name, m.external_product_name, m.is_active, m.notes, m.created_at,
+         (select count(*) from public.recipes r where r.menu_item_id = m.id)::bigint as recipe_count
+  from public.menu_items m
+  order by m.name;
+$$;
+
 drop trigger if exists audit_safe_counts on public.safe_counts;
 create trigger audit_safe_counts
   after insert or update or delete on public.safe_counts
   for each row execute function public._audit_row_change();
+
+-- =====================================================================
+-- Phase 4.A — Inventory: auto-deduction trigger
+-- =====================================================================
+
+create or replace function public._apply_sale_deductions_row()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_menu_item_id  uuid;
+  v_recipe_id     uuid;
+  v_item          record;
+  v_purchase_at   timestamptz;
+begin
+  -- Lookup parent order's purchase time for semantic correctness
+  select purchase_at into v_purchase_at
+  from public.sales_orders
+  where id = new.sales_order_id;
+
+  -- 1. Match menu_item by case-insensitive trimmed external_product_name
+  select id into v_menu_item_id
+  from public.menu_items
+  where external_product_name is not null
+    and lower(trim(external_product_name)) = lower(trim(new.product_name))
+    and is_active = true
+  limit 1;
+
+  if v_menu_item_id is null then
+    return new;
+  end if;
+
+  -- 2. Active recipe?
+  select id into v_recipe_id
+  from public.recipes
+  where menu_item_id = v_menu_item_id and is_active = true
+  limit 1;
+
+  if v_recipe_id is null then
+    return new;
+  end if;
+
+  -- 3. Emit one stock_movement per recipe_item, scaled by new.quantity
+  for v_item in
+    select ingredient_id, quantity from public.recipe_items where recipe_id = v_recipe_id
+  loop
+    insert into public.stock_movements (
+      ingredient_id, quantity_delta, reason, occurred_at,
+      source_order_id, source_recipe_id, created_by
+    ) values (
+      v_item.ingredient_id,
+      -(v_item.quantity * new.quantity),
+      'sale_theoretical',
+      coalesce(v_purchase_at, now()),
+      new.sales_order_id,
+      v_recipe_id,
+      null
+    );
+  end loop;
+
+  return new;
+
+exception when others then
+  -- Defense-in-depth: never break ingest. Log + return new.
+  -- Nested EXCEPTION guards audit_log INSERT itself.
+  begin
+    insert into public.audit_log (
+      actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+    ) values (
+      null, null, 'inventory_deduction_error', 'sales_order_item', new.id,
+      jsonb_build_object(
+        'sales_order_id', new.sales_order_id,
+        'product_name', new.product_name,
+        'sqlstate', SQLSTATE,
+        'message', SQLERRM
+      )
+    );
+  exception when others then
+    null;  -- swallow secondary failure; ingest must continue
+  end;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_apply_sale_deductions on public.sales_order_items;
+drop trigger if exists sales_order_items_apply_deductions on public.sales_order_items;
+
+create trigger sales_order_items_apply_deductions
+after insert on public.sales_order_items
+for each row
+execute function public._apply_sale_deductions_row();
+
+-- =====================================================================
+-- Phase 4.A — Ingredients CRUD
+-- =====================================================================
+
+create or replace function public.create_ingredient(
+  p_name                text,
+  p_unit                text,
+  p_low_stock_threshold numeric default null,
+  p_notes               text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền tạo nguyên liệu.';
+  end if;
+
+  insert into public.ingredients (name, unit, low_stock_threshold, notes, created_by)
+  values (trim(p_name), trim(p_unit), p_low_stock_threshold, p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_created', 'ingredient', v_new_id,
+    jsonb_build_object('name', trim(p_name), 'unit', trim(p_unit),
+                       'low_stock_threshold', p_low_stock_threshold)
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.update_ingredient(
+  p_id                  uuid,
+  p_name                text,
+  p_unit                text,
+  p_low_stock_threshold numeric,
+  p_notes               text,
+  p_is_active           boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa nguyên liệu.';
+  end if;
+
+  update public.ingredients
+     set name = trim(p_name),
+         unit = trim(p_unit),
+         low_stock_threshold = p_low_stock_threshold,
+         notes = p_notes,
+         is_active = p_is_active
+   where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy nguyên liệu với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_updated', 'ingredient', p_id,
+    jsonb_build_object('name', trim(p_name), 'is_active', p_is_active)
+  );
+end;
+$$;
+
+create or replace function public.delete_ingredient(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa nguyên liệu.';
+  end if;
+
+  if exists (select 1 from public.stock_movements where ingredient_id = p_id) then
+    raise exception 'Không thể xóa: nguyên liệu đã có giao dịch tồn kho. Hãy đặt is_active = false để vô hiệu hóa.';
+  end if;
+
+  if exists (select 1 from public.recipe_items where ingredient_id = p_id) then
+    raise exception 'Không thể xóa: nguyên liệu đang được dùng trong công thức. Hãy xóa khỏi công thức trước.';
+  end if;
+
+  delete from public.ingredients where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy nguyên liệu với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_deleted', 'ingredient', p_id,
+    jsonb_build_object()
+  );
+end;
+$$;
+
+create or replace function public.list_ingredients()
+returns table (
+  id                  uuid,
+  name                text,
+  unit                text,
+  low_stock_threshold numeric,
+  is_active           boolean,
+  notes               text,
+  created_at          timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select i.id, i.name, i.unit, i.low_stock_threshold,
+         i.is_active, i.notes, i.created_at
+  from public.ingredients i
+  order by i.name;
+$$;
+
+-- =====================================================================
+-- Phase 4.A — Recipes
+-- =====================================================================
+
+create or replace function public.upsert_recipe(
+  p_menu_item_id uuid,
+  p_is_active    boolean,
+  p_notes        text,
+  p_items        jsonb
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_recipe_id   uuid;
+  v_item        jsonb;
+  v_qty         numeric;
+  v_ing_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa công thức.';
+  end if;
+
+  select id into v_recipe_id from public.recipes where menu_item_id = p_menu_item_id;
+  if v_recipe_id is null then
+    insert into public.recipes (menu_item_id, is_active, notes, created_by)
+    values (p_menu_item_id, p_is_active, p_notes, auth.uid())
+    returning id into v_recipe_id;
+  else
+    update public.recipes
+       set is_active = p_is_active, notes = p_notes, updated_at = now()
+     where id = v_recipe_id;
+  end if;
+
+  delete from public.recipe_items where recipe_id = v_recipe_id;
+
+  if jsonb_array_length(coalesce(p_items, '[]'::jsonb)) > 0 then
+    for v_item in select * from jsonb_array_elements(p_items) loop
+      v_ing_id := (v_item->>'ingredient_id')::uuid;
+      v_qty    := (v_item->>'quantity')::numeric;
+      if v_qty is null or v_qty <= 0 then
+        raise exception 'Số lượng cho mỗi nguyên liệu phải lớn hơn 0.';
+      end if;
+      if v_ing_id is null then
+        raise exception 'ingredient_id thiếu hoặc không hợp lệ.';
+      end if;
+      insert into public.recipe_items (recipe_id, ingredient_id, quantity)
+      values (v_recipe_id, v_ing_id, v_qty);
+    end loop;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'recipe_upserted', 'recipe', v_recipe_id,
+    jsonb_build_object('menu_item_id', p_menu_item_id,
+                       'item_count', jsonb_array_length(coalesce(p_items, '[]'::jsonb)))
+  );
+
+  return v_recipe_id;
+end;
+$$;
+
+create or replace function public.delete_recipe(p_recipe_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_menu_id     uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa công thức.';
+  end if;
+
+  select menu_item_id into v_menu_id from public.recipes where id = p_recipe_id;
+  if v_menu_id is null then
+    raise exception 'Không tìm thấy công thức với id %.', p_recipe_id;
+  end if;
+
+  delete from public.recipes where id = p_recipe_id;  -- cascades to recipe_items
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'recipe_deleted', 'recipe', p_recipe_id,
+    jsonb_build_object('menu_item_id', v_menu_id)
+  );
+end;
+$$;
+
+create or replace function public.list_recipes()
+returns table (
+  recipe_id      uuid,
+  menu_item_id   uuid,
+  menu_item_name text,
+  is_active      boolean,
+  item_count     bigint,
+  updated_at     timestamptz,
+  notes          text
+)
+language sql
+stable
+set search_path = public
+as $$
+  select r.id as recipe_id,
+         r.menu_item_id,
+         m.name as menu_item_name,
+         r.is_active,
+         (select count(*) from public.recipe_items ri where ri.recipe_id = r.id)::bigint as item_count,
+         r.updated_at,
+         r.notes
+  from public.recipes r
+  join public.menu_items m on m.id = r.menu_item_id
+  order by m.name;
+$$;
+
+create or replace function public.get_recipe_by_menu_item(p_menu_item_id uuid)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select case
+    when r.id is null then null
+    else jsonb_build_object(
+      'recipe_id', r.id,
+      'menu_item_id', r.menu_item_id,
+      'is_active', r.is_active,
+      'notes', r.notes,
+      'items', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+            'ingredient_id', ri.ingredient_id,
+            'ingredient_name', i.name,
+            'unit', i.unit,
+            'quantity', ri.quantity
+          ) order by i.name)
+         from public.recipe_items ri
+         join public.ingredients i on i.id = ri.ingredient_id
+         where ri.recipe_id = r.id),
+        '[]'::jsonb
+      )
+    )
+  end
+  from public.recipes r
+  where r.menu_item_id = p_menu_item_id
+  limit 1;
+$$;
+
+-- =====================================================================
+-- Phase 4.A — Stock movements + counts + balances
+-- =====================================================================
+
+create or replace function public.record_stock_movement(
+  p_ingredient_id  uuid,
+  p_quantity_delta numeric,
+  p_reason         text,
+  p_notes          text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager', 'staff_operator') then
+    raise exception 'Bạn không có quyền nhập xuất kho.';
+  end if;
+
+  if p_reason not in ('purchase_received', 'manual_adjustment_in',
+                      'manual_adjustment_out', 'waste') then
+    raise exception 'Lý do không hợp lệ. Chỉ chấp nhận: purchase_received, manual_adjustment_in, manual_adjustment_out, waste.';
+  end if;
+
+  if p_reason in ('purchase_received', 'manual_adjustment_in') and p_quantity_delta <= 0 then
+    raise exception 'Số lượng phải lớn hơn 0 cho lý do %.', p_reason;
+  end if;
+  if p_reason in ('manual_adjustment_out', 'waste') and p_quantity_delta >= 0 then
+    raise exception 'Số lượng phải nhỏ hơn 0 cho lý do %.', p_reason;
+  end if;
+
+  insert into public.stock_movements (
+    ingredient_id, quantity_delta, reason, notes, created_by
+  ) values (p_ingredient_id, p_quantity_delta, p_reason, p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'stock_movement_recorded', 'stock_movement', v_new_id,
+    jsonb_build_object(
+      'movement_id', v_new_id,
+      'ingredient_id', p_ingredient_id,
+      'delta', p_quantity_delta,
+      'reason', p_reason
+    )
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.record_stock_count(
+  p_ingredient_id   uuid,
+  p_actual_quantity numeric,
+  p_notes           text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role         text;
+  v_theoretical_before  numeric;
+  v_delta               numeric;
+  v_new_id              uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager', 'staff_operator') then
+    raise exception 'Bạn không có quyền kiểm kê.';
+  end if;
+
+  if p_actual_quantity < 0 then
+    raise exception 'Số lượng thực tế không thể âm.';
+  end if;
+
+  select coalesce(sum(quantity_delta), 0) into v_theoretical_before
+  from public.stock_movements
+  where ingredient_id = p_ingredient_id;
+
+  v_delta := p_actual_quantity - v_theoretical_before;
+
+  insert into public.stock_movements (
+    ingredient_id, quantity_delta, reason, notes, created_by
+  ) values (p_ingredient_id, v_delta, 'count_correction', p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'stock_count_recorded', 'stock_movement', v_new_id,
+    jsonb_build_object(
+      'movement_id', v_new_id,
+      'ingredient_id', p_ingredient_id,
+      'theoretical_before', v_theoretical_before,
+      'actual', p_actual_quantity,
+      'delta', v_delta
+    )
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.stock_balance_now(p_ingredient_id uuid)
+returns numeric
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(sum(quantity_delta), 0)::numeric
+  from public.stock_movements
+  where ingredient_id = p_ingredient_id;
+$$;
+
+create or replace function public.stock_balances_all()
+returns table (
+  ingredient_id        uuid,
+  name                 text,
+  unit                 text,
+  theoretical_balance  numeric,
+  low_stock_threshold  numeric,
+  is_low               boolean,
+  last_movement_at     timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    i.id as ingredient_id,
+    i.name,
+    i.unit,
+    coalesce(sum(sm.quantity_delta), 0)::numeric as theoretical_balance,
+    i.low_stock_threshold,
+    case
+      when i.low_stock_threshold is null then false
+      else coalesce(sum(sm.quantity_delta), 0) < i.low_stock_threshold
+    end as is_low,
+    max(sm.occurred_at) as last_movement_at
+  from public.ingredients i
+  left join public.stock_movements sm on sm.ingredient_id = i.id
+  where i.is_active = true
+  group by i.id, i.name, i.unit, i.low_stock_threshold
+  order by i.name;
+$$;
+
+create or replace function public.list_stock_movements(
+  p_ingredient_id uuid    default null,
+  p_from          timestamptz default null,
+  p_to            timestamptz default null,
+  p_limit         int     default 100,
+  p_offset        int     default 0
+) returns table (
+  id               uuid,
+  ingredient_id    uuid,
+  ingredient_name  text,
+  quantity_delta   numeric,
+  reason           text,
+  occurred_at      timestamptz,
+  source_order_id  uuid,
+  source_recipe_id uuid,
+  notes            text,
+  created_by       uuid,
+  created_at       timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    sm.id, sm.ingredient_id, i.name as ingredient_name,
+    sm.quantity_delta, sm.reason, sm.occurred_at,
+    sm.source_order_id, sm.source_recipe_id,
+    sm.notes, sm.created_by, sm.created_at
+  from public.stock_movements sm
+  join public.ingredients i on i.id = sm.ingredient_id
+  where (p_ingredient_id is null or sm.ingredient_id = p_ingredient_id)
+    and (p_from is null or sm.occurred_at >= p_from)
+    and (p_to   is null or sm.occurred_at <= p_to)
+  order by sm.occurred_at desc, sm.id desc
+  limit greatest(p_limit, 1) offset greatest(p_offset, 0);
+$$;

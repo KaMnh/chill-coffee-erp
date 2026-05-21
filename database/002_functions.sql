@@ -2722,3 +2722,158 @@ as $$
   from public.ingredients i
   order by i.name;
 $$;
+
+-- =====================================================================
+-- Phase 4.A — Recipes
+-- =====================================================================
+
+create or replace function public.upsert_recipe(
+  p_menu_item_id uuid,
+  p_is_active    boolean,
+  p_notes        text,
+  p_items        jsonb
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_recipe_id   uuid;
+  v_item        jsonb;
+  v_qty         numeric;
+  v_ing_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa công thức.';
+  end if;
+
+  select id into v_recipe_id from public.recipes where menu_item_id = p_menu_item_id;
+  if v_recipe_id is null then
+    insert into public.recipes (menu_item_id, is_active, notes, created_by)
+    values (p_menu_item_id, p_is_active, p_notes, auth.uid())
+    returning id into v_recipe_id;
+  else
+    update public.recipes
+       set is_active = p_is_active, notes = p_notes, updated_at = now()
+     where id = v_recipe_id;
+  end if;
+
+  delete from public.recipe_items where recipe_id = v_recipe_id;
+
+  if jsonb_array_length(coalesce(p_items, '[]'::jsonb)) > 0 then
+    for v_item in select * from jsonb_array_elements(p_items) loop
+      v_ing_id := (v_item->>'ingredient_id')::uuid;
+      v_qty    := (v_item->>'quantity')::numeric;
+      if v_qty is null or v_qty <= 0 then
+        raise exception 'Số lượng cho mỗi nguyên liệu phải lớn hơn 0.';
+      end if;
+      if v_ing_id is null then
+        raise exception 'ingredient_id thiếu hoặc không hợp lệ.';
+      end if;
+      insert into public.recipe_items (recipe_id, ingredient_id, quantity)
+      values (v_recipe_id, v_ing_id, v_qty);
+    end loop;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'recipe_upserted', 'recipe', v_recipe_id,
+    jsonb_build_object('menu_item_id', p_menu_item_id,
+                       'item_count', jsonb_array_length(coalesce(p_items, '[]'::jsonb)))
+  );
+
+  return v_recipe_id;
+end;
+$$;
+
+create or replace function public.delete_recipe(p_recipe_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_menu_id     uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa công thức.';
+  end if;
+
+  select menu_item_id into v_menu_id from public.recipes where id = p_recipe_id;
+  if v_menu_id is null then
+    raise exception 'Không tìm thấy công thức với id %.', p_recipe_id;
+  end if;
+
+  delete from public.recipes where id = p_recipe_id;  -- cascades to recipe_items
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'recipe_deleted', 'recipe', p_recipe_id,
+    jsonb_build_object('menu_item_id', v_menu_id)
+  );
+end;
+$$;
+
+create or replace function public.list_recipes()
+returns table (
+  recipe_id      uuid,
+  menu_item_id   uuid,
+  menu_item_name text,
+  is_active      boolean,
+  item_count     bigint,
+  updated_at     timestamptz,
+  notes          text
+)
+language sql
+stable
+set search_path = public
+as $$
+  select r.id as recipe_id,
+         r.menu_item_id,
+         m.name as menu_item_name,
+         r.is_active,
+         (select count(*) from public.recipe_items ri where ri.recipe_id = r.id)::bigint as item_count,
+         r.updated_at,
+         r.notes
+  from public.recipes r
+  join public.menu_items m on m.id = r.menu_item_id
+  order by m.name;
+$$;
+
+create or replace function public.get_recipe_by_menu_item(p_menu_item_id uuid)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select case
+    when r.id is null then null
+    else jsonb_build_object(
+      'recipe_id', r.id,
+      'menu_item_id', r.menu_item_id,
+      'is_active', r.is_active,
+      'notes', r.notes,
+      'items', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+            'ingredient_id', ri.ingredient_id,
+            'ingredient_name', i.name,
+            'unit', i.unit,
+            'quantity', ri.quantity
+          ) order by i.name)
+         from public.recipe_items ri
+         join public.ingredients i on i.id = ri.ingredient_id
+         where ri.recipe_id = r.id),
+        '[]'::jsonb
+      )
+    )
+  end
+  from public.recipes r
+  where r.menu_item_id = p_menu_item_id
+  limit 1;
+$$;

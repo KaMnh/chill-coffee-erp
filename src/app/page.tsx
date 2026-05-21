@@ -24,6 +24,7 @@ import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
 import { CashView } from "@/features/cash/cash-view";
 import { SafeView } from "@/features/safe/safe-view";
+import { HandoverView } from "@/features/handover/handover-view";
 import { SettingsView } from "@/features/settings/settings-view";
 import { ShiftsView } from "@/features/shifts/shifts-view";
 import { Card, CardBody } from "@/components/ui/card";
@@ -197,6 +198,9 @@ export default function HomePage() {
         )}
         {view === "safe" && (
           <SafeView businessDate={businessDate} role={account.role} />
+        )}
+        {view === "handover" && (
+          <HandoverView businessDate={businessDate} role={account.role} />
         )}
         {view === "settings" && <SettingsView role={account.role} />}
       </div>

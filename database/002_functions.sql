@@ -2357,3 +2357,84 @@ drop trigger if exists audit_safe_counts on public.safe_counts;
 create trigger audit_safe_counts
   after insert or update or delete on public.safe_counts
   for each row execute function public._audit_row_change();
+
+-- =====================================================================
+-- Phase 4.A — Inventory: auto-deduction trigger
+-- =====================================================================
+
+create or replace function public._apply_sale_deductions_row()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_menu_item_id  uuid;
+  v_recipe_id     uuid;
+  v_item          record;
+begin
+  -- 1. Match menu_item by case-insensitive trimmed external_product_name
+  select id into v_menu_item_id
+  from public.menu_items
+  where external_product_name is not null
+    and lower(trim(external_product_name)) = lower(trim(new.product_name))
+    and is_active = true
+  limit 1;
+
+  if v_menu_item_id is null then
+    return new;
+  end if;
+
+  -- 2. Active recipe?
+  select id into v_recipe_id
+  from public.recipes
+  where menu_item_id = v_menu_item_id and is_active = true
+  limit 1;
+
+  if v_recipe_id is null then
+    return new;
+  end if;
+
+  -- 3. Emit one stock_movement per recipe_item, scaled by new.quantity
+  for v_item in
+    select ingredient_id, quantity from public.recipe_items where recipe_id = v_recipe_id
+  loop
+    insert into public.stock_movements (
+      ingredient_id, quantity_delta, reason, occurred_at,
+      source_order_id, source_recipe_id, created_by
+    ) values (
+      v_item.ingredient_id,
+      -(v_item.quantity * new.quantity),
+      'sale_theoretical',
+      new.created_at,
+      new.order_id,
+      v_recipe_id,
+      null
+    );
+  end loop;
+
+  return new;
+
+exception when others then
+  -- Defense-in-depth: never break ingest. Log + return new.
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    null, null, 'inventory_deduction_error', 'sales_order_item', new.id,
+    jsonb_build_object(
+      'order_id', new.order_id,
+      'product_name', new.product_name,
+      'sqlstate', SQLSTATE,
+      'message', SQLERRM
+    )
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_apply_sale_deductions on public.sales_order_items;
+
+create trigger trg_apply_sale_deductions
+after insert on public.sales_order_items
+for each row
+execute function public._apply_sale_deductions_row();

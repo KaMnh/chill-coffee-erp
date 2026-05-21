@@ -1,12 +1,12 @@
 -- Phase 3B.2b.ii.b — save_cash_day_opening RPC tests.
 --
 -- 4 assertions:
---   1. Happy path: owner inserts → row appears with correct opening_total
---   2. Duplicate business_date by non-owner → raises (only owner can update)
---   3. Manager allowed on first insert (per RLS + RPC role check)
---   4. Staff_operator rejected
+--   1. Owner happy path: RPC does not throw (lives_ok)
+--   2. Owner happy path verify: opening_total = sum(denom × count)
+--   3. Manager allowed on a fresh date (lives_ok)
+--   4. Staff_operator rejected (throws_ok)
 --
--- Pattern: BEGIN ... pg_temp.act_as(uuid, role) ... assertions ... ROLLBACK.
+-- Pattern: BEGIN ... pg_temp.act_as(uuid) ... assertions ... ROLLBACK.
 
 BEGIN;
 SELECT plan(4);
@@ -26,10 +26,12 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ────────────────────────────────────────────────────────────────────
--- Fixtures: 1 auth user + profile per role we need.
--- We do NOT touch auth.users (managed by Supabase Auth). Instead we
--- generate UUIDs and insert directly into profiles + employee_accounts
--- with role claim. The RLS app_role() reads from employee_accounts.
+-- Fixtures: 1 auth user + profile + employee_account per role we need.
+-- We insert directly into auth.users with the minimal required columns
+-- (id, email, encrypted_password, email_confirmed_at, instance_id) —
+-- this is safe because the whole transaction ROLLBACKs at the end, so
+-- no real Auth state persists. The RLS app_role() reads role from
+-- employee_accounts.role by matching auth_user_id = auth.uid().
 -- ────────────────────────────────────────────────────────────────────
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, instance_id)
   VALUES

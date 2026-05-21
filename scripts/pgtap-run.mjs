@@ -98,10 +98,23 @@ for (const file of files) {
   const { plan, passes, fails } = parseTap(output);
   totalPasses += passes.length;
   totalFails += fails.length;
-  if (fails.length > 0) {
+
+  // Plan-vs-count mismatch is a TAP-spec failure (e.g. a file declared 1..6
+  // but bailed out after 4 ok lines). Treat as a fail so the gate doesn't
+  // silently pass partially-run suites.
+  const planMismatch =
+    plan !== null && fails.length === 0 && passes.length !== plan;
+
+  if (fails.length > 0 || planMismatch) {
     if (!firstFailFile) firstFailFile = file;
     for (const f of fails) {
       console.error(`  ✗ not ok ${f.n} - ${f.desc}`);
+    }
+    if (planMismatch) {
+      console.error(
+        `  ✗ plan mismatch: declared 1..${plan} but found ${passes.length} ok lines`
+      );
+      totalFails += 1;
     }
     console.error(`  ${passes.length}/${plan ?? "?"} passed in this file`);
     break;

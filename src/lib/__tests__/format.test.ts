@@ -89,9 +89,10 @@ describe("formatDateTime", () => {
       /^(\d{2}:\d{2}\s+)?\d{1,2}\/\d{1,2}\/\d{2,4}(,?\s+\d{2}:\d{2})?$/
     );
     // Sanity: result should contain the day, month, and the VN-local hour.
-    expect(result).toContain("21");
-    expect(result).toContain("5");
-    expect(result).toContain("15:30");
+    expect(result).toContain("21");           // pins the day
+    expect(result).toContain("15:30");        // pins the VN-local hour
+    expect(result).toMatch(/[\/\s]0?5[\/\s]/); // pins month=5, bounded by separators (avoids matching "5" inside "15:30")
+    expect(result).toMatch(/\b26\b|\b2026\b/); // pins year (2-digit OR 4-digit)
   });
 });
 

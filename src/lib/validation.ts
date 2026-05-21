@@ -129,3 +129,60 @@ export function validateHandoverNote(note: string): ValidationResult {
   if (note.length > limits.note) return fail("note", `Ghi chú tối đa ${limits.note} ký tự.`);
   return ok();
 }
+
+// ---- Safe ledger ----
+export type SafeSetupInput = {
+  amount: number;
+  note?: string;
+};
+
+export function validateSafeSetup(input: SafeSetupInput): ValidationResult {
+  if (!inRange(input.amount, { min: 1, max: limits.amount.max }))
+    return fail("amount", `Số tiền phải từ 1 đến ${limits.amount.max}.`);
+  if ((input.note?.length ?? 0) > limits.note)
+    return fail("note", `Ghi chú tối đa ${limits.note} ký tự.`);
+  return ok();
+}
+
+export type SafeWithdrawInput = {
+  amount: number;
+  category: string;
+  description?: string;
+};
+
+const SAFE_WITHDRAW_CATEGORIES = ["utilities", "rent", "inventory", "maintenance", "other"] as const;
+
+export function validateSafeWithdraw(
+  input: SafeWithdrawInput,
+  currentBalance: number
+): ValidationResult {
+  if (!inRange(input.amount, { min: 1, max: limits.amount.max }))
+    return fail("amount", `Số tiền phải từ 1 đến ${limits.amount.max}.`);
+  if (input.amount > currentBalance)
+    return fail("amount", `Sổ quỹ không đủ. Số dư hiện tại: ${currentBalance}.`);
+  if (!SAFE_WITHDRAW_CATEGORIES.includes(input.category as (typeof SAFE_WITHDRAW_CATEGORIES)[number]))
+    return fail("category", "Hạng mục không hợp lệ.");
+  if ((input.description?.length ?? 0) > limits.note)
+    return fail("description", `Mô tả tối đa ${limits.note} ký tự.`);
+  return ok();
+}
+
+export type SafeAdjustInput = {
+  newBalance: number;
+  note: string;
+};
+
+export function validateSafeAdjust(
+  input: SafeAdjustInput,
+  currentBalance: number
+): ValidationResult {
+  if (!inRange(input.newBalance, { min: 0, max: limits.amount.max }))
+    return fail("newBalance", `Số dư mới phải từ 0 đến ${limits.amount.max}.`);
+  if (input.newBalance === currentBalance)
+    return fail("newBalance", "Số dư mới phải khác số dư hiện tại.");
+  if ((input.note?.trim().length ?? 0) < 5)
+    return fail("note", "Lý do điều chỉnh phải ≥ 5 ký tự.");
+  if (input.note.length > limits.note)
+    return fail("note", `Lý do tối đa ${limits.note} ký tự.`);
+  return ok();
+}

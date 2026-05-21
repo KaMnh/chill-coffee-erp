@@ -13,6 +13,8 @@ import {
   Trash2, Save,
   // Phase 3B.2b.i — action icons
   Pencil, Calculator,
+  // Phase 3C.1 — file upload + safe icons
+  Upload, Image as ImageIcon, ArrowDownRight,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -59,6 +61,10 @@ export const Icons = {
   // Phase 3B.2b.i actions
   pencil: Pencil,
   calculator: Calculator,
+  // Phase 3C.1 — file upload + safe action icons
+  upload: Upload,
+  image: ImageIcon,
+  arrowDownRight: ArrowDownRight,
 } as const;
 
 export type IconName = keyof typeof Icons;

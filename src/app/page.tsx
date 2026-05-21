@@ -23,6 +23,7 @@ import { ExpensesView } from "@/features/expenses/expenses-view";
 import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
 import { CashView } from "@/features/cash/cash-view";
+import { SafeView } from "@/features/safe/safe-view";
 import { ShiftsView } from "@/features/shifts/shifts-view";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardBody } from "@/components/ui/card";
@@ -194,11 +195,14 @@ export default function HomePage() {
         {view === "cash" && (
           <CashView businessDate={businessDate} role={account.role} />
         )}
-        {(view === "safe" || view === "settings") && (
+        {view === "safe" && (
+          <SafeView businessDate={businessDate} role={account.role} />
+        )}
+        {view === "settings" && (
           <EmptyState
             icon="lock"
-            title="Module này sẵn sàng ở Phase 3C"
-            subtitle="Sổ quỹ / Thiết lập là module owner-only, sẽ vào Phase 3C."
+            title="Thiết lập sẵn sàng ở Phase 3C.2"
+            subtitle="Module owner/manager, sẽ vào Phase 3C.2 (Settings)."
           />
         )}
       </div>

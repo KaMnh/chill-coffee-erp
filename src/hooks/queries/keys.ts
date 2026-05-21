@@ -20,5 +20,6 @@ export const queryKeys = {
   safeBalance: () => ["safe", "balance"] as const,
   safeTransactions: (filter?: { from?: string; to?: string; type?: string }) =>
     ["safe", "transactions", filter ?? {}] as const,
-  safeCounts: () => ["safe", "counts"] as const
+  safeCounts: () => ["safe", "counts"] as const,
+  safeAttachments: (txId: string) => ["safe", "attachments", txId] as const
 };

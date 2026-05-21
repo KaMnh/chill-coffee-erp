@@ -2372,7 +2372,13 @@ declare
   v_menu_item_id  uuid;
   v_recipe_id     uuid;
   v_item          record;
+  v_purchase_at   timestamptz;
 begin
+  -- Lookup parent order's purchase time for semantic correctness
+  select purchase_at into v_purchase_at
+  from public.sales_orders
+  where id = new.sales_order_id;
+
   -- 1. Match menu_item by case-insensitive trimmed external_product_name
   select id into v_menu_item_id
   from public.menu_items
@@ -2406,8 +2412,8 @@ begin
       v_item.ingredient_id,
       -(v_item.quantity * new.quantity),
       'sale_theoretical',
-      new.created_at,
-      new.order_id,
+      coalesce(v_purchase_at, now()),
+      new.sales_order_id,
       v_recipe_id,
       null
     );
@@ -2417,24 +2423,30 @@ begin
 
 exception when others then
   -- Defense-in-depth: never break ingest. Log + return new.
-  insert into public.audit_log (
-    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
-  ) values (
-    null, null, 'inventory_deduction_error', 'sales_order_item', new.id,
-    jsonb_build_object(
-      'order_id', new.order_id,
-      'product_name', new.product_name,
-      'sqlstate', SQLSTATE,
-      'message', SQLERRM
-    )
-  );
+  -- Nested EXCEPTION guards audit_log INSERT itself.
+  begin
+    insert into public.audit_log (
+      actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+    ) values (
+      null, null, 'inventory_deduction_error', 'sales_order_item', new.id,
+      jsonb_build_object(
+        'sales_order_id', new.sales_order_id,
+        'product_name', new.product_name,
+        'sqlstate', SQLSTATE,
+        'message', SQLERRM
+      )
+    );
+  exception when others then
+    null;  -- swallow secondary failure; ingest must continue
+  end;
   return new;
 end;
 $$;
 
 drop trigger if exists trg_apply_sale_deductions on public.sales_order_items;
+drop trigger if exists sales_order_items_apply_deductions on public.sales_order_items;
 
-create trigger trg_apply_sale_deductions
+create trigger sales_order_items_apply_deductions
 after insert on public.sales_order_items
 for each row
 execute function public._apply_sale_deductions_row();

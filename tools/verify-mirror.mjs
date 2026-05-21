@@ -121,6 +121,66 @@ async function viaRawAggregates() {
   };
 }
 
+async function viaCashAggregates() {
+  // RPC side
+  const { data: reportsRpc, error: e1 } = await supabase.rpc(
+    "get_cash_close_reports_by_date",
+    { p_business_date: date }
+  );
+  if (e1) throw new Error(`get_cash_close_reports_by_date failed: ${e1.message}`);
+
+  const { data: countsRpc, error: e2 } = await supabase.rpc(
+    "list_cash_counts",
+    { p_business_date: date }
+  );
+  if (e2) throw new Error(`list_cash_counts failed: ${e2.message}`);
+
+  // Raw side
+  const { data: rawReports, error: e3 } = await supabase
+    .from("cash_close_reports")
+    .select("report_status, safe_deposit_amount, business_date")
+    .eq("business_date", date);
+  if (e3) throw new Error(`cash_close_reports read failed: ${e3.message}`);
+
+  const { data: rawCounts, error: e4 } = await supabase
+    .from("cash_counts")
+    .select("id")
+    .eq("business_date", date);
+  if (e4) throw new Error(`cash_counts read failed: ${e4.message}`);
+
+  // RPC return is jsonb — may be an object containing an array, or an array.
+  // Normalize: prefer .reports if present, else assume the value itself is an array.
+  const reportsArrayRpc = Array.isArray(reportsRpc)
+    ? reportsRpc
+    : Array.isArray(reportsRpc?.reports)
+      ? reportsRpc.reports
+      : [];
+  const countsArrayRpc = Array.isArray(countsRpc)
+    ? countsRpc
+    : Array.isArray(countsRpc?.counts)
+      ? countsRpc.counts
+      : [];
+
+  return {
+    cash_close_reports_count_rpc: reportsArrayRpc.length,
+    cash_close_reports_count_raw: (rawReports ?? []).length,
+    cash_close_reports_final_rpc: reportsArrayRpc.filter(
+      (r) => (r.report_status ?? r.status) === "final"
+    ).length,
+    cash_close_reports_final_raw: (rawReports ?? []).filter(
+      (r) => r.report_status === "final"
+    ).length,
+    safe_deposit_sum_rpc: reportsArrayRpc
+      .filter((r) => (r.report_status ?? r.status) === "final")
+      .reduce((sum, r) => sum + Number(r.safe_deposit_amount ?? 0), 0),
+    safe_deposit_sum_raw: (rawReports ?? [])
+      .filter((r) => r.report_status === "final")
+      .reduce((sum, r) => sum + Number(r.safe_deposit_amount ?? 0), 0),
+    cash_counts_count_rpc: countsArrayRpc.length,
+    cash_counts_count_raw: (rawCounts ?? []).length,
+  };
+}
+
 function fmt(n) {
   return new Intl.NumberFormat("vi-VN").format(n);
 }
@@ -131,6 +191,8 @@ async function main() {
   const rpc = await viaRpc();
   console.log("Loading via raw aggregates (the ground truth)...");
   const raw = await viaRawAggregates();
+  console.log("Loading via cash aggregates (RPC + raw)...");
+  const cash = await viaCashAggregates();
 
   const checks = [
     { name: "total_sales",        rpc: Number(rpc.total_sales ?? 0),     raw: raw.total_sales },
@@ -140,17 +202,21 @@ async function main() {
     { name: "active_staff",       rpc: Number(rpc.active_staff ?? 0),    raw: raw.active_staff },
     { name: "sales_orders_count", rpc: (rpc.sales_orders ?? []).length,  raw: raw.sales_orders_count },
     { name: "expenses_count",     rpc: (rpc.expenses ?? []).length,      raw: raw.expenses_count },
+    { name: "cash_close_reports_count",       rpc: cash.cash_close_reports_count_rpc,       raw: cash.cash_close_reports_count_raw },
+    { name: "cash_close_reports_final_count", rpc: cash.cash_close_reports_final_rpc,        raw: cash.cash_close_reports_final_raw },
+    { name: "safe_deposit_sum_for_date",      rpc: cash.safe_deposit_sum_rpc,                raw: cash.safe_deposit_sum_raw },
+    { name: "cash_counts_count",              rpc: cash.cash_counts_count_rpc,               raw: cash.cash_counts_count_raw },
   ];
 
   let failed = 0;
-  console.log("\nField              | RPC              | Raw              | Match");
+  console.log("\nField                            | RPC              | Raw              | Match");
   console.log("---");
   for (const c of checks) {
     const match = c.rpc === c.raw;
     if (!match) failed++;
     const tick = match ? "✓" : "✗";
     console.log(
-      `${c.name.padEnd(18)} | ${String(fmt(c.rpc)).padStart(16)} | ${String(fmt(c.raw)).padStart(16)} | ${tick}`
+      `${c.name.padEnd(32)} | ${String(fmt(c.rpc)).padStart(16)} | ${String(fmt(c.raw)).padStart(16)} | ${tick}`
     );
   }
 

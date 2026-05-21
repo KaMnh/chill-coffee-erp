@@ -15,6 +15,8 @@ import {
   Pencil, Calculator,
   // Phase 3C.1 — file upload + safe icons
   Upload, Image as ImageIcon, ArrowDownRight,
+  // Phase 3C.3 — handover icon
+  ClipboardList,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -65,6 +67,8 @@ export const Icons = {
   upload: Upload,
   image: ImageIcon,
   arrowDownRight: ArrowDownRight,
+  // Phase 3C.3 — handover
+  clipboardList: ClipboardList,
 } as const;
 
 export type IconName = keyof typeof Icons;

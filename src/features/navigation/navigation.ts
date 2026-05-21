@@ -3,6 +3,7 @@ import type { IconName } from "@/components/ui/icons";
 
 export type ViewKey =
   | "dashboard" | "expenses" | "shifts" | "cash" | "safe"
+  | "handover"
   | "reports" | "pivot" | "settings";
 
 export interface NavItem {
@@ -22,15 +23,16 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { key: "shifts",    label: "Ca & lương",    icon: "users",           roles: ["owner", "manager", "staff_operator"] },
   { key: "cash",      label: "Chốt két",      icon: "banknote",        roles: ["owner", "manager", "staff_operator"] },
   { key: "safe",      label: "Sổ quỹ",        icon: "piggyBank",       roles: ["owner"] },
+  { key: "handover",  label: "Bàn giao",      icon: "clipboardList",   roles: ["owner", "manager", "staff_operator"] },
   { key: "reports",   label: "Báo cáo chốt két", icon: "fileText",     roles: ["owner", "manager", "staff_operator"] },
   { key: "pivot",     label: "Pivot",         icon: "barChart3",       roles: ["owner", "manager"] },
   { key: "settings",  label: "Thiết lập",     icon: "settings",        roles: ["owner", "manager"] },
 ];
 
 export const DEFAULT_SIDEBAR_BY_ROLE: Record<UserRole, ReadonlyArray<ViewKey>> = {
-  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "reports", "pivot", "settings"],
-  manager:         ["dashboard", "expenses", "shifts", "cash", "reports", "pivot", "settings"],
-  staff_operator:  ["dashboard", "expenses", "shifts", "cash", "reports"],
+  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "reports", "pivot", "settings"],
+  manager:         ["dashboard", "expenses", "shifts", "cash", "handover", "reports", "pivot", "settings"],
+  staff_operator:  ["dashboard", "expenses", "shifts", "cash", "handover", "reports"],
   employee_viewer: ["dashboard"],
 };
 

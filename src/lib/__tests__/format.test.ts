@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   formatNumber,
   formatVND,
@@ -76,7 +76,7 @@ describe("formatDateTime", () => {
     expect(formatDateTime(undefined)).toBe("Chưa có");
   });
 
-  it("formats a valid ISO into vi-VN short date+time (dd/MM/yyyy, HH:mm)", () => {
+  it("formats a valid ISO into vi-VN short date+time (structure regex; ICU format may vary)", () => {
     // Pin to a fixed instant. 2026-05-21T08:30:00Z = 15:30 VN.
     // vi-VN with dateStyle:short + timeStyle:short on Node (this machine's ICU)
     // produces: "15:30 21/5/26" — time first, then date, 2-digit year, no

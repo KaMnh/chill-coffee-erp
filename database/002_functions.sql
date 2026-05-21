@@ -2877,3 +2877,191 @@ as $$
   where r.menu_item_id = p_menu_item_id
   limit 1;
 $$;
+
+-- =====================================================================
+-- Phase 4.A — Stock movements + counts + balances
+-- =====================================================================
+
+create or replace function public.record_stock_movement(
+  p_ingredient_id  uuid,
+  p_quantity_delta numeric,
+  p_reason         text,
+  p_notes          text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager', 'staff_operator') then
+    raise exception 'Bạn không có quyền nhập xuất kho.';
+  end if;
+
+  if p_reason not in ('purchase_received', 'manual_adjustment_in',
+                      'manual_adjustment_out', 'waste') then
+    raise exception 'Lý do không hợp lệ. Chỉ chấp nhận: purchase_received, manual_adjustment_in, manual_adjustment_out, waste.';
+  end if;
+
+  if p_reason in ('purchase_received', 'manual_adjustment_in') and p_quantity_delta <= 0 then
+    raise exception 'Số lượng phải lớn hơn 0 cho lý do %.', p_reason;
+  end if;
+  if p_reason in ('manual_adjustment_out', 'waste') and p_quantity_delta >= 0 then
+    raise exception 'Số lượng phải nhỏ hơn 0 cho lý do %.', p_reason;
+  end if;
+
+  insert into public.stock_movements (
+    ingredient_id, quantity_delta, reason, notes, created_by
+  ) values (p_ingredient_id, p_quantity_delta, p_reason, p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'stock_movement_recorded', 'stock_movement', v_new_id,
+    jsonb_build_object(
+      'movement_id', v_new_id,
+      'ingredient_id', p_ingredient_id,
+      'delta', p_quantity_delta,
+      'reason', p_reason
+    )
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.record_stock_count(
+  p_ingredient_id   uuid,
+  p_actual_quantity numeric,
+  p_notes           text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role         text;
+  v_theoretical_before  numeric;
+  v_delta               numeric;
+  v_new_id              uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager', 'staff_operator') then
+    raise exception 'Bạn không có quyền kiểm kê.';
+  end if;
+
+  if p_actual_quantity < 0 then
+    raise exception 'Số lượng thực tế không thể âm.';
+  end if;
+
+  select coalesce(sum(quantity_delta), 0) into v_theoretical_before
+  from public.stock_movements
+  where ingredient_id = p_ingredient_id;
+
+  v_delta := p_actual_quantity - v_theoretical_before;
+
+  insert into public.stock_movements (
+    ingredient_id, quantity_delta, reason, notes, created_by
+  ) values (p_ingredient_id, v_delta, 'count_correction', p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'stock_count_recorded', 'stock_movement', v_new_id,
+    jsonb_build_object(
+      'movement_id', v_new_id,
+      'ingredient_id', p_ingredient_id,
+      'theoretical_before', v_theoretical_before,
+      'actual', p_actual_quantity,
+      'delta', v_delta
+    )
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.stock_balance_now(p_ingredient_id uuid)
+returns numeric
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(sum(quantity_delta), 0)::numeric
+  from public.stock_movements
+  where ingredient_id = p_ingredient_id;
+$$;
+
+create or replace function public.stock_balances_all()
+returns table (
+  ingredient_id        uuid,
+  name                 text,
+  unit                 text,
+  theoretical_balance  numeric,
+  low_stock_threshold  numeric,
+  is_low               boolean,
+  last_movement_at     timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    i.id as ingredient_id,
+    i.name,
+    i.unit,
+    coalesce(sum(sm.quantity_delta), 0)::numeric as theoretical_balance,
+    i.low_stock_threshold,
+    case
+      when i.low_stock_threshold is null then false
+      else coalesce(sum(sm.quantity_delta), 0) < i.low_stock_threshold
+    end as is_low,
+    max(sm.occurred_at) as last_movement_at
+  from public.ingredients i
+  left join public.stock_movements sm on sm.ingredient_id = i.id
+  where i.is_active = true
+  group by i.id, i.name, i.unit, i.low_stock_threshold
+  order by i.name;
+$$;
+
+create or replace function public.list_stock_movements(
+  p_ingredient_id uuid    default null,
+  p_from          timestamptz default null,
+  p_to            timestamptz default null,
+  p_limit         int     default 100,
+  p_offset        int     default 0
+) returns table (
+  id               uuid,
+  ingredient_id    uuid,
+  ingredient_name  text,
+  quantity_delta   numeric,
+  reason           text,
+  occurred_at      timestamptz,
+  source_order_id  uuid,
+  source_recipe_id uuid,
+  notes            text,
+  created_by       uuid,
+  created_at       timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    sm.id, sm.ingredient_id, i.name as ingredient_name,
+    sm.quantity_delta, sm.reason, sm.occurred_at,
+    sm.source_order_id, sm.source_recipe_id,
+    sm.notes, sm.created_by, sm.created_at
+  from public.stock_movements sm
+  join public.ingredients i on i.id = sm.ingredient_id
+  where (p_ingredient_id is null or sm.ingredient_id = p_ingredient_id)
+    and (p_from is null or sm.occurred_at >= p_from)
+    and (p_to   is null or sm.occurred_at <= p_to)
+  order by sm.occurred_at desc, sm.id desc
+  limit greatest(p_limit, 1) offset greatest(p_offset, 0);
+$$;

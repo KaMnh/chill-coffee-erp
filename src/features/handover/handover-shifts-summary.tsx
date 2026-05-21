@@ -40,6 +40,10 @@ export function HandoverShiftsSummary({
       <CardBody className="space-y-3">
         {shiftsQuery.isLoading ? (
           <div className="flex justify-center py-4"><Spinner size={24} /></div>
+        ) : shiftsQuery.isError ? (
+          <AlertBanner variant="warning">
+            Không tải được danh sách ca. Hãy kiểm tra thủ công trước khi bàn giao.
+          </AlertBanner>
         ) : (
           <>
             <div className="flex items-baseline gap-3">

@@ -41,7 +41,7 @@ export function HandoverCompleteAction({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const undoneCount = totalCount - doneCount;
-  const allDone = totalCount > 0 && undoneCount === 0;
+  const allDone = undoneCount === 0;
   const isBusy = completeM.isPending;
 
   async function handleConfirm() {

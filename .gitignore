@@ -21,3 +21,6 @@ supabase/volumes/pooler/
 # Production data dumps (Phase 3A verification artifacts)
 # Contains real customer / financial data — never commit.
 mirrors/
+
+# Vitest coverage output (not generated yet — Phase 6 will turn this on)
+coverage/

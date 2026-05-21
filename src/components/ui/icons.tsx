@@ -17,6 +17,8 @@ import {
   Upload, Image as ImageIcon, ArrowDownRight,
   // Phase 3C.3 — handover icon
   ClipboardList,
+  // Phase 4.B — inventory
+  Package,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -69,6 +71,8 @@ export const Icons = {
   arrowDownRight: ArrowDownRight,
   // Phase 3C.3 — handover
   clipboardList: ClipboardList,
+  // Phase 4.B — inventory
+  package: Package,
 } as const;
 
 export type IconName = keyof typeof Icons;

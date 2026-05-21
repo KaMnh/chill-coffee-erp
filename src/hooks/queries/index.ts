@@ -11,3 +11,4 @@ export {
   useSafeCountsQuery,
   useSafeTransactionsQuery
 } from "./use-safe-queries";
+export * from "./use-inventory-queries";

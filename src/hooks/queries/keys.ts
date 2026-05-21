@@ -21,5 +21,21 @@ export const queryKeys = {
   safeTransactions: (filter?: { from?: string; to?: string; type?: string }) =>
     ["safe", "transactions", filter ?? {}] as const,
   safeCounts: () => ["safe", "counts"] as const,
-  safeAttachments: (txId: string) => ["safe", "attachments", txId] as const
+  safeAttachments: (txId: string) => ["safe", "attachments", txId] as const,
+
+  // Phase 4.A — Inventory
+  ingredients: () => ["inventory", "ingredients"] as const,
+  menuItems: () => ["inventory", "menu_items"] as const,
+  recipes: () => ["inventory", "recipes"] as const,
+  stockBalances: () => ["inventory", "stock_balances"] as const,
+  stockMovements: (filter?: {
+    ingredient_id?: string;
+    from?: string;
+    to?: string;
+  }) =>
+    filter
+      ? (["inventory", "stock_movements", filter] as const)
+      : (["inventory", "stock_movements"] as const),
+  recipeByMenuItem: (menuItemId: string) =>
+    ["inventory", "recipe", menuItemId] as const,
 };

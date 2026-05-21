@@ -618,3 +618,105 @@ begin
       check (opening_total >= 0);
   end if;
 end $$;
+
+-- =====================================================================
+-- Phase 4.A — Inventory module
+-- =====================================================================
+
+create table if not exists public.ingredients (
+  id                    uuid primary key default gen_random_uuid(),
+  name                  text not null unique,
+  unit                  text not null,
+  low_stock_threshold   numeric(18, 4),
+  is_active             boolean not null default true,
+  notes                 text,
+  created_at            timestamptz not null default now(),
+  created_by            uuid references public.profiles(id),
+  constraint ingredients_name_not_empty check (length(trim(name)) > 0),
+  constraint ingredients_unit_not_empty check (length(trim(unit)) > 0),
+  constraint ingredients_threshold_non_negative check (
+    low_stock_threshold is null or low_stock_threshold >= 0
+  )
+);
+
+create index if not exists idx_ingredients_active
+  on public.ingredients(is_active) where is_active = true;
+
+create table if not exists public.menu_items (
+  id                      uuid primary key default gen_random_uuid(),
+  name                    text not null unique,
+  external_product_name   text,
+  is_active               boolean not null default true,
+  notes                   text,
+  created_at              timestamptz not null default now(),
+  created_by              uuid references public.profiles(id),
+  constraint menu_items_name_not_empty check (length(trim(name)) > 0),
+  constraint menu_items_external_name_not_empty check (
+    external_product_name is null or length(trim(external_product_name)) > 0
+  )
+);
+
+create index if not exists idx_menu_items_ext_name_active
+  on public.menu_items (lower(trim(external_product_name)))
+  where external_product_name is not null and is_active = true;
+
+create table if not exists public.recipes (
+  id              uuid primary key default gen_random_uuid(),
+  menu_item_id    uuid not null unique references public.menu_items(id),
+  is_active       boolean not null default true,
+  notes           text,
+  created_at      timestamptz not null default now(),
+  created_by      uuid references public.profiles(id),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists idx_recipes_active
+  on public.recipes(menu_item_id) where is_active = true;
+
+create table if not exists public.recipe_items (
+  recipe_id       uuid not null references public.recipes(id) on delete cascade,
+  ingredient_id   uuid not null references public.ingredients(id),
+  quantity        numeric(18, 4) not null,
+  constraint recipe_items_quantity_positive check (quantity > 0),
+  primary key (recipe_id, ingredient_id)
+);
+
+create table if not exists public.stock_movements (
+  id                uuid primary key default gen_random_uuid(),
+  ingredient_id     uuid not null references public.ingredients(id),
+  quantity_delta    numeric(18, 4) not null,
+  reason            text not null,
+  occurred_at       timestamptz not null default now(),
+  source_order_id   uuid references public.sales_orders(id),
+  source_recipe_id  uuid references public.recipes(id),
+  notes             text,
+  created_by        uuid references public.profiles(id),
+  created_at        timestamptz not null default now(),
+  constraint stock_movements_reason_valid check (reason in (
+    'purchase_received',
+    'sale_theoretical',
+    'manual_adjustment_in',
+    'manual_adjustment_out',
+    'count_correction',
+    'waste'
+  )),
+  constraint stock_movements_delta_nonzero check (
+    quantity_delta != 0 or reason = 'count_correction'
+  ),
+  constraint stock_movements_sign_matches_reason check (
+    case
+      when reason = 'purchase_received'     then quantity_delta > 0
+      when reason = 'manual_adjustment_in'  then quantity_delta > 0
+      when reason = 'manual_adjustment_out' then quantity_delta < 0
+      when reason = 'waste'                 then quantity_delta < 0
+      when reason = 'sale_theoretical'      then quantity_delta < 0
+      when reason = 'count_correction'      then true
+      else false
+    end
+  )
+);
+
+create index if not exists idx_stock_movements_ingredient_occurred
+  on public.stock_movements (ingredient_id, occurred_at desc);
+create index if not exists idx_stock_movements_reason
+  on public.stock_movements (reason);

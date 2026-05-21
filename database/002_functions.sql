@@ -2353,6 +2353,141 @@ create trigger audit_safe_transactions
   after insert or update or delete on public.safe_transactions
   for each row execute function public._audit_row_change();
 
+-- =====================================================================
+-- Phase 4.A — Menu items CRUD
+-- =====================================================================
+
+create or replace function public.create_menu_item(
+  p_name                  text,
+  p_external_product_name text default null,
+  p_notes                 text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền tạo sản phẩm.';
+  end if;
+
+  insert into public.menu_items (name, external_product_name, notes, created_by)
+  values (
+    trim(p_name),
+    case when p_external_product_name is null then null else trim(p_external_product_name) end,
+    p_notes,
+    auth.uid()
+  )
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_created', 'menu_item', v_new_id,
+    jsonb_build_object('name', trim(p_name),
+                       'external_product_name', p_external_product_name)
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.update_menu_item(
+  p_id                    uuid,
+  p_name                  text,
+  p_external_product_name text,
+  p_notes                 text,
+  p_is_active             boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa sản phẩm.';
+  end if;
+
+  update public.menu_items
+     set name = trim(p_name),
+         external_product_name = case when p_external_product_name is null then null else trim(p_external_product_name) end,
+         notes = p_notes,
+         is_active = p_is_active
+   where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy sản phẩm với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_updated', 'menu_item', p_id,
+    jsonb_build_object('name', trim(p_name), 'is_active', p_is_active)
+  );
+end;
+$$;
+
+create or replace function public.delete_menu_item(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa sản phẩm.';
+  end if;
+
+  if exists (select 1 from public.recipes where menu_item_id = p_id) then
+    raise exception 'Không thể xóa: sản phẩm đang có công thức. Hãy xóa công thức trước.';
+  end if;
+
+  delete from public.menu_items where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy sản phẩm với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'menu_item_deleted', 'menu_item', p_id,
+    jsonb_build_object()
+  );
+end;
+$$;
+
+create or replace function public.list_menu_items()
+returns table (
+  id                    uuid,
+  name                  text,
+  external_product_name text,
+  is_active             boolean,
+  notes                 text,
+  created_at            timestamptz,
+  recipe_count          bigint
+)
+language sql
+stable
+set search_path = public
+as $$
+  select m.id, m.name, m.external_product_name, m.is_active, m.notes, m.created_at,
+         (select count(*) from public.recipes r where r.menu_item_id = m.id)::bigint as recipe_count
+  from public.menu_items m
+  order by m.name;
+$$;
+
 drop trigger if exists audit_safe_counts on public.safe_counts;
 create trigger audit_safe_counts
   after insert or update or delete on public.safe_counts

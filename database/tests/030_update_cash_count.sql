@@ -1,22 +1,22 @@
 -- Phase 3B.2b.ii.b — update_cash_count RPC tests.
 --
--- 4 assertions:
---   1. Happy path: admin edits non-final count → bank_transfer field updated
---   2. Rejects when target count is referenced by a final cash_close_report
---   3+4. Note-only edit accepted (combined with denomination re-snapshot check)
+-- 5 assertions (plan increased from 4 to split T3/T4 properly):
+--   1a. Happy path: bank_transfer edit does not throw (lives_ok)
+--   1b. Happy path verify: bank_transfer_confirmed value updated
+--   2.  Rejects when target shift_close count has a final cash_close_report
+--   3.  Denomination edit re-snapshots cash_drawer_events.amount (the
+--       UPDATE at 002_functions.sql line ~841 — only observable when
+--       denominations change because note-only edits write the same amount)
+--   4.  Note-only edit accepted (lives_ok)
 --
--- Adaptation note: finalize_cash_close_report(uuid) takes exactly one arg.
--- Instead of calling the finalize RPC chain (which requires save_cash_day_opening
--- + finalize_cash_close_report with correct POS state), Test 2 directly INSERTs
--- a 'final' row into cash_close_reports for the shift_close count. This matches
--- the actual rejection condition in update_cash_count (line ~774):
---   if v_count.count_type = 'shift_close' and exists (
---     select 1 from cash_close_reports
---     where cash_count_id = v_id and report_status = 'final'
---   )
+-- Adaptation: Test 2 bypasses the finalize_cash_close_report RPC chain
+-- (which would require save_cash_day_opening + a 2-arg finalize call) by
+-- directly INSERTing a 'final' row into cash_close_reports. The
+-- update_cash_count rejection (002_functions.sql line ~774) checks
+-- existence of such a row regardless of how it got there.
 
 BEGIN;
-SELECT plan(4);
+SELECT plan(5);
 
 CREATE OR REPLACE FUNCTION pg_temp.act_as(p_user_id uuid)
 RETURNS void AS $$
@@ -104,7 +104,24 @@ SELECT throws_ok(
   'update_cash_count rejects edits on finalized count'
 );
 
--- Test 3+4 combined: note-only edit accepted on the spot_audit (also verifies denomination re-snapshot path)
+-- Test 3: Denomination edit re-snapshots cash_drawer_events.amount.
+-- The original save_cash_count put _seed at total_physical = 500_000 (100k × 5).
+-- After update with denominations summing to 1_000_000 (100k × 10), the
+-- cash_drawer_events row for this count must reflect the new amount.
+SELECT public.update_cash_count(jsonb_build_object(
+  'id', (SELECT id FROM _seed),
+  'denominations_json', jsonb_build_object('100000', 10)
+));
+
+SELECT is(
+  (SELECT amount FROM public.cash_drawer_events
+   WHERE cash_count_id = (SELECT id FROM _seed)
+     AND event_type = 'cash_count_snapshot'),
+  1000000::numeric,
+  'cash_drawer_events.amount re-snapshotted to 1_000_000 after denomination edit'
+);
+
+-- Test 4: Note-only edit accepted (lives_ok).
 SELECT lives_ok(
   format($$SELECT public.update_cash_count(jsonb_build_object(
     'id', %L,

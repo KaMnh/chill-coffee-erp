@@ -58,8 +58,8 @@ export function HandoverNoteEditor({
     setLastSavedNote(note);
   }, [note]);
 
-  const trimmedLen = currentNote.length;
-  const tooLong = trimmedLen > limits.note;
+  const noteLen = currentNote.length;
+  const tooLong = noteLen > limits.note;
   const isDirty = currentNote !== lastSavedNote;
   const isBusy = updateM.isPending;
 
@@ -84,7 +84,7 @@ export function HandoverNoteEditor({
       ? "Sẽ lưu khi rời ô"
       : lastSavedAt
         ? `Đã lưu lúc ${formatTime(lastSavedAt.toISOString())}`
-        : `${trimmedLen}/${limits.note} ký tự`;
+        : `${noteLen}/${limits.note} ký tự`;
 
   return (
     <Card>

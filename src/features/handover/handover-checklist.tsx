@@ -22,7 +22,7 @@ interface HandoverChecklistProps {
  *
  * Each task row has:
  *   - Checkbox with task.label
- *   - "Đã làm bởi {user} lúc {ts}" muted text when is_done
+ *   - "Đã làm lúc {ts}" muted text when is_done
  *
  * Toggle fires useUpdateHandoverTask with the new isDone value.
  * While in-flight for a specific task, that row is disabled
@@ -50,7 +50,7 @@ export function HandoverChecklist({
     return a.task_key.localeCompare(b.task_key);
   });
 
-  const doneCount = sortedTasks.filter((t) => t.is_done).length;
+  const doneCount = tasks.filter((t) => t.is_done).length;
 
   async function handleToggle(task: HandoverTask, checked: boolean) {
     if (disabled || savingTaskId) return;
@@ -72,7 +72,7 @@ export function HandoverChecklist({
       <CardHeader>
         <div className="flex w-full items-baseline justify-between">
           <CardTitle>Checklist</CardTitle>
-          <span className="text-xs text-muted">{doneCount}/{sortedTasks.length} đã xong</span>
+          <span className="text-xs text-muted">{doneCount}/{tasks.length} đã xong</span>
         </div>
       </CardHeader>
       <CardBody>
@@ -89,23 +89,20 @@ export function HandoverChecklist({
               return (
                 <div
                   key={task.id}
-                  className="flex items-start gap-3 p-3 rounded-md border border-border bg-surface"
+                  className="flex flex-col p-3 rounded-md border border-border bg-surface"
                 >
                   <Checkbox
                     checked={task.is_done}
                     onCheckedChange={(checked) => handleToggle(task, checked === true)}
                     disabled={disabled || isRowSaving}
-                    aria-label={task.label}
+                    label={task.label}
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-ink">{task.label}</p>
-                    {task.is_done && (
-                      <p className="text-xs text-muted mt-0.5">
-                        Đã làm{" "}
-                        {task.checked_at && `lúc ${formatDateTime(task.checked_at)}`}
-                      </p>
-                    )}
-                  </div>
+                  {task.is_done && (
+                    <p className="text-xs text-muted mt-0.5 ml-7">
+                      Đã làm{" "}
+                      {task.checked_at && `lúc ${formatDateTime(task.checked_at)}`}
+                    </p>
+                  )}
                 </div>
               );
             })}

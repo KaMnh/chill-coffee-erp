@@ -2450,3 +2450,140 @@ create trigger sales_order_items_apply_deductions
 after insert on public.sales_order_items
 for each row
 execute function public._apply_sale_deductions_row();
+
+-- =====================================================================
+-- Phase 4.A — Ingredients CRUD
+-- =====================================================================
+
+create or replace function public.create_ingredient(
+  p_name                text,
+  p_unit                text,
+  p_low_stock_threshold numeric default null,
+  p_notes               text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+  v_new_id      uuid;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền tạo nguyên liệu.';
+  end if;
+
+  insert into public.ingredients (name, unit, low_stock_threshold, notes, created_by)
+  values (trim(p_name), trim(p_unit), p_low_stock_threshold, p_notes, auth.uid())
+  returning id into v_new_id;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_created', 'ingredient', v_new_id,
+    jsonb_build_object('name', trim(p_name), 'unit', trim(p_unit),
+                       'low_stock_threshold', p_low_stock_threshold)
+  );
+
+  return v_new_id;
+end;
+$$;
+
+create or replace function public.update_ingredient(
+  p_id                  uuid,
+  p_name                text,
+  p_unit                text,
+  p_low_stock_threshold numeric,
+  p_notes               text,
+  p_is_active           boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền chỉnh sửa nguyên liệu.';
+  end if;
+
+  update public.ingredients
+     set name = trim(p_name),
+         unit = trim(p_unit),
+         low_stock_threshold = p_low_stock_threshold,
+         notes = p_notes,
+         is_active = p_is_active
+   where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy nguyên liệu với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_updated', 'ingredient', p_id,
+    jsonb_build_object('name', trim(p_name), 'is_active', p_is_active)
+  );
+end;
+$$;
+
+create or replace function public.delete_ingredient(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_role text;
+begin
+  v_caller_role := public.app_role();
+  if v_caller_role not in ('owner', 'manager') then
+    raise exception 'Bạn không có quyền xóa nguyên liệu.';
+  end if;
+
+  if exists (select 1 from public.stock_movements where ingredient_id = p_id) then
+    raise exception 'Không thể xóa: nguyên liệu đã có giao dịch tồn kho. Hãy đặt is_active = false để vô hiệu hóa.';
+  end if;
+
+  if exists (select 1 from public.recipe_items where ingredient_id = p_id) then
+    raise exception 'Không thể xóa: nguyên liệu đang được dùng trong công thức. Hãy xóa khỏi công thức trước.';
+  end if;
+
+  delete from public.ingredients where id = p_id;
+
+  if not found then
+    raise exception 'Không tìm thấy nguyên liệu với id %.', p_id;
+  end if;
+
+  insert into public.audit_log (
+    actor_user_id, actor_role, action, entity_type, entity_id, diff_json
+  ) values (
+    auth.uid(), v_caller_role, 'ingredient_deleted', 'ingredient', p_id,
+    jsonb_build_object()
+  );
+end;
+$$;
+
+create or replace function public.list_ingredients()
+returns table (
+  id                  uuid,
+  name                text,
+  unit                text,
+  low_stock_threshold numeric,
+  is_active           boolean,
+  notes               text,
+  created_at          timestamptz
+)
+language sql
+stable
+set search_path = public
+as $$
+  select i.id, i.name, i.unit, i.low_stock_threshold,
+         i.is_active, i.notes, i.created_at
+  from public.ingredients i
+  order by i.name;
+$$;

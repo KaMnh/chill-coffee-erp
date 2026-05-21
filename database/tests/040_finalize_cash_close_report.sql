@@ -118,9 +118,11 @@ SELECT is(
   'second finalize call adds NO new safe_transactions (idempotent)'
 );
 
--- Test 8: leave > physical_cash → raises
--- Must use a *fresh* cash_count (never finalized) so the idempotency early-return
--- at line 2257 doesn't fire before the leave validation at line 2277.
+-- Test 8: leave > physical_cash → raises.
+-- Must use a *fresh* cash_count (never finalized) so the idempotency
+-- early-return doesn't fire before the leave > physical_cash validation.
+-- Re-using _count (already final from Tests 1-7) would short-circuit to
+-- the idempotency branch and silently pass even if the leave check is broken.
 SELECT public.save_cash_day_opening(jsonb_build_object(
   'business_date', '2026-01-16',
   'denominations_json', jsonb_build_object('100000', 2),

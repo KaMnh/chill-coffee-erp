@@ -631,7 +631,7 @@ create table if not exists public.ingredients (
   is_active             boolean not null default true,
   notes                 text,
   created_at            timestamptz not null default now(),
-  created_by            uuid references public.profiles(id),
+  created_by            uuid references auth.users(id),
   constraint ingredients_name_not_empty check (length(trim(name)) > 0),
   constraint ingredients_unit_not_empty check (length(trim(unit)) > 0),
   constraint ingredients_threshold_non_negative check (
@@ -649,7 +649,7 @@ create table if not exists public.menu_items (
   is_active               boolean not null default true,
   notes                   text,
   created_at              timestamptz not null default now(),
-  created_by              uuid references public.profiles(id),
+  created_by              uuid references auth.users(id),
   constraint menu_items_name_not_empty check (length(trim(name)) > 0),
   constraint menu_items_external_name_not_empty check (
     external_product_name is null or length(trim(external_product_name)) > 0
@@ -666,12 +666,16 @@ create table if not exists public.recipes (
   is_active       boolean not null default true,
   notes           text,
   created_at      timestamptz not null default now(),
-  created_by      uuid references public.profiles(id),
+  created_by      uuid references auth.users(id),
   updated_at      timestamptz not null default now()
 );
 
 create index if not exists idx_recipes_active
   on public.recipes(menu_item_id) where is_active = true;
+
+drop trigger if exists recipes_set_updated_at on public.recipes;
+create trigger recipes_set_updated_at before update on public.recipes
+  for each row execute function public.set_updated_at();
 
 create table if not exists public.recipe_items (
   recipe_id       uuid not null references public.recipes(id) on delete cascade,
@@ -690,7 +694,7 @@ create table if not exists public.stock_movements (
   source_order_id   uuid references public.sales_orders(id),
   source_recipe_id  uuid references public.recipes(id),
   notes             text,
-  created_by        uuid references public.profiles(id),
+  created_by        uuid references auth.users(id),
   created_at        timestamptz not null default now(),
   constraint stock_movements_reason_valid check (reason in (
     'purchase_received',

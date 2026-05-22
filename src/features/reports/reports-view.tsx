@@ -19,6 +19,7 @@ import { exportElementAsJpeg } from "./export-jpeg";
 import { InventoryAnalyticsTab } from "./inventory-analytics-tab";
 import { SalesByProductTab } from "./sales-by-product-tab";
 import { ExpensePayrollTab } from "./expense-payroll-tab";
+import { HourlyTrendsTab } from "./hourly-trends-tab";
 
 interface ReportsViewProps {
   businessDate: string;
@@ -52,12 +53,7 @@ export function ReportsView({ businessDate }: ReportsViewProps) {
       </TabsContent>
 
       <TabsContent value="hourly">
-        <EmptyState
-          icon="info"
-          title="Theo giờ"
-          subtitle="Phát hành trong giai đoạn 5.D — xu hướng doanh số theo giờ."
-          dashedBorder
-        />
+        <HourlyTrendsTab />
       </TabsContent>
     </Tabs>
   );

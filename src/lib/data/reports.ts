@@ -79,3 +79,52 @@ export async function editCashCloseReport(
     adjustment_id?: string;
   };
 }
+
+// ---------------------------------------------------------------------
+// Phase 5.A — Inventory analytics
+// ---------------------------------------------------------------------
+
+export interface ConsumptionRow {
+  ingredient_id: string;
+  ingredient_name: string;
+  unit: string;
+  total_consumed: number;
+  sale_count: number;
+}
+
+export async function loadInventoryConsumption(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<ConsumptionRow[]> {
+  const { data, error } = await supabase.rpc(
+    "inventory_consumption_by_ingredient",
+    { p_from: from, p_to: to }
+  );
+  if (error) throw toAppError(error, "Không tải được báo cáo tiêu thụ.");
+  return (data ?? []) as ConsumptionRow[];
+}
+
+export interface VarianceRow {
+  movement_id: string;
+  ingredient_id: string;
+  ingredient_name: string;
+  unit: string;
+  quantity_delta: number;
+  occurred_at: string;
+  notes: string | null;
+  created_by: string | null;
+}
+
+export async function loadInventoryVariance(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<VarianceRow[]> {
+  const { data, error } = await supabase.rpc(
+    "inventory_variance_audit",
+    { p_from: from, p_to: to }
+  );
+  if (error) throw toAppError(error, "Không tải được lịch sử kiểm kê.");
+  return (data ?? []) as VarianceRow[];
+}

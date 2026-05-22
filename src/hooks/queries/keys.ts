@@ -38,4 +38,10 @@ export const queryKeys = {
       : (["inventory", "stock_movements"] as const),
   recipeByMenuItem: (menuItemId: string) =>
     ["inventory", "recipe", menuItemId] as const,
+
+  // Phase 5.A — Inventory analytics reports
+  inventoryConsumption: (range: { from: string; to: string }) =>
+    ["inventory-reports", "consumption", range] as const,
+  inventoryVariance: (range: { from: string; to: string }) =>
+    ["inventory-reports", "variance", range] as const,
 };

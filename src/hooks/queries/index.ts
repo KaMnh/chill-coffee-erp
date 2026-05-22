@@ -16,3 +16,4 @@ export * from "./use-stock-movements-query";
 export * from "./use-inventory-reports-query";
 export * from "./use-sales-reports-query";
 export * from "./use-expense-payroll-reports-query";
+export * from "./use-hourly-reports-query";

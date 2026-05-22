@@ -128,3 +128,49 @@ export async function loadInventoryVariance(
   if (error) throw toAppError(error, "Không tải được lịch sử kiểm kê.");
   return (data ?? []) as VarianceRow[];
 }
+
+// ---------------------------------------------------------------------
+// Phase 5.B — Sales reports
+// ---------------------------------------------------------------------
+
+export interface ProductSummaryRow {
+  product_id: string | null;
+  product_code: string | null;
+  product_name: string;
+  category_name: string | null;
+  total_quantity: number;
+  total_revenue: number;
+  order_count: number;
+}
+
+export async function loadSalesProductSummary(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<ProductSummaryRow[]> {
+  const { data, error } = await supabase.rpc("sales_product_summary", {
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw toAppError(error, "Không tải được báo cáo doanh thu.");
+  return (data ?? []) as ProductSummaryRow[];
+}
+
+export interface CategorySummaryRow {
+  category_name: string | null;
+  total_quantity: number;
+  total_revenue: number;
+}
+
+export async function loadSalesCategorySummary(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<CategorySummaryRow[]> {
+  const { data, error } = await supabase.rpc("sales_category_summary", {
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw toAppError(error, "Không tải được báo cáo danh mục.");
+  return (data ?? []) as CategorySummaryRow[];
+}

@@ -44,4 +44,10 @@ export const queryKeys = {
     ["inventory-reports", "consumption", range] as const,
   inventoryVariance: (range: { from: string; to: string }) =>
     ["inventory-reports", "variance", range] as const,
+
+  // Phase 5.B — Sales reports
+  salesProductSummary: (range: { from: string; to: string }) =>
+    ["sales-reports", "product", range] as const,
+  salesCategorySummary: (range: { from: string; to: string }) =>
+    ["sales-reports", "category", range] as const,
 };

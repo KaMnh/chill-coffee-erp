@@ -17,6 +17,7 @@ import { ReportList } from "./report-list";
 import { PrintableReport } from "./printable-report";
 import { exportElementAsJpeg } from "./export-jpeg";
 import { InventoryAnalyticsTab } from "./inventory-analytics-tab";
+import { SalesByProductTab } from "./sales-by-product-tab";
 
 interface ReportsViewProps {
   businessDate: string;
@@ -42,12 +43,7 @@ export function ReportsView({ businessDate }: ReportsViewProps) {
       </TabsContent>
 
       <TabsContent value="sales_product">
-        <EmptyState
-          icon="barChart3"
-          title="Doanh số"
-          subtitle="Phát hành trong giai đoạn 5.B — báo cáo doanh số theo sản phẩm và danh mục."
-          dashedBorder
-        />
+        <SalesByProductTab />
       </TabsContent>
 
       <TabsContent value="expense_payroll">

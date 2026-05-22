@@ -1,20 +1,28 @@
 #!/usr/bin/env node
-// scripts/pgtap-run.mjs — Run all database/tests/*.sql files through pgTAP
-// inside the Supabase Postgres container, parse TAP output, exit 0 on
-// success, 1 on first failure.
+// scripts/pgtap-run.mjs — Run all database/tests/*.sql files through pgTAP,
+// parse TAP output, exit 0 on success, 1 on first failure.
+//
+// Two modes:
+//   1. Local dev (default): docker compose exec into the Supabase `db`
+//      service; reads POSTGRES_PASSWORD from supabase/.env.
+//   2. CI mode (PGTAP_DB_URL set): direct `psql <url>` against the
+//      connection string. No docker, no supabase/.env required.
 //
 // Usage:
 //   node scripts/pgtap-run.mjs              # run all files
 //   node scripts/pgtap-run.mjs --setup-only # run 000_setup.sql only
 //   node scripts/pgtap-run.mjs --file <path># run a single file
 //
-// Reads supabase/.env for POSTGRES_PASSWORD (same pattern as db-init.mjs).
+// CI mode example:
+//   PGTAP_DB_URL=postgres://postgres:postgres@localhost:5432/postgres \
+//     node scripts/pgtap-run.mjs
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const TESTS_DIR = "database/tests";
+const CI_DB_URL = process.env.PGTAP_DB_URL ?? null;
 
 function readEnvValue(path, key) {
   const line = readFileSync(path, "utf8")
@@ -24,7 +32,18 @@ function readEnvValue(path, key) {
   return line.slice(key.length + 1).trim();
 }
 
-const POSTGRES_PASSWORD = readEnvValue("supabase/.env", "POSTGRES_PASSWORD");
+// Only read POSTGRES_PASSWORD when running in local-docker mode.
+// CI mode never needs the supabase/.env file.
+let POSTGRES_PASSWORD = null;
+if (!CI_DB_URL) {
+  if (!existsSync("supabase/.env")) {
+    throw new Error(
+      "supabase/.env not found. Either run from project root with the Supabase " +
+      "docker stack, or set PGTAP_DB_URL env var to use CI mode."
+    );
+  }
+  POSTGRES_PASSWORD = readEnvValue("supabase/.env", "POSTGRES_PASSWORD");
+}
 
 function parseArgs(args) {
   const out = { setupOnly: false, file: null };
@@ -47,6 +66,23 @@ function listTestFiles({ setupOnly, file }) {
 }
 
 function psqlFile(sqlContent) {
+  if (CI_DB_URL) {
+    // CI mode: direct psql against the connection string. The runner
+    // already has psql installed (postgresql-client-15) and the
+    // postgres service is reachable on localhost:5432.
+    return execFileSync(
+      "psql",
+      [
+        CI_DB_URL,
+        "-v", "ON_ERROR_STOP=1",
+        "-AtX",
+        "-f", "-",
+      ],
+      { input: sqlContent, encoding: "utf8" }
+    );
+  }
+  // Local-dev mode: docker compose exec into the Supabase `db` service.
+  // psql runs inside the container; we pipe SQL via stdin.
   return execFileSync(
     "docker",
     [

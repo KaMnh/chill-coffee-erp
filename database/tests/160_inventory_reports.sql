@@ -138,14 +138,12 @@ insert into public.stock_movements (ingredient_id, quantity_delta, reason, occur
 values
   ((select id from _t_ing_bean), -30, 'sale_theoretical', (current_date - 1) + time '14:00', (select id from _t_ord3), '11111111-1111-1111-1111-111111111111');
 
+-- See Test 9 rationale: language sql function output order is preserved
+-- when consumed without an outer ORDER BY.
 select is(
-  (select array_agg(ingredient_id order by ord)
-   from (
-     select ingredient_id, row_number() over () as ord
-     from public.inventory_consumption_by_ingredient(current_date - 2, current_date)
-   ) t),
-  array[(select id from _t_ing_milk), (select id from _t_ing_bean)],
-  'consumption: sort is ORDER BY total_consumed DESC (milk before bean)'
+  (select ingredient_id from public.inventory_consumption_by_ingredient(current_date - 2, current_date) limit 1),
+  (select id from _t_ing_milk),
+  'consumption: first row is the largest total_consumed (milk, 150 > bean, 30)'
 );
 
 -- ==================================================================
@@ -181,17 +179,14 @@ insert into public.stock_movements (ingredient_id, quantity_delta, reason, occur
 values
   ((select id from _t_ing_milk), 5, 'count_correction', (current_date - 1) + time '20:00', '11111111-1111-1111-1111-111111111111');
 
--- Verify the FUNCTION returns the rows in DESC order (not the test's own ORDER BY).
--- row_number() over () inside a subquery without its own ORDER BY locks in the
--- function's natural output order.
+-- A language sql function with a top-level ORDER BY is inlined and its
+-- output order is preserved when consumed without an outer ORDER BY.
+-- We exploit that here: limit 1 against the function's natural output
+-- must give the row with the latest occurred_at.
 select is(
-  (select (array_agg(quantity_delta order by ord))[1]
-   from (
-     select quantity_delta, row_number() over () as ord
-     from public.inventory_variance_audit(current_date - 2, current_date)
-   ) t),
+  (select quantity_delta from public.inventory_variance_audit(current_date - 2, current_date) limit 1),
   5::numeric,
-  'variance: function returns rows pre-sorted by occurred_at DESC'
+  'variance: first row from function is the most recent (occurred_at DESC sort)'
 );
 
 -- ------------------------------------------------------------------

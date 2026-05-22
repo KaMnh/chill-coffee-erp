@@ -3073,15 +3073,18 @@ $$;
 -- Top ingredients consumed by sales over a date range.
 -- Filters strictly to reason = 'sale_theoretical' (excludes manual moves,
 -- count corrections, purchases, waste).
+-- Drop first: return type changed (name → ingredient_name); CREATE OR REPLACE
+-- cannot change OUT-column names in PostgreSQL.
+drop function if exists public.inventory_consumption_by_ingredient(date, date);
 create or replace function public.inventory_consumption_by_ingredient(
   p_from date,
   p_to   date
 ) returns table (
-  ingredient_id  uuid,
-  name           text,
-  unit           text,
-  total_consumed numeric,
-  sale_count     bigint
+  ingredient_id    uuid,
+  ingredient_name  text,
+  unit             text,
+  total_consumed   numeric,
+  sale_count       bigint
 )
 language sql
 stable
@@ -3089,15 +3092,15 @@ set search_path = public
 as $$
   select
     i.id           as ingredient_id,
-    i.name,
+    i.name as ingredient_name,
     i.unit,
     sum(abs(sm.quantity_delta))::numeric        as total_consumed,
     count(distinct sm.source_order_id)::bigint  as sale_count
   from public.stock_movements sm
   join public.ingredients i on i.id = sm.ingredient_id
   where sm.reason = 'sale_theoretical'
-    and sm.occurred_at::date >= p_from
-    and sm.occurred_at::date <= p_to
+    and (sm.occurred_at at time zone 'Asia/Ho_Chi_Minh')::date >= p_from
+    and (sm.occurred_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_to
   group by i.id, i.name, i.unit
   order by total_consumed desc;
 $$;
@@ -3105,6 +3108,11 @@ $$;
 -- Audit log of count_correction movements over a date range.
 -- Used by the Variance Audit report. No running balance computation —
 -- owner drills into Stock tab for full ledger context.
+--
+-- Note: quantity_delta may be 0 for count_correction rows (a correction
+-- that confirmed the existing balance). The schema constraint
+-- stock_movements_delta_nonzero exempts count_correction from the
+-- nonzero rule.
 create or replace function public.inventory_variance_audit(
   p_from date,
   p_to   date
@@ -3134,7 +3142,7 @@ as $$
   from public.stock_movements sm
   join public.ingredients i on i.id = sm.ingredient_id
   where sm.reason = 'count_correction'
-    and sm.occurred_at::date >= p_from
-    and sm.occurred_at::date <= p_to
+    and (sm.occurred_at at time zone 'Asia/Ho_Chi_Minh')::date >= p_from
+    and (sm.occurred_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_to
   order by sm.occurred_at desc;
 $$;

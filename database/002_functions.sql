@@ -3290,3 +3290,59 @@ as $$
   group by p.employee_id, e.name
   order by total_pay desc;
 $$;
+
+-- =====================================================================
+-- Phase 5.D — Hourly trends report
+-- =====================================================================
+
+-- Sales aggregation by hour-of-day over a date range. Always returns
+-- 24 rows (one per hour 0..23) via generate_series LEFT JOIN — zero
+-- hours surface as zero bars in the UI chart, giving the owner
+-- shop-hours context at a glance.
+--
+-- CRITICAL: AT TIME ZONE 'Asia/Ho_Chi_Minh' is applied BEFORE
+-- extract(hour ...) so the bucket reflects Vietnam local time, not
+-- UTC. Without this, a 02:00 UTC sale (= 09:00 Vietnam) would bucket
+-- as hour=2 instead of hour=9. Same defense as 5.A T1's date-cast fix.
+-- See pgTAP file 190 Tests 3 + 4 for explicit boundary verification.
+--
+-- business_date filter (not purchase_at directly) matches the 5.B
+-- convention — date boundary handled at the sales_orders level,
+-- hour bucket derived from purchase_at via the timezone-aware cast.
+create or replace function public.sales_hourly_summary(
+  p_from date,
+  p_to   date
+) returns table (
+  sale_hour      int,
+  total_quantity numeric,
+  total_revenue  numeric,
+  order_count    int
+)
+language sql
+stable
+set search_path = public
+as $$
+  with hours as (
+    select generate_series(0, 23) as sale_hour
+  ),
+  agg as (
+    select
+      extract(hour from (so.purchase_at at time zone 'Asia/Ho_Chi_Minh'))::int as sale_hour,
+      sum(soi.quantity)::numeric                                                as total_quantity,
+      sum(soi.line_total)::numeric                                              as total_revenue,
+      count(distinct so.id)::int                                                as order_count
+    from public.sales_orders so
+    join public.sales_order_items soi on soi.sales_order_id = so.id
+    where so.business_date >= p_from
+      and so.business_date <= p_to
+    group by extract(hour from (so.purchase_at at time zone 'Asia/Ho_Chi_Minh'))
+  )
+  select
+    h.sale_hour,
+    coalesce(a.total_quantity, 0)::numeric as total_quantity,
+    coalesce(a.total_revenue, 0)::numeric  as total_revenue,
+    coalesce(a.order_count, 0)::int        as order_count
+  from hours h
+  left join agg a on a.sale_hour = h.sale_hour
+  order by h.sale_hour asc;
+$$;

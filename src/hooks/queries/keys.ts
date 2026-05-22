@@ -50,4 +50,10 @@ export const queryKeys = {
     ["sales-reports", "product", range] as const,
   salesCategorySummary: (range: { from: string; to: string }) =>
     ["sales-reports", "category", range] as const,
+
+  // Phase 5.C — Expense + payroll reports
+  expenseSummaryByCategory: (range: { from: string; to: string }) =>
+    ["expense-payroll-reports", "expense_category", range] as const,
+  payrollSummaryByEmployee: (range: { from: string; to: string }) =>
+    ["expense-payroll-reports", "payroll_employee", range] as const,
 };

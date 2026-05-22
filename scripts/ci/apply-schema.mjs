@@ -37,6 +37,22 @@ if (!DB_URL) {
 const AUTH_SCHEMA_MOCK = `
 create schema if not exists auth;
 
+-- Supabase role stubs. These roles exist on Supabase but not on a vanilla
+-- Postgres install. Both 002_functions.sql and 003_rls.sql contain
+-- \`grant ... to anon, authenticated;\` statements that would fail without
+-- these roles. PostgreSQL has no \`CREATE ROLE IF NOT EXISTS\` syntax —
+-- the DO block is the idiomatic guard.
+do $do$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+end
+$do$;
+
 create table if not exists auth.users (
   id uuid primary key,
   email text,

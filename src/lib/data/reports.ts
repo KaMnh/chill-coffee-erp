@@ -174,3 +174,48 @@ export async function loadSalesCategorySummary(
   if (error) throw toAppError(error, "Không tải được báo cáo danh mục.");
   return (data ?? []) as CategorySummaryRow[];
 }
+
+// ---------------------------------------------------------------------
+// Phase 5.C — Expense + payroll reports
+// ---------------------------------------------------------------------
+
+export interface ExpenseCategoryRow {
+  category_id: string | null;
+  category_name: string | null;
+  total_amount: number;
+  expense_count: number;
+}
+
+export async function loadExpenseSummaryByCategory(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<ExpenseCategoryRow[]> {
+  const { data, error } = await supabase.rpc("expense_summary_by_category", {
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw toAppError(error, "Không tải được báo cáo chi phí.");
+  return (data ?? []) as ExpenseCategoryRow[];
+}
+
+export interface PayrollEmployeeRow {
+  employee_id: string;
+  employee_name: string;
+  total_pay: number;
+  shift_count: number;
+  total_minutes: number;
+}
+
+export async function loadPayrollSummaryByEmployee(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<PayrollEmployeeRow[]> {
+  const { data, error } = await supabase.rpc("payroll_summary_by_employee", {
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw toAppError(error, "Không tải được báo cáo lương.");
+  return (data ?? []) as PayrollEmployeeRow[];
+}

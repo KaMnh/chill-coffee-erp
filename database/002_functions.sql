@@ -3213,3 +3213,80 @@ as $$
   group by soi.category_name
   order by total_revenue desc;
 $$;
+
+-- =====================================================================
+-- Phase 5.C — Expense + payroll reports
+-- =====================================================================
+
+-- Expense aggregation by category over a date range.
+-- LEFT JOIN because expenses.category_id is nullable — a NULL row
+-- surfaces as its own bucket displayed as "Chưa phân loại" in UI.
+-- No is_active filter on categories — historical expenses against
+-- deactivated categories must surface.
+--
+-- SECURITY DEFINER: expense_categories_read RLS filters is_active
+-- for non-owner roles, which would silently drop deactivated
+-- category names from the LEFT JOIN for staff callers. Bypassing
+-- RLS here preserves the "historical data must surface" intent for
+-- all authorized report viewers (owner + manager + staff_operator,
+-- gated upstream by NAV_ITEMS).
+create or replace function public.expense_summary_by_category(
+  p_from date,
+  p_to   date
+) returns table (
+  category_id    uuid,
+  category_name  text,
+  total_amount   numeric,
+  expense_count  int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    e.category_id,
+    c.name                       as category_name,
+    sum(e.amount)::numeric       as total_amount,
+    count(*)::int                as expense_count
+  from public.expenses e
+  left join public.expense_categories c on c.id = e.category_id
+  where e.business_date >= p_from
+    and e.business_date <= p_to
+  group by e.category_id, c.name
+  order by total_amount desc;
+$$;
+
+-- Payroll aggregation by employee over a date range.
+-- INNER JOIN — schema enforces shift_payroll_records.employee_id NOT NULL.
+-- Returns total_minutes as 5th column for "hours worked" display
+-- (formatted client-side as "8 giờ 25").
+-- No is_active filter on employees — historical pay records for
+-- now-inactive employees must surface.
+create or replace function public.payroll_summary_by_employee(
+  p_from date,
+  p_to   date
+) returns table (
+  employee_id    uuid,
+  employee_name  text,
+  total_pay      numeric,
+  shift_count    int,
+  total_minutes  int
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    p.employee_id,
+    e.name                       as employee_name,
+    sum(p.total_pay)::numeric    as total_pay,
+    count(*)::int                as shift_count,
+    sum(p.total_minutes)::int    as total_minutes
+  from public.shift_payroll_records p
+  join public.employees e on e.id = p.employee_id
+  where p.business_date >= p_from
+    and p.business_date <= p_to
+  group by p.employee_id, e.name
+  order by total_pay desc;
+$$;

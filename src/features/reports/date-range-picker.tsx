@@ -88,7 +88,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
               type="date"
               value={value.from}
               onChange={changeFrom}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-ink focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
             />
           </label>
           <label className="flex items-center gap-2 text-sm">
@@ -97,7 +97,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
               type="date"
               value={value.to}
               onChange={changeTo}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-ink focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
             />
           </label>
         </div>

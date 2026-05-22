@@ -18,6 +18,7 @@ import { PrintableReport } from "./printable-report";
 import { exportElementAsJpeg } from "./export-jpeg";
 import { InventoryAnalyticsTab } from "./inventory-analytics-tab";
 import { SalesByProductTab } from "./sales-by-product-tab";
+import { ExpensePayrollTab } from "./expense-payroll-tab";
 
 interface ReportsViewProps {
   businessDate: string;
@@ -47,12 +48,7 @@ export function ReportsView({ businessDate }: ReportsViewProps) {
       </TabsContent>
 
       <TabsContent value="expense_payroll">
-        <EmptyState
-          icon="wallet"
-          title="Chi phí + lương"
-          subtitle="Phát hành trong giai đoạn 5.C — báo cáo chi phí và lương theo khoảng."
-          dashedBorder
-        />
+        <ExpensePayrollTab />
       </TabsContent>
 
       <TabsContent value="hourly">

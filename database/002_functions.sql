@@ -3223,6 +3223,13 @@ $$;
 -- surfaces as its own bucket displayed as "Chưa phân loại" in UI.
 -- No is_active filter on categories — historical expenses against
 -- deactivated categories must surface.
+--
+-- SECURITY DEFINER: expense_categories_read RLS filters is_active
+-- for non-owner roles, which would silently drop deactivated
+-- category names from the LEFT JOIN for staff callers. Bypassing
+-- RLS here preserves the "historical data must surface" intent for
+-- all authorized report viewers (owner + manager + staff_operator,
+-- gated upstream by NAV_ITEMS).
 create or replace function public.expense_summary_by_category(
   p_from date,
   p_to   date
@@ -3234,6 +3241,7 @@ create or replace function public.expense_summary_by_category(
 )
 language sql
 stable
+security definer
 set search_path = public
 as $$
   select

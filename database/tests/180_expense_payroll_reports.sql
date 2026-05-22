@@ -1,11 +1,12 @@
 -- Phase 5.C — Expense + payroll reports.
 --
--- 10 assertions (top-level SELECT pattern):
---   expense_summary_by_category (5):
+-- 11 assertions (top-level SELECT pattern):
+--   expense_summary_by_category (6):
 --     1. Empty range returns 0 rows
 --     2. sum(amount) correct across multiple expenses in same category
 --     3. expense_count = count(*) per category
---     4. NULL category_id produces its own row with category_name = NULL
+--     4a. NULL category_id produces its own row
+--     4b. NULL-category row also has NULL category_name (LEFT JOIN behaviour)
 --     5. Sort is ORDER BY total_amount DESC (verified via limit 1)
 --
 --   payroll_summary_by_employee (5):
@@ -16,7 +17,7 @@
 --    10. Sort is ORDER BY total_pay DESC (verified via limit 1)
 
 begin;
-select plan(10);
+select plan(11);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$
@@ -109,6 +110,15 @@ select is(
    where category_id is null),
   1,
   'expense: NULL category_id produces its own row'
+);
+
+-- Test 4b: the NULL-category row also has NULL category_name (LEFT JOIN behaviour)
+select is(
+  (select category_name from public.expense_summary_by_category(
+     current_date - 2, current_date)
+   where category_id is null),
+  null::text,
+  'expense: NULL category_id row has category_name = NULL'
 );
 
 -- ------------------------------------------------------------------

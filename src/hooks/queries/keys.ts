@@ -41,7 +41,7 @@ export const queryKeys = {
 
   // Phase 5.A — Inventory analytics reports
   inventoryConsumption: (range: { from: string; to: string }) =>
-    ["reports", "inventory_consumption", range] as const,
+    ["inventory-reports", "consumption", range] as const,
   inventoryVariance: (range: { from: string; to: string }) =>
-    ["reports", "inventory_variance", range] as const,
+    ["inventory-reports", "variance", range] as const,
 };

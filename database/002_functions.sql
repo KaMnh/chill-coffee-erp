@@ -3084,7 +3084,7 @@ create or replace function public.inventory_consumption_by_ingredient(
   ingredient_name  text,
   unit             text,
   total_consumed   numeric,
-  sale_count       bigint
+  sale_count       int
 )
 language sql
 stable
@@ -3094,8 +3094,8 @@ as $$
     i.id           as ingredient_id,
     i.name as ingredient_name,
     i.unit,
-    sum(abs(sm.quantity_delta))::numeric        as total_consumed,
-    count(distinct sm.source_order_id)::bigint  as sale_count
+    sum(abs(sm.quantity_delta))::numeric      as total_consumed,
+    count(distinct sm.source_order_id)::int   as sale_count
   from public.stock_movements sm
   join public.ingredients i on i.id = sm.ingredient_id
   where sm.reason = 'sale_theoretical'

@@ -108,7 +108,7 @@ select is(
   (select sale_count from public.inventory_consumption_by_ingredient(
      current_date - 2, current_date)
    where ingredient_id = (select id from _t_ing_milk)),
-  2::bigint,
+  2::int,
   'consumption: sale_count = count(distinct source_order_id) = 2'
 );
 

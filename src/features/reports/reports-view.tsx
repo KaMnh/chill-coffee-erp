@@ -12,15 +12,75 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { Icon } from "@/components/ui/icons";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReportList } from "./report-list";
 import { PrintableReport } from "./printable-report";
 import { exportElementAsJpeg } from "./export-jpeg";
+import { InventoryAnalyticsTab } from "./inventory-analytics-tab";
 
 interface ReportsViewProps {
   businessDate: string;
 }
 
 export function ReportsView({ businessDate }: ReportsViewProps) {
+  return (
+    <Tabs defaultValue="cash_close">
+      <TabsList>
+        <TabsTrigger value="cash_close">Chốt két</TabsTrigger>
+        <TabsTrigger value="inventory">Tồn kho</TabsTrigger>
+        <TabsTrigger value="sales_product">Doanh số</TabsTrigger>
+        <TabsTrigger value="expense_payroll">Chi phí + lương</TabsTrigger>
+        <TabsTrigger value="hourly">Theo giờ</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="cash_close">
+        <CashCloseTab businessDate={businessDate} />
+      </TabsContent>
+
+      <TabsContent value="inventory">
+        <InventoryAnalyticsTab />
+      </TabsContent>
+
+      <TabsContent value="sales_product">
+        <EmptyState
+          icon="barChart3"
+          title="Doanh số"
+          subtitle="Phát hành trong giai đoạn 5.B — báo cáo doanh số theo sản phẩm và danh mục."
+          dashedBorder
+        />
+      </TabsContent>
+
+      <TabsContent value="expense_payroll">
+        <EmptyState
+          icon="wallet"
+          title="Chi phí + lương"
+          subtitle="Phát hành trong giai đoạn 5.C — báo cáo chi phí và lương theo khoảng."
+          dashedBorder
+        />
+      </TabsContent>
+
+      <TabsContent value="hourly">
+        <EmptyState
+          icon="info"
+          title="Theo giờ"
+          subtitle="Phát hành trong giai đoạn 5.D — xu hướng doanh số theo giờ."
+          dashedBorder
+        />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Cash close tab — extracted from the previous ReportsView body
+// without semantic changes. Renders the existing two-pane layout.
+// ---------------------------------------------------------------------
+
+interface CashCloseTabProps {
+  businessDate: string;
+}
+
+function CashCloseTab({ businessDate }: CashCloseTabProps) {
   const supabase = useSupabase();
   const reportsQuery = useReportsQuery(supabase, businessDate, true);
   const { toast } = useToast();

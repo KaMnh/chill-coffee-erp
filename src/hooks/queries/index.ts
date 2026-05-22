@@ -14,3 +14,4 @@ export {
 export * from "./use-inventory-queries";
 export * from "./use-stock-movements-query";
 export * from "./use-inventory-reports-query";
+export * from "./use-sales-reports-query";

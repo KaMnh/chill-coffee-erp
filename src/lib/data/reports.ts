@@ -219,3 +219,27 @@ export async function loadPayrollSummaryByEmployee(
   if (error) throw toAppError(error, "Không tải được báo cáo lương.");
   return (data ?? []) as PayrollEmployeeRow[];
 }
+
+// ---------------------------------------------------------------------
+// Phase 5.D — Hourly trends report
+// ---------------------------------------------------------------------
+
+export interface HourlyRow {
+  sale_hour: number;
+  total_quantity: number;
+  total_revenue: number;
+  order_count: number;
+}
+
+export async function loadSalesHourlySummary(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+): Promise<HourlyRow[]> {
+  const { data, error } = await supabase.rpc("sales_hourly_summary", {
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw toAppError(error, "Không tải được báo cáo theo giờ.");
+  return (data ?? []) as HourlyRow[];
+}

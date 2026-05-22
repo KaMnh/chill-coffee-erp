@@ -56,4 +56,8 @@ export const queryKeys = {
     ["expense-payroll-reports", "expense_category", range] as const,
   payrollSummaryByEmployee: (range: { from: string; to: string }) =>
     ["expense-payroll-reports", "payroll_employee", range] as const,
+
+  // Phase 5.D — Hourly trends (under existing "sales-reports" namespace)
+  salesHourlySummary: (range: { from: string; to: string }) =>
+    ["sales-reports", "hourly", range] as const,
 };

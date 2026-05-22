@@ -1,0 +1,118 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ----------------------------------------------------------------
+  # Job 1: TypeScript strict check (fast gate)
+  # ----------------------------------------------------------------
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  # ----------------------------------------------------------------
+  # Job 2: Vitest with coverage
+  # ----------------------------------------------------------------
+  vitest:
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ----------------------------------------------------------------
+  # Job 3: pgTAP against Postgres 15 service container
+  # ----------------------------------------------------------------
+  pgtap:
+    runs-on: ubuntu-latest
+    needs: typecheck
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      - name: Install pgTAP inside Postgres container + psql client on host
+        run: |
+          # pgTAP must live INSIDE the postgres:15 service container so
+          # CREATE EXTENSION pgtap can find pgtap.control. The official
+          # postgres:15 image is debian-based and ships with PGDG apt
+          # sources already configured.
+          PG_CONTAINER=$(docker ps -q --filter "ancestor=postgres:15")
+          docker exec "$PG_CONTAINER" bash -c "apt-get update -qq && apt-get install -y --no-install-recommends postgresql-15-pgtap"
+          # psql client on the runner — apply-schema.mjs and pgtap-run.mjs
+          # shell out to psql. Ubuntu noble ships postgresql-client-16
+          # which is wire-compatible with PG 15.
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Create pgTAP extension in CI database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS pgtap;"
+
+      - name: Apply schema + functions + RLS
+        env:
+          PGTAP_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node scripts/ci/apply-schema.mjs
+
+      - name: Run pgTAP suite
+        env:
+          PGTAP_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: npm run pgtap
+
+  # ----------------------------------------------------------------
+  # Job 4: Production build (catches Next.js compile + page generation errors)
+  # ----------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    needs: [vitest, pgtap]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build

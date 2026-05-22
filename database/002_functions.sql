@@ -3146,3 +3146,70 @@ as $$
     and (sm.occurred_at at time zone 'Asia/Ho_Chi_Minh')::date <= p_to
   order by sm.occurred_at desc;
 $$;
+
+-- =====================================================================
+-- Phase 5.B — Sales reports
+-- =====================================================================
+
+-- Sales by product over a date range. Aggregates sales_order_items
+-- joined to sales_orders, filtered by sales_orders.business_date.
+-- Groups by (product_id, product_code, product_name, category_name) —
+-- so a mid-period rename or recategorisation surfaces as 2 rows.
+create or replace function public.sales_product_summary(
+  p_from date,
+  p_to   date
+) returns table (
+  product_id     text,
+  product_code   text,
+  product_name   text,
+  category_name  text,
+  total_quantity numeric,
+  total_revenue  numeric,
+  order_count    int
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    soi.product_id,
+    soi.product_code,
+    soi.product_name,
+    soi.category_name,
+    sum(soi.quantity)::numeric            as total_quantity,
+    sum(soi.line_total)::numeric          as total_revenue,
+    count(distinct so.id)::int            as order_count
+  from public.sales_orders so
+  join public.sales_order_items soi on soi.sales_order_id = so.id
+  where so.business_date >= p_from
+    and so.business_date <= p_to
+  group by soi.product_id, soi.product_code, soi.product_name, soi.category_name
+  order by total_revenue desc;
+$$;
+
+-- Sales by category over a date range. Same JOIN + WHERE filter; groups
+-- by category_name only. Intentionally NO order_count column — one order
+-- with multiple products in same category would overcount.
+create or replace function public.sales_category_summary(
+  p_from date,
+  p_to   date
+) returns table (
+  category_name  text,
+  total_quantity numeric,
+  total_revenue  numeric
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    soi.category_name,
+    sum(soi.quantity)::numeric   as total_quantity,
+    sum(soi.line_total)::numeric as total_revenue
+  from public.sales_orders so
+  join public.sales_order_items soi on soi.sales_order_id = so.id
+  where so.business_date >= p_from
+    and so.business_date <= p_to
+  group by soi.category_name
+  order by total_revenue desc;
+$$;

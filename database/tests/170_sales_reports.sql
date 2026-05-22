@@ -1,6 +1,6 @@
 -- Phase 5.B — Sales reports.
 --
--- 10 assertions (top-level SELECT pattern):
+-- 11 assertions (top-level SELECT pattern):
 --   sales_product_summary (5):
 --     1. Empty range returns 0 rows
 --     2. sum(quantity) correct across multiple orders for same product
@@ -8,15 +8,16 @@
 --     4. order_count = count(distinct sales_order_id)
 --     5. Sort is ORDER BY total_revenue DESC (verified via limit 1)
 --
---   sales_category_summary (5):
+--   sales_category_summary (6):
 --     6. Empty range returns 0 rows
 --     7. Groups by category — 2 products in same category roll up to one row
---     8. sum(quantity) + sum(line_total) correct after roll-up
+--     8a. sum(quantity) correct after roll-up
+--     8b. sum(line_total) correct after roll-up
 --     9. NULL category_name produces its own row
 --    10. Sort is ORDER BY total_revenue DESC
 
 begin;
-select plan(10);
+select plan(11);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$
@@ -173,6 +174,13 @@ select is(
    where category_name = 'Ca phe'),
   5::numeric,
   'category: sum(quantity) correct after roll-up = 5'
+);
+
+select is(
+  (select total_revenue from public.sales_category_summary(current_date - 2, current_date)
+   where category_name = 'Ca phe'),
+  130000::numeric,
+  'category: sum(line_total) correct after roll-up = 130000'
 );
 
 -- ------------------------------------------------------------------

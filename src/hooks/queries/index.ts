@@ -12,3 +12,4 @@ export {
   useSafeTransactionsQuery
 } from "./use-safe-queries";
 export * from "./use-inventory-queries";
+export * from "./use-stock-movements-query";

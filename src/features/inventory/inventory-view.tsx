@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { IngredientsTab } from "./ingredients-tab";
 import { MenuItemsTab } from "./menu-items-tab";
 import { RecipesTab } from "./recipes-tab";
+import { StockTab } from "./stock-tab";
 import type { UserRole } from "@/lib/types";
 
 interface InventoryViewProps {
@@ -60,12 +61,7 @@ export function InventoryView({ role }: InventoryViewProps) {
         </TabsContent>
 
         <TabsContent value="stock">
-          <EmptyState
-            icon="package"
-            title="Tồn kho"
-            subtitle="Phát hành trong giai đoạn 4.D — kiểm kê + sổ nhập xuất + điều chỉnh thủ công."
-            dashedBorder
-          />
+          <StockTab role={role} />
         </TabsContent>
 
         <TabsContent value="dashboard">

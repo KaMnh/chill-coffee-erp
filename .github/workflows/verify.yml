@@ -72,10 +72,19 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - name: Install pgTAP extension + psql client
+      - name: Install pgTAP inside Postgres container + psql client on host
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-15-pgtap postgresql-client-15
+          # pgTAP must live INSIDE the postgres:15 service container so
+          # CREATE EXTENSION pgtap can find pgtap.control. The official
+          # postgres:15 image is debian-based and ships with PGDG apt
+          # sources already configured.
+          PG_CONTAINER=$(docker ps -q --filter "ancestor=postgres:15")
+          docker exec "$PG_CONTAINER" bash -c "apt-get update -qq && apt-get install -y --no-install-recommends postgresql-15-pgtap"
+          # psql client on the runner — apply-schema.mjs and pgtap-run.mjs
+          # shell out to psql. Ubuntu noble ships postgresql-client-16
+          # which is wire-compatible with PG 15.
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
 
       - name: Create pgTAP extension in CI database
         env:

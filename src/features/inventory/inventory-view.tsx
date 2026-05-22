@@ -6,6 +6,7 @@ import { IngredientsTab } from "./ingredients-tab";
 import { MenuItemsTab } from "./menu-items-tab";
 import { RecipesTab } from "./recipes-tab";
 import { StockTab } from "./stock-tab";
+import { InventoryDashboardTab } from "./inventory-dashboard-tab";
 import type { UserRole } from "@/lib/types";
 
 interface InventoryViewProps {
@@ -65,12 +66,7 @@ export function InventoryView({ role }: InventoryViewProps) {
         </TabsContent>
 
         <TabsContent value="dashboard">
-          <EmptyState
-            icon="barChart3"
-            title="Tổng quan kho"
-            subtitle="Phát hành trong giai đoạn 4.E — cảnh báo sắp hết, chênh lệch lý thuyết-thực tế, tiêu thụ theo thời gian."
-            dashedBorder
-          />
+          <InventoryDashboardTab />
         </TabsContent>
       </Tabs>
     </div>

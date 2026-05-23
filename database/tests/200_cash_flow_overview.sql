@@ -1,7 +1,7 @@
 -- =============================================================================
 -- pgTAP — cash_flow_overview RPC
 --
--- 7 assertions across 3 scenarios:
+-- 8 assertions across 3 scenarios:
 --   Scenario 1: empty period (4 assertions)
 --     1. in = 0
 --     2. out = 0
@@ -13,8 +13,8 @@
 --     6. out = 80  (expense 30 + payroll 50)
 --     7. net = 20
 --
---   Scenario 3: top_categories ordering
---     (verified inline as part of the insert — ordering checked via top_categories[0])
+--   Scenario 3: top_categories ordering (1 assertion)
+--     8. top_categories[0].category_name = 'CFO Cat Big' (highest-amount category first)
 -- =============================================================================
 
 begin;

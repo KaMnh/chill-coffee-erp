@@ -108,6 +108,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   if (accError) {
     void supabase.from("employees").delete().eq("id", employeeId);
+    if ((accError as { code?: string }).code === "23505") {
+      return bad(
+        "Tài khoản đã được tạo bởi yêu cầu khác — không thể duyệt lần nữa.",
+        409
+      );
+    }
     return bad(`Không tạo được employee_account: ${accError.message}`, 500);
   }
 

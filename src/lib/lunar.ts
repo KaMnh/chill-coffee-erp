@@ -192,12 +192,25 @@ export interface LunarInfo {
 }
 
 export function solarToLunar(date: Date | string): LunarInfo {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const { lunarDay, lunarMonth, lunarYear, lunarLeap } = convertSolar2Lunar(
-    d.getDate(),
-    d.getMonth() + 1,
-    d.getFullYear(),
-  );
+  let dd: number, mm: number, yy: number;
+  if (typeof date === "string") {
+    // Parse YYYY-MM-DD as local components — avoids the UTC-shift bug
+    // that `new Date("2024-02-10")` triggers (it's UTC midnight, which
+    // becomes the previous day on UTC-west servers).
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+    if (!m) throw new RangeError(`solarToLunar: invalid date string "${date}"`);
+    yy = Number(m[1]);
+    mm = Number(m[2]);
+    dd = Number(m[3]);
+  } else {
+    if (isNaN(date.getTime())) {
+      throw new RangeError("solarToLunar: invalid Date");
+    }
+    dd = date.getDate();
+    mm = date.getMonth() + 1;
+    yy = date.getFullYear();
+  }
+  const { lunarDay, lunarMonth, lunarYear, lunarLeap } = convertSolar2Lunar(dd, mm, yy);
   const key = `${lunarMonth}-${lunarDay}`;
   return {
     day: lunarDay,
@@ -205,7 +218,8 @@ export function solarToLunar(date: Date | string): LunarInfo {
     year: lunarYear,
     isLeapMonth: lunarLeap === 1,
     canChi: getCanChi(lunarYear),
-    holiday: LUNAR_HOLIDAYS[key],
+    // Holidays only fire in regular (non-leap) months.
+    holiday: lunarLeap === 0 ? LUNAR_HOLIDAYS[key] : undefined,
     isFirstOfMonth: lunarDay === 1,
     isFullMoon: lunarDay === 15,
   };

@@ -86,3 +86,21 @@ describe("getCanChi — known anchor years", () => {
     expect(getCanChi(2026)).toBe("Bính Ngọ");
   });
 });
+
+describe("solarToLunar — input validation + edge cases", () => {
+  it("accepts YYYY-MM-DD string and parses as local date (no UTC shift)", () => {
+    // Tết 2024 = Sat 10/2/2024. Parsing the string MUST yield the same
+    // result as the Date-object form — even on a UTC-west server.
+    const fromStr = solarToLunar("2024-02-10");
+    const fromObj = solarToLunar(new Date(2024, 1, 10));
+    expect(fromStr.day).toBe(fromObj.day);
+    expect(fromStr.month).toBe(fromObj.month);
+    expect(fromStr.year).toBe(fromObj.year);
+    expect(fromStr.holiday).toBe("Tết Nguyên Đán");
+  });
+
+  it("throws on invalid date input rather than returning NaN fields", () => {
+    expect(() => solarToLunar("garbage")).toThrow(/invalid date string/);
+    expect(() => solarToLunar(new Date("not a date"))).toThrow(/invalid Date/);
+  });
+});

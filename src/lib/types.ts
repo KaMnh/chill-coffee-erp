@@ -371,3 +371,26 @@ export interface StockBalance {
   is_low: boolean;
   last_movement_at: string | null;
 }
+
+// =====================================================================
+// User management — signup_requests (Phase 6+ user mgmt UI)
+// =====================================================================
+
+export type SignupRequestStatus =
+  | "pending_email_verification"
+  | "pending_approval"
+  | "approved"
+  | "rejected";
+
+export interface SignupRequest {
+  id: string;
+  auth_user_id: string | null;
+  email: string;
+  name: string | null;
+  employee_code: string | null;
+  status: SignupRequestStatus;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  note: string | null;
+}

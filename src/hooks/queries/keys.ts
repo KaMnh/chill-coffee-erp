@@ -60,4 +60,7 @@ export const queryKeys = {
   // Phase 5.D — Hourly trends (under existing "sales-reports" namespace)
   salesHourlySummary: (range: { from: string; to: string }) =>
     ["sales-reports", "hourly", range] as const,
+
+  // User management — signup_requests
+  signupRequests: () => ["signup-requests"] as const,
 };

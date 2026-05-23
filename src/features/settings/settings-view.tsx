@@ -11,6 +11,7 @@ import {
 import type { UserRole } from "@/lib/types";
 import { SidebarConfigForm } from "./sidebar-config-form";
 import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
+import { KiotvietConfigForm } from "./kiotviet-config-form";
 
 interface SettingsViewProps {
   role: UserRole;
@@ -79,6 +80,7 @@ export function SettingsView({ role }: SettingsViewProps) {
         currentUserAuthId={currentAccount.auth_user_id}
       />
       <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
+      <KiotvietConfigForm />
     </div>
   );
 }

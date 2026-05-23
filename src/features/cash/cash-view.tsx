@@ -11,6 +11,7 @@ import {
   useSaveCashCount,
   useFinalizeCashClose,
 } from "@/hooks/mutations/use-cash-mutations";
+import { useCashDraftPersistence } from "@/hooks/use-cash-draft-persistence";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -67,6 +68,15 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const [manualPosTotal, setManualPosTotal] = useState("");
   const [manualPosCash, setManualPosCash] = useState("");
   const [manualPosNonCash, setManualPosNonCash] = useState("");
+
+  // Mirror the 8 unsaved inputs above into localStorage so they survive a
+  // page refresh. Source of truth stays in the useState calls above; this
+  // hook restores on mount/businessDate change and clears on submit.
+  const { clearDraft } = useCashDraftPersistence(
+    businessDate,
+    { counts, bankTransfer, note, leaveForNextDay, isManualPos, manualPosTotal, manualPosCash, manualPosNonCash },
+    { setCounts, setBankTransfer, setNote, setLeaveForNextDay, setIsManualPos, setManualPosTotal, setManualPosCash, setManualPosNonCash },
+  );
 
   // Modal state.
   const [isOpeningOpen, setIsOpeningOpen] = useState(false);
@@ -174,6 +184,10 @@ export function CashView({ businessDate, role }: CashViewProps) {
             ? `Đã chốt két${safeDeposit > 0 ? ` và nạp ${formatVND(safeDeposit)} vào sổ quỹ` : ""}.`
             : "Đã lưu kiểm két nhanh.",
       });
+      // Clear the localStorage draft mirror on any successful submit.
+      // For spot_audit, React state stays (operator may re-audit on screen);
+      // a refresh after submit will show an empty form, which is intentional.
+      clearDraft();
       // Reset only after shift_close (spot_audit: counts stay for next audit).
       if (mode === "shift_close") {
         setCounts({});

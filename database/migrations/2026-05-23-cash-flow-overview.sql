@@ -35,7 +35,7 @@ begin
   select coalesce(sum(net_amount), 0)
     into v_in
     from public.sales_orders
-   where purchase_at::date between p_start and p_end;
+   where business_date between p_start and p_end;
 
   select coalesce((select sum(amount) from public.expenses
                     where business_date between p_start and p_end), 0)
@@ -49,9 +49,9 @@ begin
       from generate_series(p_start, p_end, interval '1 day') dd
   ),
   ins as (
-    select purchase_at::date as day, sum(net_amount) as amt
+    select business_date as day, sum(net_amount) as amt
       from public.sales_orders
-     where purchase_at::date between p_start and p_end
+     where business_date between p_start and p_end
      group by 1
   ),
   outs as (
@@ -107,7 +107,7 @@ begin
     select coalesce(sum(net_amount), 0)
       into v_prev_in
       from public.sales_orders
-     where purchase_at::date between p_compare_start and p_compare_end;
+     where business_date between p_compare_start and p_compare_end;
     select coalesce((select sum(amount) from public.expenses
                       where business_date between p_compare_start and p_compare_end), 0)
          + coalesce((select sum(total_pay) from public.shift_payroll_records

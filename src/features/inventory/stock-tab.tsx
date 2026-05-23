@@ -9,8 +9,7 @@ import {
   useIngredientsQuery,
 } from "@/hooks/queries";
 import { StockBalanceList } from "./stock-balance-list";
-import { StockCountModal } from "./stock-count-modal";
-import { StockMovementModal } from "./stock-movement-modal";
+import { StockEntryModal } from "./stock-entry-modal";
 import {
   StockLedgerSection,
   type LedgerFilter,
@@ -32,17 +31,20 @@ const INITIAL_FILTER: LedgerFilter = {
  * Phase 4.D — Stock tab content.
  *
  * Two stacked sections:
- *   Section 1: "Tồn hiện tại" — StockBalanceList
+ *   Section 1: "Tồn hiện tại" — StockBalanceList (rows clickable → opens entry modal)
  *   Section 2: "Lịch sử nhập xuất" — StockLedgerSection
  *
- * Toolbar (top): "+ Kiểm kê" + "+ Nhập xuất" buttons (canWrite only).
+ * Toolbar (top): single "+ Ghi nhận" button (canWrite only). The button
+ * opens the unified StockEntryModal with no ingredient pre-selected;
+ * clicking a row in the balance list opens the same modal with the
+ * row's ingredient pre-selected.
  *
  * canWrite = role !== "employee_viewer"
  *   (broader than 4.B/4.C; first writeable tab for staff_operator)
  *
  * Filter state for ledger lives here, passed to StockLedgerSection.
  *
- * Active ingredients filtered client-side for the modal Select dropdowns.
+ * Active ingredients filtered client-side for the modal Select dropdown.
  */
 export function StockTab({ role }: StockTabProps) {
   const supabase = useSupabase();
@@ -51,8 +53,8 @@ export function StockTab({ role }: StockTabProps) {
 
   const canWrite = role !== "employee_viewer";
 
-  const [countModalOpen, setCountModalOpen] = useState(false);
-  const [movementModalOpen, setMovementModalOpen] = useState(false);
+  const [entryModalOpen, setEntryModalOpen] = useState(false);
+  const [initialIngredientId, setInitialIngredientId] = useState<string | null>(null);
   const [filter, setFilter] = useState<LedgerFilter>(INITIAL_FILTER);
 
   const balances = balancesQuery.data ?? [];
@@ -63,29 +65,30 @@ export function StockTab({ role }: StockTabProps) {
     [ingredients]
   );
 
+  function openEntryFromToolbar() {
+    setInitialIngredientId(null);
+    setEntryModalOpen(true);
+  }
+
+  function openEntryFromRow(ingredientId: string) {
+    if (!canWrite) return;
+    setInitialIngredientId(ingredientId);
+    setEntryModalOpen(true);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-medium text-ink">Tồn kho</h2>
         {canWrite && (
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => setCountModalOpen(true)}
-              leadingIcon={<Icon name="plus" size={16} />}
-            >
-              Kiểm kê
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setMovementModalOpen(true)}
-              leadingIcon={<Icon name="plus" size={16} />}
-            >
-              Nhập xuất
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={openEntryFromToolbar}
+            leadingIcon={<Icon name="plus" size={16} />}
+          >
+            Ghi nhận
+          </Button>
         )}
       </div>
 
@@ -95,6 +98,7 @@ export function StockTab({ role }: StockTabProps) {
           balances={balances}
           isLoading={balancesQuery.isLoading}
           isError={balancesQuery.isError}
+          onSelectIngredient={canWrite ? openEntryFromRow : undefined}
         />
       </section>
 
@@ -107,18 +111,15 @@ export function StockTab({ role }: StockTabProps) {
         />
       </section>
 
-      <StockCountModal
-        open={countModalOpen}
-        onOpenChange={setCountModalOpen}
-        ingredients={activeIngredients}
-        balances={balances}
-      />
-      <StockMovementModal
-        open={movementModalOpen}
-        onOpenChange={setMovementModalOpen}
-        ingredients={activeIngredients}
-        balances={balances}
-      />
+      {canWrite && (
+        <StockEntryModal
+          open={entryModalOpen}
+          onOpenChange={setEntryModalOpen}
+          initialIngredientId={initialIngredientId}
+          ingredients={activeIngredients}
+          balances={balances}
+        />
+      )}
     </div>
   );
 }

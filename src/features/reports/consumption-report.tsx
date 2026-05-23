@@ -74,7 +74,7 @@ export function ConsumptionReport({ dateRange }: ConsumptionReportProps) {
             {data.length} nguyên liệu
           </Badge>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-muted">
               <th className="text-left pb-2 font-medium">Nguyên liệu</th>
@@ -96,7 +96,7 @@ export function ConsumptionReport({ dateRange }: ConsumptionReportProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </CardBody>
     </Card>
   );

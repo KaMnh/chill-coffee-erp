@@ -39,7 +39,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "relative rounded-2xl p-6 min-h-[180px] flex flex-col justify-between overflow-hidden",
+        "relative rounded-2xl p-4 sm:p-6 min-h-[110px] sm:min-h-[180px] flex flex-col justify-between overflow-hidden",
         colorBg[color],
         className
       )}
@@ -49,7 +49,7 @@ export function StatCard({
         {subtitle && <div className={cn("text-xs mt-1 opacity-80", colorInk[color])}>{subtitle}</div>}
       </div>
       <div className="flex items-end justify-between gap-4">
-        <div className={cn("font-display text-4xl font-bold tabular-nums", colorInk[color])}>{value}</div>
+        <div className={cn("font-display text-2xl sm:text-4xl font-bold tabular-nums", colorInk[color])}>{value}</div>
         {onAction && (
           <IconButton
             icon="arrowUpRight"

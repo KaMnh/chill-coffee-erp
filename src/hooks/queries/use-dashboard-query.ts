@@ -10,6 +10,9 @@ export function useDashboardQuery(supabase: SupabaseClient | null, businessDate:
     queryKey: queryKeys.dashboard(businessDate),
     queryFn: () => loadDashboard(supabase!, businessDate),
     enabled: enabled && !!supabase,
-    staleTime: 30_000
+    staleTime: 30_000,
+    // Predictive refresh: when the user re-focuses the window, re-fetch POS
+    // numbers. staleTime gates this so rapid focus toggles don't spam.
+    refetchOnWindowFocus: true
   });
 }

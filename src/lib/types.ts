@@ -371,3 +371,66 @@ export interface StockBalance {
   is_low: boolean;
   last_movement_at: string | null;
 }
+
+// =====================================================================
+// User management — signup_requests (Phase 6+ user mgmt UI)
+// =====================================================================
+
+export type SignupRequestStatus =
+  | "pending_email_verification"
+  | "pending_approval"
+  | "approved"
+  | "rejected";
+
+export interface SignupRequest {
+  id: string;
+  auth_user_id: string | null;
+  email: string;
+  name: string | null;
+  employee_code: string | null;
+  status: SignupRequestStatus;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  note: string | null;
+}
+
+// =====================================================================
+// Cash Flow Overview (2026-05-23)
+// =====================================================================
+
+export type PeriodPreset = "week" | "month" | "custom";
+
+export interface PeriodState {
+  preset: PeriodPreset;
+  /** Inclusive start date in YYYY-MM-DD (local). */
+  start: string;
+  /** Inclusive end date in YYYY-MM-DD (local). */
+  end: string;
+}
+
+export interface CashFlowDayPoint {
+  /** YYYY-MM-DD */
+  date: string;
+  in: number;
+  out: number;
+}
+
+export interface CashFlowTopCategory {
+  category_name: string;
+  amount: number;
+  /** 0..1 (fraction of total out). */
+  pct: number;
+}
+
+export interface CashFlowOverview {
+  in: number;
+  out: number;
+  net: number;
+  by_day: CashFlowDayPoint[];
+  top_categories: CashFlowTopCategory[];
+  /** Only present when caller supplied a comparison range. */
+  prev_in?: number;
+  prev_out?: number;
+  prev_net?: number;
+}

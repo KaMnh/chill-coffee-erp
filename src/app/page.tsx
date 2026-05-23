@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthSession } from "@/hooks/use-auth-session";
@@ -9,8 +10,10 @@ import { useBusinessDate } from "@/hooks/use-business-date";
 import { useRoleGate } from "@/hooks/use-role-gate";
 import { useAppSettingsQuery, useDashboardQuery } from "@/hooks/queries";
 import { usePosSync } from "@/hooks/use-pos-sync";
+import { useBackgroundPosSync } from "@/hooks/use-background-pos-sync";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { useAuthCookieSync } from "@/hooks/use-auth-cookie-sync";
+import { prefetchNav } from "@/lib/prefetch-nav";
 import { AppShell } from "@/components/layout/app-shell";
 import { Sidebar, SidebarSection, SidebarLogo } from "@/components/layout/sidebar";
 import { NavItem } from "@/components/layout/nav-item";
@@ -22,6 +25,7 @@ import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { ExpensesView } from "@/features/expenses/expenses-view";
 import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
+import { CashFlowView } from "@/features/cashflow/cash-flow-view";
 import { CashView } from "@/features/cash/cash-view";
 import { SafeView } from "@/features/safe/safe-view";
 import { HandoverView } from "@/features/handover/handover-view";
@@ -43,8 +47,49 @@ export default function HomePage() {
   const { visibleNav, defaultView, canSee } = useRoleGate(account, appSettingsQuery.data);
   const dashboardQuery = useDashboardQuery(supabase, businessDate, status === "authed");
   const posSync = usePosSync(supabase, businessDate, account, dashboardQuery.data?.latest_sync);
+  useBackgroundPosSync(posSync, account?.role);
   useRealtimeInvalidate(supabase, businessDate);
   useAuthCookieSync(supabase);
+
+  // Nav-hover prefetch: 200ms debounce per nav item; the timer is cancelled
+  // if the cursor leaves before it fires (transient pass-through doesn't
+  // trigger an RPC). prefetchNav internally defers to TanStack's per-query
+  // staleTime — already-fresh data is a no-op.
+  const queryClient = useQueryClient();
+  const hoverTimersRef = useRef<Map<ViewKey, ReturnType<typeof setTimeout>>>(new Map());
+  const HOVER_DEBOUNCE_MS = 200;
+
+  const handleNavHover = useCallback(
+    (key: ViewKey) => {
+      const map = hoverTimersRef.current;
+      const prev = map.get(key);
+      if (prev) clearTimeout(prev);
+      const id = setTimeout(() => {
+        prefetchNav(key, queryClient, supabase, businessDate);
+        map.delete(key);
+      }, HOVER_DEBOUNCE_MS);
+      map.set(key, id);
+    },
+    [queryClient, supabase, businessDate],
+  );
+
+  const handleNavHoverLeave = useCallback((key: ViewKey) => {
+    const map = hoverTimersRef.current;
+    const prev = map.get(key);
+    if (prev) {
+      clearTimeout(prev);
+      map.delete(key);
+    }
+  }, []);
+
+  // Cleanup hover timers on unmount so no late prefetch fires after navigation.
+  useEffect(() => {
+    const map = hoverTimersRef.current;
+    return () => {
+      map.forEach((id) => clearTimeout(id));
+      map.clear();
+    };
+  }, []);
 
   const [view, setView] = useState<ViewKey>("dashboard");
   // If role change hides current view, snap to first visible.
@@ -137,6 +182,8 @@ export default function HomePage() {
                 label={item.label}
                 active={view === item.key}
                 onClick={() => handleNavClick(item.key)}
+                onPointerEnter={() => handleNavHover(item.key)}
+                onPointerLeave={() => handleNavHoverLeave(item.key)}
               />
             ))}
           </SidebarSection>
@@ -150,7 +197,7 @@ export default function HomePage() {
                 type="date"
                 value={businessDate}
                 onChange={(e) => setBusinessDate(e.target.value)}
-                className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+                className="h-10 rounded-md border border-border bg-surface px-2 sm:px-3 text-xs sm:text-sm text-ink w-[120px] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
                 aria-label="Ngày kinh doanh"
               />
               <IconButton
@@ -160,12 +207,15 @@ export default function HomePage() {
                 aria-label={posSync.isPending ? "Đang sync POS" : "Đồng bộ POS"}
                 onClick={handlePosSync}
                 disabled={posSync.isPending}
+                className="hidden sm:inline-flex"
               />
-              <Avatar
-                size="md"
-                initials={employeeName.slice(0, 2).toUpperCase()}
-                alt={`${employeeName} (${ROLE_LABELS[account.role]})`}
-              />
+              <span className="hidden sm:inline-flex">
+                <Avatar
+                  size="md"
+                  initials={employeeName.slice(0, 2).toUpperCase()}
+                  alt={`${employeeName} (${ROLE_LABELS[account.role]})`}
+                />
+              </span>
               <IconButton
                 icon="logOut"
                 size={40}
@@ -182,11 +232,12 @@ export default function HomePage() {
         {view === "dashboard" && (
           <DashboardView
             businessDate={businessDate}
-            onGoReports={() => setView("reports")}
+            onNavigate={setView}
           />
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}
         {view === "pivot" && <PivotView businessDate={businessDate} />}
+        {view === "cashflow" && <CashFlowView role={account.role} />}
         {/* 3B/3C views — expenses now live; shifts + cash still locked. */}
         {view === "expenses" && (
           <ExpensesView businessDate={businessDate} role={account.role} />

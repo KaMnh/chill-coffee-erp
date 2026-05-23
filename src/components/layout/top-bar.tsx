@@ -11,9 +11,9 @@ interface TopBarProps {
 
 export function TopBar({ search, actions, className }: TopBarProps) {
   return (
-    <div className={cn("flex items-center gap-4 px-6 py-4", className)}>
-      <div className="flex-1">{search ?? <SearchBar />}</div>
-      <div className="flex items-center gap-3">{actions}</div>
+    <div className={cn("flex items-center gap-2 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4", className)}>
+      <div className="hidden sm:block flex-1">{search ?? <SearchBar />}</div>
+      <div className="flex items-center gap-3 ml-auto">{actions}</div>
     </div>
   );
 }
@@ -31,7 +31,7 @@ export function SearchBar({
         aria-label="Tìm kiếm"
         className="w-full h-10 pl-11 pr-16 rounded-full bg-surface-muted border border-transparent text-sm placeholder:text-muted focus-visible:outline-none focus-visible:border-border-strong focus-visible:border-2"
       />
-      <kbd className="absolute right-3 px-1.5 py-0.5 text-xs text-muted bg-surface rounded-xs border border-border">
+      <kbd className="absolute right-3 hidden sm:inline-flex px-1.5 py-0.5 text-xs text-muted bg-surface rounded-xs border border-border">
         {shortcut}
       </kbd>
     </div>

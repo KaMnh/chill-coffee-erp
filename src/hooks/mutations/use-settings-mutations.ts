@@ -5,7 +5,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   updateSidebarDefaults,
   updateUserSidebarConfig,
-  updateHandoverDefaultTasks
+  updateHandoverDefaultTasks,
+  createUserAccount,
+  updateUserAccount,
+  deactivateUserAccount,
+  approveSignupRequest,
+  rejectSignupRequest,
+  type CreateUserPayload
 } from "@/lib/data";
 import type { UserRole } from "@/lib/types";
 import { queryKeys } from "@/hooks/queries/keys";
@@ -73,6 +79,98 @@ export function useUpdateHandoverDefaultTasks(supabase: SupabaseClient | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.appSettings() });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// User management mutations (Phase 6+)
+// ---------------------------------------------------------------------------
+
+export function useCreateUser(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CreateUserPayload) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return createUserAccount(supabase, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+    }
+  });
+}
+
+export interface UpdateUserInput {
+  authUserId: string;
+  patch: {
+    role?: UserRole;
+    status?: "active" | "disabled";
+    name?: string;
+    position?: string;
+    hourly_rate?: number;
+  };
+}
+
+export function useUpdateUser(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateUserInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return updateUserAccount(supabase, input.authUserId, input.patch);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.account() });
+    }
+  });
+}
+
+export function useDeactivateUser(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (authUserId: string) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return deactivateUserAccount(supabase, authUserId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+    }
+  });
+}
+
+export interface ApproveSignupInput {
+  id: string;
+  role: UserRole;
+}
+
+export function useApproveSignup(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ApproveSignupInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return approveSignupRequest(supabase, input.id, input.role);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.signupRequests() });
+    }
+  });
+}
+
+export interface RejectSignupInput {
+  id: string;
+  note?: string;
+}
+
+export function useRejectSignup(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RejectSignupInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return rejectSignupRequest(supabase, input.id, input.note);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.signupRequests() });
     }
   });
 }

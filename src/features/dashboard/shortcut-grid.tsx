@@ -2,47 +2,35 @@
 
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icons";
-import { useToast } from "@/components/ui/toast";
+import type { ViewKey } from "@/features/navigation/navigation";
 
 interface Shortcut {
   key: "expense" | "shift" | "cash-check" | "cash-close" | "report";
   label: string;
   hint: string;
   icon: IconName;
-  /** Phase the destination module lands in. Until then, clicks toast a hint. */
-  phase: "3B" | "3C" | "ready";
+  /** Sidebar view to navigate to when clicked. */
+  target: ViewKey;
 }
 
 const SHORTCUTS: ReadonlyArray<Shortcut> = [
-  { key: "expense",    label: "Ghi chi phí",     hint: "Mở form nhập nhanh",       icon: "plus",     phase: "3B" },
-  { key: "shift",      label: "Ra/vào ca",        hint: "Ghi nhận lượt làm",        icon: "clock",    phase: "3B" },
-  { key: "cash-check", label: "Kiểm két nhanh",   hint: "Đếm két tức thời",         icon: "banknote", phase: "3B" },
-  { key: "cash-close", label: "Chốt két",         hint: "Đi theo từng bước",        icon: "lock",     phase: "3C" },
-  { key: "report",     label: "In báo cáo",       hint: "Phiếu chốt két",           icon: "printer",  phase: "ready" },
+  { key: "expense",    label: "Ghi chi phí",     hint: "Mở form nhập nhanh",       icon: "plus",     target: "expenses" },
+  { key: "shift",      label: "Ra/vào ca",        hint: "Ghi nhận lượt làm",        icon: "clock",    target: "shifts" },
+  { key: "cash-check", label: "Kiểm két nhanh",   hint: "Đếm két tức thời",         icon: "banknote", target: "cash" },
+  { key: "cash-close", label: "Chốt két",         hint: "Đi theo từng bước",        icon: "lock",     target: "cash" },
+  { key: "report",     label: "In báo cáo",       hint: "Phiếu chốt két",           icon: "printer",  target: "reports" },
 ];
 
 interface ShortcutGridProps {
-  onGoReports(): void;
+  onNavigate(view: ViewKey): void;
 }
 
 /**
- * 5 quick-action buttons. In Phase 3A only "Báo cáo chốt két" (report)
- * has a real destination (the reports view); the rest toast a hint about
- * when they land.
+ * 5 quick-action buttons that navigate to their destination module via the
+ * parent's view dispatcher. The dashboard widget pattern is "summary +
+ * click-through to full module" — these shortcuts are the click-through.
  */
-export function ShortcutGrid({ onGoReports }: ShortcutGridProps) {
-  const { toast } = useToast();
-  function handle(s: Shortcut) {
-    if (s.key === "report") {
-      onGoReports();
-      return;
-    }
-    toast({
-      semantic: "info",
-      title: s.label,
-      message: `Tính năng này sẽ vào ở Phase ${s.phase}.`,
-    });
-  }
+export function ShortcutGrid({ onNavigate }: ShortcutGridProps) {
   return (
     <Card>
       <CardHeader>
@@ -54,7 +42,7 @@ export function ShortcutGrid({ onGoReports }: ShortcutGridProps) {
             <button
               key={s.key}
               type="button"
-              onClick={() => handle(s)}
+              onClick={() => onNavigate(s.target)}
               className="flex flex-col items-start gap-2 rounded-lg border border-border bg-surface p-4 text-left transition hover:border-border-strong hover:shadow-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
             >
               <Icon name={s.icon} size={20} className="text-ink" />

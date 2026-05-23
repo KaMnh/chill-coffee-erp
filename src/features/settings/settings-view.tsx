@@ -6,11 +6,15 @@ import { useSupabase } from "@/hooks/use-supabase";
 import {
   useAppSettingsQuery,
   useSettingsAccountsQuery,
-  useAccountQuery
+  useAccountQuery,
+  useSignupRequestsQuery
 } from "@/hooks/queries";
 import type { UserRole } from "@/lib/types";
 import { SidebarConfigForm } from "./sidebar-config-form";
 import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
+import { KiotvietConfigForm } from "./kiotviet-config-form";
+import { AccountsManagerCard } from "./accounts-manager-card";
+import { SignupRequestsCard } from "./signup-requests-card";
 
 interface SettingsViewProps {
   role: UserRole;
@@ -33,6 +37,7 @@ export function SettingsView({ role }: SettingsViewProps) {
   const appSettingsQuery = useAppSettingsQuery(supabase, isEnabled);
   const settingsAccountsQuery = useSettingsAccountsQuery(supabase, isEnabled);
   const accountQuery = useAccountQuery(supabase, isEnabled);
+  const signupRequestsQuery = useSignupRequestsQuery(supabase, isEnabled);
 
   if (!isEnabled) {
     return (
@@ -47,7 +52,8 @@ export function SettingsView({ role }: SettingsViewProps) {
   const isLoading =
     appSettingsQuery.isLoading ||
     settingsAccountsQuery.isLoading ||
-    accountQuery.isLoading;
+    accountQuery.isLoading ||
+    signupRequestsQuery.isLoading;
 
   if (isLoading) {
     return (
@@ -73,12 +79,18 @@ export function SettingsView({ role }: SettingsViewProps) {
 
   return (
     <div className="space-y-6">
+      <AccountsManagerCard
+        accounts={accounts}
+        currentUserAuthId={currentAccount.auth_user_id}
+      />
+      <SignupRequestsCard requests={signupRequestsQuery.data ?? []} />
       <SidebarConfigForm
         sidebarDefaults={appSettings.sidebar_defaults}
         accounts={accounts}
         currentUserAuthId={currentAccount.auth_user_id}
       />
       <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
+      <KiotvietConfigForm />
     </div>
   );
 }

@@ -13,6 +13,13 @@ interface StockBalanceListProps {
   balances: StockBalance[];
   isLoading: boolean;
   isError: boolean;
+  /**
+   * Optional click handler — when present, each ingredient row becomes
+   * interactive (button role, keyboard activation). Used by Kho tab to
+   * open the unified "Ghi nhận" modal with the row's ingredient
+   * pre-selected.
+   */
+  onSelectIngredient?(ingredientId: string): void;
 }
 
 /**
@@ -31,6 +38,7 @@ export function StockBalanceList({
   balances,
   isLoading,
   isError,
+  onSelectIngredient,
 }: StockBalanceListProps) {
   if (isLoading) {
     return (
@@ -61,8 +69,25 @@ export function StockBalanceList({
     <div className="space-y-2">
       {balances.map((b) => {
         const isNegative = b.theoretical_balance < 0;
+        const clickable = onSelectIngredient != null;
+        const interactiveProps = clickable
+          ? {
+              role: "button" as const,
+              tabIndex: 0,
+              onClick: () => onSelectIngredient?.(b.ingredient_id),
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectIngredient?.(b.ingredient_id);
+                }
+              },
+              className:
+                "cursor-pointer transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong",
+              "aria-label": `Ghi nhận kho cho ${b.name}`,
+            }
+          : {};
         return (
-          <Card key={b.ingredient_id}>
+          <Card key={b.ingredient_id} {...interactiveProps}>
             <CardBody>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">

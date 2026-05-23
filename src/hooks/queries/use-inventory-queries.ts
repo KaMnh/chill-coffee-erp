@@ -64,5 +64,8 @@ export function useStockBalancesQuery(
     queryFn: () => loadStockBalancesAll(supabase!),
     enabled: !!supabase && enabled,
     staleTime: 30_000,
+    // Predictive refresh: when the user re-focuses the window, re-fetch
+    // current stock balances. staleTime gates rapid focus toggles.
+    refetchOnWindowFocus: true,
   });
 }

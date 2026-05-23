@@ -14,6 +14,9 @@
 --     8. Returns ONLY reason='count_correction' rows
 --     9. Sort is ORDER BY occurred_at DESC (function-native)
 --    10. Joins ingredients.name + ingredients.unit correctly
+--
+-- All dates are 2099-* to avoid colliding with seed data — see
+-- database/200_cash_flow_overview.sql for the same convention.
 
 begin;
 select plan(10);
@@ -49,7 +52,7 @@ insert into _t_ing_bean select public.create_ingredient('Coffee T160', 'g',  nul
 -- ------------------------------------------------------------------
 select is(
   (select count(*)::int from public.inventory_consumption_by_ingredient(
-     current_date - 30, current_date - 29)),
+     '2099-11-01'::date, '2099-11-02'::date)),
   0,
   'consumption: empty range returns 0 rows'
 );
@@ -61,25 +64,25 @@ create temp table _t_ord1 (id uuid);
 create temp table _t_ord2 (id uuid);
 with i1 as (
   insert into public.sales_orders (kiotviet_invoice_id, purchase_at, business_date, net_amount, total_payment)
-  values ('test-160-ord1', current_date - 1, current_date - 1, 50000, 50000)
+  values ('test-160-ord1', '2099-12-15'::date, '2099-12-15'::date, 50000, 50000)
   returning id
 )
 insert into _t_ord1 select id from i1;
 with i2 as (
   insert into public.sales_orders (kiotviet_invoice_id, purchase_at, business_date, net_amount, total_payment)
-  values ('test-160-ord2', current_date - 1, current_date - 1, 30000, 30000)
+  values ('test-160-ord2', '2099-12-15'::date, '2099-12-15'::date, 30000, 30000)
   returning id
 )
 insert into _t_ord2 select id from i2;
 
 insert into public.stock_movements (ingredient_id, quantity_delta, reason, occurred_at, source_order_id, created_by)
 values
-  ((select id from _t_ing_milk), -100, 'sale_theoretical', (current_date - 1) + time '10:00', (select id from _t_ord1), '11111111-1111-1111-1111-111111111111'),
-  ((select id from _t_ing_milk),  -50, 'sale_theoretical', (current_date - 1) + time '11:00', (select id from _t_ord2), '11111111-1111-1111-1111-111111111111');
+  ((select id from _t_ing_milk), -100, 'sale_theoretical', '2099-12-15'::date + time '10:00', (select id from _t_ord1), '11111111-1111-1111-1111-111111111111'),
+  ((select id from _t_ing_milk),  -50, 'sale_theoretical', '2099-12-15'::date + time '11:00', (select id from _t_ord2), '11111111-1111-1111-1111-111111111111');
 
 select is(
   (select total_consumed from public.inventory_consumption_by_ingredient(
-     current_date - 2, current_date)
+     '2099-12-14'::date, '2099-12-16'::date)
    where ingredient_id = (select id from _t_ing_milk)),
   150::numeric,
   'consumption: sums abs(quantity_delta) across 2 movements = 150'
@@ -90,12 +93,12 @@ select is(
 -- ------------------------------------------------------------------
 insert into public.stock_movements (ingredient_id, quantity_delta, reason, occurred_at, created_by)
 values
-  ((select id from _t_ing_milk),  500, 'purchase_received', (current_date - 1) + time '12:00', '11111111-1111-1111-1111-111111111111'),
-  ((select id from _t_ing_milk),  -10, 'count_correction',  (current_date - 1) + time '13:00', '11111111-1111-1111-1111-111111111111');
+  ((select id from _t_ing_milk),  500, 'purchase_received', '2099-12-15'::date + time '12:00', '11111111-1111-1111-1111-111111111111'),
+  ((select id from _t_ing_milk),  -10, 'count_correction',  '2099-12-15'::date + time '13:00', '11111111-1111-1111-1111-111111111111');
 
 select is(
   (select total_consumed from public.inventory_consumption_by_ingredient(
-     current_date - 2, current_date)
+     '2099-12-14'::date, '2099-12-16'::date)
    where ingredient_id = (select id from _t_ing_milk)),
   150::numeric,
   'consumption: excludes purchase_received and count_correction'
@@ -106,7 +109,7 @@ select is(
 -- ------------------------------------------------------------------
 select is(
   (select sale_count from public.inventory_consumption_by_ingredient(
-     current_date - 2, current_date)
+     '2099-12-14'::date, '2099-12-16'::date)
    where ingredient_id = (select id from _t_ing_milk)),
   2::int,
   'consumption: sale_count = count(distinct source_order_id) = 2'
@@ -117,7 +120,7 @@ select is(
 -- ------------------------------------------------------------------
 select is(
   (select total_consumed from public.inventory_consumption_by_ingredient(
-     current_date - 1, current_date - 1)
+     '2099-12-15'::date, '2099-12-15'::date)
    where ingredient_id = (select id from _t_ing_milk)),
   150::numeric,
   'consumption: date filter is inclusive on both p_from and p_to'
@@ -129,19 +132,20 @@ select is(
 create temp table _t_ord3 (id uuid);
 with i3 as (
   insert into public.sales_orders (kiotviet_invoice_id, purchase_at, business_date, net_amount, total_payment)
-  values ('test-160-ord3', current_date - 1, current_date - 1, 25000, 25000)
+  values ('test-160-ord3', '2099-12-15'::date, '2099-12-15'::date, 25000, 25000)
   returning id
 )
 insert into _t_ord3 select id from i3;
 
 insert into public.stock_movements (ingredient_id, quantity_delta, reason, occurred_at, source_order_id, created_by)
 values
-  ((select id from _t_ing_bean), -30, 'sale_theoretical', (current_date - 1) + time '14:00', (select id from _t_ord3), '11111111-1111-1111-1111-111111111111');
+  ((select id from _t_ing_bean), -30, 'sale_theoretical', '2099-12-15'::date + time '14:00', (select id from _t_ord3), '11111111-1111-1111-1111-111111111111');
 
 -- See Test 9 rationale: language sql function output order is preserved
 -- when consumed without an outer ORDER BY.
 select is(
-  (select ingredient_id from public.inventory_consumption_by_ingredient(current_date - 2, current_date) limit 1),
+  (select ingredient_id from public.inventory_consumption_by_ingredient(
+     '2099-12-14'::date, '2099-12-16'::date) limit 1),
   (select id from _t_ing_milk),
   'consumption: first row is the largest total_consumed (milk, 150 > bean, 30)'
 );
@@ -155,7 +159,7 @@ select is(
 -- ------------------------------------------------------------------
 select is(
   (select count(*)::int from public.inventory_variance_audit(
-     current_date - 60, current_date - 50)),
+     '2099-10-01'::date, '2099-10-02'::date)),
   0,
   'variance: empty range returns 0 rows'
 );
@@ -164,10 +168,10 @@ select is(
 -- Test 8: returns ONLY reason='count_correction' rows
 -- ------------------------------------------------------------------
 -- So far: -100, -50 sale_theoretical + 500 purchase + -10 count_correction
--- Plus -30 sale_theoretical for bean. So variance audit in last 2 days = 1 row.
+-- Plus -30 sale_theoretical for bean. So variance audit on 2099-12-15 = 1 row.
 select is(
   (select count(*)::int from public.inventory_variance_audit(
-     current_date - 2, current_date)),
+     '2099-12-14'::date, '2099-12-16'::date)),
   1,
   'variance: returns only reason=count_correction rows'
 );
@@ -177,14 +181,15 @@ select is(
 -- ------------------------------------------------------------------
 insert into public.stock_movements (ingredient_id, quantity_delta, reason, occurred_at, created_by)
 values
-  ((select id from _t_ing_milk), 5, 'count_correction', (current_date - 1) + time '20:00', '11111111-1111-1111-1111-111111111111');
+  ((select id from _t_ing_milk), 5, 'count_correction', '2099-12-15'::date + time '20:00', '11111111-1111-1111-1111-111111111111');
 
 -- A language sql function with a top-level ORDER BY is inlined and its
 -- output order is preserved when consumed without an outer ORDER BY.
 -- We exploit that here: limit 1 against the function's natural output
 -- must give the row with the latest occurred_at.
 select is(
-  (select quantity_delta from public.inventory_variance_audit(current_date - 2, current_date) limit 1),
+  (select quantity_delta from public.inventory_variance_audit(
+     '2099-12-14'::date, '2099-12-16'::date) limit 1),
   5::numeric,
   'variance: first row from function is the most recent (occurred_at DESC sort)'
 );
@@ -195,7 +200,7 @@ select is(
 select is(
   (select ingredient_name || '|' || unit
    from public.inventory_variance_audit(
-     current_date - 2, current_date)
+     '2099-12-14'::date, '2099-12-16'::date)
    order by occurred_at desc
    limit 1),
   'Milk T160|ml',

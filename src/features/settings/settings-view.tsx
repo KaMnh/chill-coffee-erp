@@ -52,7 +52,8 @@ export function SettingsView({ role }: SettingsViewProps) {
   const isLoading =
     appSettingsQuery.isLoading ||
     settingsAccountsQuery.isLoading ||
-    accountQuery.isLoading;
+    accountQuery.isLoading ||
+    signupRequestsQuery.isLoading;
 
   if (isLoading) {
     return (

@@ -132,9 +132,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     })
     .eq("id", id);
   if (updError) {
-    // Account is already created — don't roll back; just surface the warning.
+    // Account is already created — don't roll back, but signal partial success
+    // so the client surfaces a warning instead of treating this as a clean OK
+    // (otherwise the signup_requests row stays pending_approval and reappears
+    // in the next refetch).
     return NextResponse.json({
-      status: "ok",
+      status: "ok_with_warning",
       auth_user_id: request.auth_user_id,
       employee_id: employeeId,
       warning: `Đã tạo tài khoản nhưng không cập nhật được signup_requests: ${updError.message}`

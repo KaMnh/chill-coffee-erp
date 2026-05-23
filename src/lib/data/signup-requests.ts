@@ -40,9 +40,15 @@ export async function approveSignupRequest(
     headers,
     body: JSON.stringify({ role })
   });
-  const json = (await res.json()) as { status: string; error?: string };
-  if (!res.ok || json.status !== "ok") {
+  const json = (await res.json()) as { status: string; error?: string; warning?: string };
+  if (!res.ok || (json.status !== "ok" && json.status !== "ok_with_warning")) {
     throw new Error(json.error ?? `Duyệt thất bại (HTTP ${res.status}).`);
+  }
+  if (json.status === "ok_with_warning" && json.warning) {
+    // Account exists but signup_requests.status didn't flip — surface to the
+    // caller via a non-fatal warning. Caller can choose to toast or log.
+    // eslint-disable-next-line no-console
+    console.warn("[approveSignupRequest] partial success:", json.warning);
   }
 }
 

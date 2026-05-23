@@ -229,7 +229,7 @@ export default function HomePage() {
         {view === "dashboard" && (
           <DashboardView
             businessDate={businessDate}
-            onGoReports={() => setView("reports")}
+            onNavigate={setView}
           />
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}

@@ -5,6 +5,7 @@ import { useDashboardQuery, useHandoverQuery } from "@/hooks/queries";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import type { DashboardData } from "@/lib/types";
+import type { ViewKey } from "@/features/navigation/navigation";
 import { KpiBar } from "./kpi-bar";
 import { ShortcutGrid } from "./shortcut-grid";
 import { ExpenseLogCard } from "./expense-log-card";
@@ -27,10 +28,10 @@ const EMPTY: DashboardData = {
 
 interface DashboardViewProps {
   businessDate: string;
-  onGoReports(): void;
+  onNavigate(view: ViewKey): void;
 }
 
-export function DashboardView({ businessDate, onGoReports }: DashboardViewProps) {
+export function DashboardView({ businessDate, onNavigate }: DashboardViewProps) {
   const supabase = useSupabase();
   const dashboardQuery = useDashboardQuery(supabase, businessDate, true);
   const handoverQuery = useHandoverQuery(supabase, businessDate, true);
@@ -59,7 +60,7 @@ export function DashboardView({ businessDate, onGoReports }: DashboardViewProps)
   return (
     <div className="space-y-6">
       <KpiBar data={data} />
-      <ShortcutGrid onGoReports={onGoReports} />
+      <ShortcutGrid onNavigate={onNavigate} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <ExpenseLogCard expenses={data.expenses} total={data.total_expenses} />

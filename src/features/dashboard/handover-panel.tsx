@@ -12,9 +12,9 @@ interface HandoverPanelProps {
 }
 
 /**
- * Read-only handover panel for Phase 3A. The wizard + mutation flow ports
- * to Phase 3C — until then we render the current state (checkboxes
- * disabled, note read-only) with a banner pointing to the next phase.
+ * Read-only handover summary widget for the Dashboard. Edits happen in
+ * the dedicated Handover module accessed via the sidebar — this is a
+ * preview-only surface (checkboxes + note are non-interactive).
  */
 export function HandoverPanel({ handover }: HandoverPanelProps) {
   if (!handover) {
@@ -51,13 +51,14 @@ export function HandoverPanel({ handover }: HandoverPanelProps) {
       <CardBody className="space-y-4">
         {total > 0 && <ProgressBar value={pct} />}
         <AlertBanner variant="info">
-          Read-only ở Phase 3A. Wizard ghi sẽ vào Phase 3C.
+          Tóm tắt nhanh — bấm &quot;Bàn giao&quot; ở sidebar để chỉnh sửa
+          checklist.
         </AlertBanner>
         {total === 0 ? (
           <EmptyState
             icon="info"
             title="Chưa có checklist"
-            subtitle="Owner/manager cấu hình mặc định ở Thiết lập (Phase 3C)."
+            subtitle="Owner/manager cấu hình mặc định ở Thiết lập."
           />
         ) : (
           <ul className="space-y-2">

@@ -19,6 +19,8 @@ import {
   ClipboardList,
   // Phase 4.B — inventory
   Package,
+  // Phase 5 — cashflow
+  TrendingUp,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -73,6 +75,8 @@ export const Icons = {
   clipboardList: ClipboardList,
   // Phase 4.B — inventory
   package: Package,
+  // Phase 5 — cashflow
+  trendingUp: TrendingUp,
 } as const;
 
 export type IconName = keyof typeof Icons;

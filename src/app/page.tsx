@@ -25,6 +25,7 @@ import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { ExpensesView } from "@/features/expenses/expenses-view";
 import { ReportsView } from "@/features/reports/reports-view";
 import { PivotView } from "@/features/pivot/pivot-view";
+import { CashFlowView } from "@/features/cashflow/cash-flow-view";
 import { CashView } from "@/features/cash/cash-view";
 import { SafeView } from "@/features/safe/safe-view";
 import { HandoverView } from "@/features/handover/handover-view";
@@ -233,6 +234,7 @@ export default function HomePage() {
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}
         {view === "pivot" && <PivotView businessDate={businessDate} />}
+        {view === "cashflow" && <CashFlowView role={account.role} />}
         {/* 3B/3C views — expenses now live; shifts + cash still locked. */}
         {view === "expenses" && (
           <ExpensesView businessDate={businessDate} role={account.role} />

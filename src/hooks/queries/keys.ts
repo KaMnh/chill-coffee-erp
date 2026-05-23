@@ -63,4 +63,8 @@ export const queryKeys = {
 
   // User management — signup_requests
   signupRequests: () => ["signup-requests"] as const,
+
+  // Cash flow overview (2026-05-23)
+  cashFlowOverview: (start: string, end: string) =>
+    ["cash-flow-overview", start, end] as const,
 };

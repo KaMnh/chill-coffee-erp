@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useAuthSession } from "@/hooks/use-auth-session";
@@ -9,8 +10,10 @@ import { useBusinessDate } from "@/hooks/use-business-date";
 import { useRoleGate } from "@/hooks/use-role-gate";
 import { useAppSettingsQuery, useDashboardQuery } from "@/hooks/queries";
 import { usePosSync } from "@/hooks/use-pos-sync";
+import { useBackgroundPosSync } from "@/hooks/use-background-pos-sync";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { useAuthCookieSync } from "@/hooks/use-auth-cookie-sync";
+import { prefetchNav } from "@/lib/prefetch-nav";
 import { AppShell } from "@/components/layout/app-shell";
 import { Sidebar, SidebarSection, SidebarLogo } from "@/components/layout/sidebar";
 import { NavItem } from "@/components/layout/nav-item";
@@ -43,8 +46,49 @@ export default function HomePage() {
   const { visibleNav, defaultView, canSee } = useRoleGate(account, appSettingsQuery.data);
   const dashboardQuery = useDashboardQuery(supabase, businessDate, status === "authed");
   const posSync = usePosSync(supabase, businessDate, account, dashboardQuery.data?.latest_sync);
+  useBackgroundPosSync(posSync, account?.role);
   useRealtimeInvalidate(supabase, businessDate);
   useAuthCookieSync(supabase);
+
+  // Nav-hover prefetch: 200ms debounce per nav item; the timer is cancelled
+  // if the cursor leaves before it fires (transient pass-through doesn't
+  // trigger an RPC). prefetchNav internally defers to TanStack's per-query
+  // staleTime — already-fresh data is a no-op.
+  const queryClient = useQueryClient();
+  const hoverTimersRef = useRef<Map<ViewKey, ReturnType<typeof setTimeout>>>(new Map());
+  const HOVER_DEBOUNCE_MS = 200;
+
+  const handleNavHover = useCallback(
+    (key: ViewKey) => {
+      const map = hoverTimersRef.current;
+      const prev = map.get(key);
+      if (prev) clearTimeout(prev);
+      const id = setTimeout(() => {
+        prefetchNav(key, queryClient, supabase, businessDate);
+        map.delete(key);
+      }, HOVER_DEBOUNCE_MS);
+      map.set(key, id);
+    },
+    [queryClient, supabase, businessDate],
+  );
+
+  const handleNavHoverLeave = useCallback((key: ViewKey) => {
+    const map = hoverTimersRef.current;
+    const prev = map.get(key);
+    if (prev) {
+      clearTimeout(prev);
+      map.delete(key);
+    }
+  }, []);
+
+  // Cleanup hover timers on unmount so no late prefetch fires after navigation.
+  useEffect(() => {
+    const map = hoverTimersRef.current;
+    return () => {
+      map.forEach((id) => clearTimeout(id));
+      map.clear();
+    };
+  }, []);
 
   const [view, setView] = useState<ViewKey>("dashboard");
   // If role change hides current view, snap to first visible.
@@ -137,6 +181,8 @@ export default function HomePage() {
                 label={item.label}
                 active={view === item.key}
                 onClick={() => handleNavClick(item.key)}
+                onPointerEnter={() => handleNavHover(item.key)}
+                onPointerLeave={() => handleNavHoverLeave(item.key)}
               />
             ))}
           </SidebarSection>

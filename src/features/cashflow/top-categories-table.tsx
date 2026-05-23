@@ -23,38 +23,40 @@ export function TopCategoriesTable({ rows }: TopCategoriesTableProps) {
             subtitle="Khi có expense thì top hạng mục sẽ hiện ra đây."
           />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-2 pr-2 text-xs font-medium uppercase tracking-wider text-muted w-10">
-                  #
-                </th>
-                <th className="text-left py-2 px-2 text-xs font-medium uppercase tracking-wider text-muted">
-                  Hạng mục
-                </th>
-                <th className="text-right py-2 px-2 text-xs font-medium uppercase tracking-wider text-muted">
-                  Số tiền
-                </th>
-                <th className="text-right py-2 pl-2 text-xs font-medium uppercase tracking-wider text-muted w-16">
-                  %
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.category_name} className="border-b border-border last:border-0">
-                  <td className="py-3 pr-2 text-muted">{i + 1}</td>
-                  <td className="py-3 px-2 text-ink">{row.category_name}</td>
-                  <td className="py-3 px-2 text-right tabular-nums text-ink">
-                    {formatVND(row.amount)}
-                  </td>
-                  <td className="py-3 pl-2 text-right tabular-nums text-muted">
-                    {(row.pct * 100).toFixed(0)}%
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-2 text-xs font-medium uppercase tracking-wider text-muted w-10">
+                    #
+                  </th>
+                  <th className="text-left py-2 px-2 text-xs font-medium uppercase tracking-wider text-muted">
+                    Hạng mục
+                  </th>
+                  <th className="text-right py-2 px-2 text-xs font-medium uppercase tracking-wider text-muted">
+                    Số tiền
+                  </th>
+                  <th className="text-right py-2 pl-2 text-xs font-medium uppercase tracking-wider text-muted w-16">
+                    %
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={row.category_name} className="border-b border-border last:border-0">
+                    <td className="py-3 pr-2 text-muted">{i + 1}</td>
+                    <td className="py-3 px-2 text-ink">{row.category_name}</td>
+                    <td className="py-3 px-2 text-right tabular-nums text-ink">
+                      {formatVND(row.amount)}
+                    </td>
+                    <td className="py-3 pl-2 text-right tabular-nums text-muted">
+                      {(row.pct * 100).toFixed(0)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </CardBody>
     </Card>

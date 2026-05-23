@@ -70,7 +70,7 @@ export function ProductSummaryTable({ dateRange }: ProductSummaryTableProps) {
             {data.length} sản phẩm
           </Badge>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-muted">
               <th scope="col" className="text-left pb-2 font-medium">Sản phẩm</th>
@@ -102,7 +102,7 @@ export function ProductSummaryTable({ dateRange }: ProductSummaryTableProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </CardBody>
     </Card>
   );

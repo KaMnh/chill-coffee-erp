@@ -197,7 +197,7 @@ export default function HomePage() {
                 type="date"
                 value={businessDate}
                 onChange={(e) => setBusinessDate(e.target.value)}
-                className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+                className="h-10 rounded-md border border-border bg-surface px-2 sm:px-3 text-xs sm:text-sm text-ink w-[120px] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
                 aria-label="Ngày kinh doanh"
               />
               <IconButton
@@ -207,12 +207,15 @@ export default function HomePage() {
                 aria-label={posSync.isPending ? "Đang sync POS" : "Đồng bộ POS"}
                 onClick={handlePosSync}
                 disabled={posSync.isPending}
+                className="hidden sm:inline-flex"
               />
-              <Avatar
-                size="md"
-                initials={employeeName.slice(0, 2).toUpperCase()}
-                alt={`${employeeName} (${ROLE_LABELS[account.role]})`}
-              />
+              <span className="hidden sm:inline-flex">
+                <Avatar
+                  size="md"
+                  initials={employeeName.slice(0, 2).toUpperCase()}
+                  alt={`${employeeName} (${ROLE_LABELS[account.role]})`}
+                />
+              </span>
               <IconButton
                 icon="logOut"
                 size={40}

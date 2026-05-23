@@ -47,7 +47,7 @@ export const SelectContent = forwardRef<
         position={position}
         sideOffset={4}
         className={cn(
-          "min-w-[8rem] overflow-hidden rounded-md border border-border bg-surface shadow-popover z-50",
+          "min-w-[8rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border border-border bg-surface shadow-popover z-50",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           className
         )}

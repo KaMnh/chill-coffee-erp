@@ -68,7 +68,7 @@ export function ExpenseByCategoryTable({ dateRange }: ExpenseByCategoryTableProp
             {data.length} danh mục
           </Badge>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-muted">
               <th scope="col" className="text-left pb-2 font-medium">Danh mục</th>
@@ -94,7 +94,7 @@ export function ExpenseByCategoryTable({ dateRange }: ExpenseByCategoryTableProp
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </CardBody>
     </Card>
   );

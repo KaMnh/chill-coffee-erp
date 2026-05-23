@@ -163,9 +163,9 @@ export function CreateAccountModal({ open, onOpenChange }: CreateAccountModalPro
           />
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-ink-2">Vai trò</label>
+            <label htmlFor="create-account-role" className="text-sm text-ink-2">Vai trò</label>
             <Select value={role} onValueChange={(v) => setRole(v as UserRole)} disabled={isBusy}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="create-account-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

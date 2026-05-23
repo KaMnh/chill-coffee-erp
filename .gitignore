@@ -24,3 +24,6 @@ mirrors/
 
 # Vitest coverage output (not generated yet — Phase 6 will turn this on)
 coverage/
+
+# Claude Code harness config (worktree-local launch.json, etc.)
+.claude/

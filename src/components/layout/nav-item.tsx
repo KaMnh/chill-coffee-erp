@@ -20,7 +20,7 @@ const baseClass =
   "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors duration-200 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2";
 
-const activeClass = "rounded-full bg-ink text-white";
+const activeClass = "rounded-full bg-accent-dark text-white";
 const inactiveClass = "rounded-md text-ink-2 hover:bg-surface-muted hover:text-ink";
 
 export function NavItem({

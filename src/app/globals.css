@@ -40,6 +40,16 @@
   --color-border: #EDE6DC;
   --color-border-strong: #2A1E16;
 
+  /* Brand accent — ported from V3 (Chill orange).
+   * --color-accent is the primary CTA fill; --color-accent-dark is the
+   * hover/active state and the colour of text-on-light when the brand
+   * needs to read as "orange" (e.g. links, active nav text).
+   * --color-accent-soft is the peach tint used by V3 for ghost-button
+   * backgrounds + hover states + soft badges. */
+  --color-accent: #F98900;
+  --color-accent-dark: #C95D00;
+  --color-accent-soft: #FFF0DF;
+
   /* Pastel KPI palette */
   --color-peach: #FFD9B8;
   --color-peach-ink: #8B4513;

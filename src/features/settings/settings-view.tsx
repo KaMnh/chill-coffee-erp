@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSupabase } from "@/hooks/use-supabase";
 import {
   useAppSettingsQuery,
@@ -11,9 +12,11 @@ import {
 import type { UserRole } from "@/lib/types";
 import { SidebarConfigForm } from "./sidebar-config-form";
 import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
+import { BackupRestoreSection } from "./backup-restore-section";
 
 interface SettingsViewProps {
   role: UserRole;
+  authHeader: string | null;
 }
 
 /**
@@ -26,7 +29,7 @@ interface SettingsViewProps {
  *   - SidebarConfigForm (role matrix + per-user override sub-section)
  *   - HandoverDefaultTasksEditor (list editor)
  */
-export function SettingsView({ role }: SettingsViewProps) {
+export function SettingsView({ role, authHeader }: SettingsViewProps) {
   const supabase = useSupabase();
   const isEnabled = role === "owner" || role === "manager";
 
@@ -72,13 +75,26 @@ export function SettingsView({ role }: SettingsViewProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <SidebarConfigForm
-        sidebarDefaults={appSettings.sidebar_defaults}
-        accounts={accounts}
-        currentUserAuthId={currentAccount.auth_user_id}
-      />
-      <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
-    </div>
+    <Tabs defaultValue="general" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="general">Cài đặt chung</TabsTrigger>
+        <TabsTrigger value="backup">Sao lưu / Khôi phục</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="general">
+        <div className="space-y-6">
+          <SidebarConfigForm
+            sidebarDefaults={appSettings.sidebar_defaults}
+            accounts={accounts}
+            currentUserAuthId={currentAccount.auth_user_id}
+          />
+          <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="backup">
+        <BackupRestoreSection role={role} authHeader={authHeader} />
+      </TabsContent>
+    </Tabs>
   );
 }

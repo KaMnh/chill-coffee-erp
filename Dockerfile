@@ -38,6 +38,18 @@ RUN apk add --no-cache postgresql-client \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Overlay full production node_modules. Next.js standalone bundles a subset of
+# node_modules via output-file tracing — sufficient for serving the app, but
+# misses packages like @supabase/supabase-js that the migrator scripts need.
+# Adds ~200MB but unblocks `npm run deploy:init`.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Schema + migrator scripts. Used by the `migrator` service in
+# deploy/dockge/compose.yaml (command: npm run deploy:init). Overwrite the
+# stripped package.json that Next.js standalone generated so `npm run
+# deploy:init` resolves to the script defined in the project's real package.json.
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=nextjs:nodejs /app/database ./database
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 USER nextjs

@@ -70,9 +70,10 @@ Fill at minimum:
 - `NEXT_PUBLIC_APP_URL` — the public URL of your reverse-proxied app (e.g. `https://app.example.com`)
 - `API_EXTERNAL_URL`, `SUPABASE_PUBLIC_URL`, `SITE_URL` — usually same as the URLs above (interpolated from `NEXT_PUBLIC_*` by default)
 - All Section 3 secrets (paste from step 1)
-- `INGEST_CLIENT_SECRET` — leave EMPTY on first deploy; set after the integration_clients table is seeded (`openssl rand -hex 32`)
 - `CRON_SECRET` — `openssl rand -hex 32` (or leave empty to disable cron)
+- `INGEST_CLIENT_SECRET` — `openssl rand -hex 32`. The `migrator` container will hash + insert this into `integration_clients` automatically during seed.
 - `CHILL_ERP_IMAGE` — replace `REPLACE_WITH_GITHUB_OWNER` with your GitHub username/org; pin to a release tag like `:v4.0.0`
+- **Section 12 — `OWNER_EMAIL` + `OWNER_PASSWORD`**: the first owner account the migrator will auto-create. Password >= 8 chars. After first successful deploy you can clear these (migrator will skip seed once an owner exists).
 
 Note: `POSTGRES_BACKUP_URL`, `SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are constructed automatically inside `compose.yaml` from the values you paste into Section 3 — do not set them in `.env`.
 
@@ -105,35 +106,18 @@ Public packages skip this step.
 3. Set stack name: `chill-coffee-erp`
 4. Dockge detects `/opt/stacks/chill-coffee-erp/compose.yaml` automatically
 5. Click "Deploy"
-6. Wait ~2 minutes for all healthchecks to pass (watch the logs panel)
+6. Wait ~3 minutes:
+   - ~30s for Postgres + Kong + Auth + Studio to reach healthy
+   - The `chill-migrator` container auto-runs, applies schema + migrations,
+     creates the owner account, exits 0 (you can watch its logs in Dockge)
+   - The `chill-app` container starts ONLY after migrator succeeds
+   - All 14 services Up + 1 Exited(0) when done
 
-### 8. Initialize the database schema and seed
+No SSH, no manual `npm` commands, no repo clone on the server. The image
+ships `scripts/` + `database/` baked in; the `migrator` service runs them
+inside the Docker network.
 
-The `db:init` and `db:seed` scripts run from a machine that has both
-`docker compose` access to the stack AND the project source code. The
-simplest workflow on the mini-PC: clone the repo alongside the stack folder.
-
-```bash
-# On the mini-PC, in a shell with docker compose access:
-git clone https://github.com/<your-org>/chill-coffee-erp.git /opt/chill-coffee-erp-src
-cd /opt/chill-coffee-erp-src
-npm install --omit=dev
-
-# The scripts read POSTGRES_PASSWORD from supabase/.env (legacy) — symlink it
-# to the consolidated .env so the scripts find the value:
-ln -sf /opt/stacks/chill-coffee-erp/.env supabase/.env
-
-# Apply schema (~30 SQL files)
-node scripts/db-init.mjs
-
-# Create the first owner account (set OWNER_EMAIL/OWNER_PASSWORD inline)
-OWNER_EMAIL=admin@example.com OWNER_PASSWORD='choose-a-strong-pw-here' \
-  node scripts/seed.mjs
-```
-
-Total ~60 seconds. After this, the owner can sign in at `https://app.example.com`.
-
-### 9. Smoke test
+### 8. Smoke test
 
 ```bash
 curl -fsS http://localhost:${APP_PORT:-3009}/        # 200 OK
@@ -143,7 +127,7 @@ curl -fsS http://localhost:${KONG_HTTP_PORT:-8000}/  # Kong response (HTTP 404 i
 xdg-open http://<server-ip>:${APP_PORT:-3009}        # Chill ERP login screen
 ```
 
-### 10. Configure your reverse proxy
+### 9. Configure your reverse proxy
 
 (Out of scope of this stack — example mappings.)
 
@@ -169,7 +153,11 @@ Or for a rolling deploy with `:latest`:
 # Dockge UI → chill-coffee-erp → "Pull" → "Recreate"
 ```
 
-Only the `app` container restarts; Supabase containers stay up.
+On every recreate, the `chill-migrator` container runs again first, applies
+any new `database/migrations/*.sql` files baked into the image, then exits 0
+and lets `chill-app` start with the up-to-date schema. Idempotent — re-running
+against an already-migrated DB is a no-op. Supabase containers (Postgres,
+Kong, Auth, ...) stay running across updates.
 
 ## Rollback
 
@@ -210,4 +198,6 @@ recent `.sql` backup via App Settings → Backup → "Restore from file"
 | `supabase-vector` keeps restarting with "Configuration error" | `volumes/logs/vector.yml` missing or invalid | Re-run `deploy/dockge/sync-volumes.sh` from dev machine; if the stub doesn't work for your needs, copy the official `vector.yml` from https://github.com/supabase/supabase/tree/master/docker/volumes/logs |
 | `supabase-pooler` keeps restarting with "cat: pooler.exs: Is a directory" | `volumes/pooler/pooler.exs` missing | Same as above; copy official `pooler.exs` if needed |
 | `supabase-edge-functions` keeps restarting with "could not find an appropriate entrypoint" | `volumes/functions/main/index.ts` missing | Re-run `deploy/dockge/sync-volumes.sh` |
-| `node scripts/db-init.mjs` errors with "Không tìm thấy POSTGRES_PASSWORD" | The script reads `supabase/.env` but the consolidated stack uses one `.env`; symlink fix needed | `ln -sf /opt/stacks/chill-coffee-erp/.env supabase/.env` from the repo clone |
+| `chill-migrator` exits with non-zero status, `chill-app` never starts | Migration SQL failed (bad migration file) or seed step failed (Auth API unreachable, bad OWNER_PASSWORD) | Check `docker logs chill-migrator` in Dockge. Common causes: (a) new migration has syntax error → fix and re-push image; (b) `kong` not healthy yet → wait/restart migrator only; (c) `OWNER_PASSWORD` < 8 chars → fix `.env` and recreate migrator |
+| Migrator runs every restart and that's wasteful | Working as intended — but step is fast (~5s if no new migrations) and provides safety on every deploy | If you really want to skip it once, `docker compose up -d --no-deps app` (skips deps including migrator). NOT recommended. |
+| Container name conflict like `Conflict. The container name "/supabase-db" is already in use` | Another Supabase stack on the same Docker daemon already uses these names | Set `STACK_NAMESPACE=quan2-` (note trailing hyphen) in `.env` to prefix all container names. Default is empty = keep original names. |

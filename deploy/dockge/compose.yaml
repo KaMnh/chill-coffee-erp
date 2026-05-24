@@ -17,7 +17,7 @@ name: chill-coffee-erp
 services:
 
   app:
-    container_name: chill-app
+    container_name: ${STACK_NAMESPACE:-}chill-app
     image: ${CHILL_ERP_IMAGE:-ghcr.io/REPLACE_WITH_GITHUB_OWNER/chill-coffee-erp:latest}
     restart: unless-stopped
     env_file: .env
@@ -42,6 +42,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
@@ -54,8 +56,47 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # One-shot init container: applies database/*.sql + migrations, then seeds
+  # the first owner account if OWNER_EMAIL/OWNER_PASSWORD are set in .env.
+  # Reuses the chill-app image (which now ships scripts/ + database/).
+  # Idempotent: runs on every `docker compose up`; re-runs are no-ops thanks to
+  # CREATE IF NOT EXISTS / CREATE OR REPLACE in SQL and existence checks in seed.
+  migrator:
+    container_name: ${STACK_NAMESPACE:-}chill-migrator
+    image: ${CHILL_ERP_IMAGE:-ghcr.io/REPLACE_WITH_GITHUB_OWNER/chill-coffee-erp:latest}
+    env_file: .env
+    environment:
+      # Direct psql to db service over Docker network (triggers container-mode
+      # in scripts/db-init.mjs via the POSTGRES_HOST check).
+      POSTGRES_HOST: db
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Section 3}
+      # For deploy-seed.mjs Supabase Auth API call.
+      SUPABASE_INTERNAL_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in Section 3}
+      # Optional owner-account seed. If both empty → seed is skipped (no-op).
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    # Override image ENTRYPOINT — docker-entrypoint.sh exists to sed NEXT_PUBLIC_*
+    # placeholders into the Next.js bundle for the APP container. Migrator doesn't
+    # serve the bundle, doesn't have NEXT_PUBLIC_SUPABASE_ANON_KEY in its env (we
+    # only inject what migrator scripts actually need), so the entrypoint would
+    # fail-loud on a leftover placeholder. Skip it entirely.
+    entrypoint: ["npm", "run", "deploy:init"]
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   studio:
-    container_name: supabase-studio
+    container_name: ${STACK_NAMESPACE:-}supabase-studio
     image: supabase/studio:2026.04.27-sha-5f60601
     restart: unless-stopped
     healthcheck:
@@ -116,7 +157,7 @@ services:
       - ./volumes/functions:/app/edge-functions:Z
 
   kong:
-    container_name: supabase-kong
+    container_name: ${STACK_NAMESPACE:-}supabase-kong
     image: kong/kong:3.9.1
     restart: unless-stopped
     networks:
@@ -163,7 +204,7 @@ services:
     entrypoint: /home/kong/kong-entrypoint.sh
 
   auth:
-    container_name: supabase-auth
+    container_name: ${STACK_NAMESPACE:-}supabase-auth
     image: supabase/gotrue:v2.186.0
     restart: unless-stopped
     healthcheck:
@@ -301,7 +342,7 @@ services:
       # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
 
   rest:
-    container_name: supabase-rest
+    container_name: ${STACK_NAMESPACE:-}supabase-rest
     image: postgrest/postgrest:v14.8
     restart: unless-stopped
     depends_on:
@@ -330,7 +371,7 @@ services:
 
   realtime:
     # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
-    container_name: realtime-dev.supabase-realtime
+    container_name: ${STACK_NAMESPACE:-}realtime-dev.supabase-realtime
     image: supabase/realtime:v2.76.5
     restart: unless-stopped
     depends_on:
@@ -341,7 +382,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sSfL --head -o /dev/null -H \"Authorization: Bearer ${ANON_KEY}\" http://localhost:4000/api/tenants/realtime-dev/health"
+          "curl -sSfL --head -o /dev/null -H \"Authorization: Bearer ${ANON_KEY}\" http://localhost:4000/api/tenants/${STACK_NAMESPACE:-}realtime-dev/health"
         ]
       timeout: 5s
       interval: 30s
@@ -376,7 +417,7 @@ services:
 
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
-    container_name: supabase-storage
+    container_name: ${STACK_NAMESPACE:-}supabase-storage
     image: supabase/storage-api:v1.48.26
     restart: unless-stopped
     depends_on:
@@ -439,7 +480,7 @@ services:
       - ./volumes/storage:/var/lib/storage:z
 
   imgproxy:
-    container_name: supabase-imgproxy
+    container_name: ${STACK_NAMESPACE:-}supabase-imgproxy
     image: darthsim/imgproxy:v3.30.1
     restart: unless-stopped
     volumes:
@@ -462,7 +503,7 @@ services:
       IMGPROXY_MAX_SRC_RESOLUTION: 16.8
 
   meta:
-    container_name: supabase-meta
+    container_name: ${STACK_NAMESPACE:-}supabase-meta
     image: supabase/postgres-meta:v0.96.3
     restart: unless-stopped
     depends_on:
@@ -479,7 +520,7 @@ services:
       CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
 
   functions:
-    container_name: supabase-edge-functions
+    container_name: ${STACK_NAMESPACE:-}supabase-edge-functions
     image: supabase/edge-runtime:v1.71.2
     restart: unless-stopped
     volumes:
@@ -510,7 +551,7 @@ services:
       ]
 
   analytics:
-    container_name: supabase-analytics
+    container_name: ${STACK_NAMESPACE:-}supabase-analytics
     image: supabase/logflare:1.36.1
     restart: unless-stopped
     # ports:
@@ -557,7 +598,7 @@ services:
 
   # Comment out everything below this point if you are using an external Postgres database
   db:
-    container_name: supabase-db
+    container_name: ${STACK_NAMESPACE:-}supabase-db
     image: supabase/postgres:15.8.1.085
     restart: unless-stopped
     # ports:
@@ -613,7 +654,7 @@ services:
       ]
 
   vector:
-    container_name: supabase-vector
+    container_name: ${STACK_NAMESPACE:-}supabase-vector
     image: timberio/vector:0.53.0-alpine
     restart: unless-stopped
     volumes:
@@ -647,7 +688,7 @@ services:
 
   # Update the DATABASE_URL if you are using an external Postgres database
   supavisor:
-    container_name: supabase-pooler
+    container_name: ${STACK_NAMESPACE:-}supabase-pooler
     image: supabase/supavisor:2.7.4
     restart: unless-stopped
     # ports:

@@ -434,3 +434,26 @@ export interface CashFlowOverview {
   prev_out?: number;
   prev_net?: number;
 }
+
+// =====================================================================
+// Backup/Restore (Phase 1)
+// =====================================================================
+export type BackupRunKind = "backup" | "restore";
+export type BackupRunStatus = "running" | "success" | "failed";
+
+export interface BackupRun {
+  id: string;
+  kind: BackupRunKind;
+  status: BackupRunStatus;
+  started_at: string;       // ISO timestamp
+  finished_at: string | null;
+  byte_size: number | null;
+  error_message: string | null;
+  filename: string | null;
+  created_by: string | null;
+}
+
+// Detail variant with log_text (returned only from GET /runs/:id/log)
+export interface BackupRunWithLog extends BackupRun {
+  log_text: string;
+}

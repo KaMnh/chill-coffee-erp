@@ -619,6 +619,23 @@ begin
   end if;
 end $$;
 
+-- -----------------------------------------------------------------------------
+-- 9. Backup runs (Phase 1 backup/restore UI)
+-- -----------------------------------------------------------------------------
+create table if not exists public.backup_runs (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('backup','restore')),
+  status text not null default 'running' check (status in ('running','success','failed')),
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  byte_size bigint,
+  log_text text default '',
+  error_message text,
+  created_by uuid references auth.users(id),
+  filename text
+);
+create index if not exists backup_runs_started_idx on public.backup_runs(started_at desc);
+
 -- =====================================================================
 -- Phase 4.A — Inventory module
 -- =====================================================================

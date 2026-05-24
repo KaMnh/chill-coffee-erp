@@ -15,7 +15,13 @@
     "test:coverage": "vitest run --coverage",
     "pgtap": "node scripts/pgtap-run.mjs",
     "verify:phase": "npm run test:run && npm run pgtap",
-    "verify:mirror": "node tools/verify-mirror.mjs"
+    "verify:mirror": "node tools/verify-mirror.mjs",
+    "migrate:check": "node scripts/migrate/00-check-dump.mjs",
+    "migrate:inspect": "node scripts/migrate/01-inspect-dump.mjs",
+    "migrate:load": "node scripts/migrate/02-load-staging.mjs",
+    "migrate:apply": "node scripts/migrate/03-run-all.mjs",
+    "migrate:reset": "node scripts/migrate/03z-reset.mjs",
+    "migrate:verify": "node scripts/migrate/04-verify.mjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

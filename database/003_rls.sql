@@ -265,3 +265,9 @@ create policy recipe_items_no_direct_write on public.recipe_items
   for all to authenticated using (false) with check (false);
 create policy stock_movements_no_direct_write on public.stock_movements
   for all to authenticated using (false) with check (false);
+
+-- backup_runs (Phase 1 backup/restore)
+alter table public.backup_runs enable row level security;
+drop policy if exists backup_runs_owner_read on public.backup_runs;
+create policy backup_runs_owner_read on public.backup_runs for select
+  using (public.app_role() = 'owner');

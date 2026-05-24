@@ -1,0 +1,14 @@
+# Runtime data — never commit
+.env
+.env.local
+volumes/db/data/
+volumes/storage/
+volumes/backups/
+volumes/snippets/
+volumes/functions/
+volumes/logs/
+volumes/api/kong-temp.yml
+
+# OS noise
+.DS_Store
+Thumbs.db

@@ -7,4 +7,5 @@ supabase
 database
 scripts
 docs
+deploy
 *.md

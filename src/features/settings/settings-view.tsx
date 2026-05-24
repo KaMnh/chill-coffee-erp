@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSupabase } from "@/hooks/use-supabase";
 import {
   useAppSettingsQuery,
@@ -15,9 +16,11 @@ import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
 import { KiotvietConfigForm } from "./kiotviet-config-form";
 import { AccountsManagerCard } from "./accounts-manager-card";
 import { SignupRequestsCard } from "./signup-requests-card";
+import { BackupRestoreSection } from "./backup-restore-section";
 
 interface SettingsViewProps {
   role: UserRole;
+  authHeader: string | null;
 }
 
 /**
@@ -30,7 +33,7 @@ interface SettingsViewProps {
  *   - SidebarConfigForm (role matrix + per-user override sub-section)
  *   - HandoverDefaultTasksEditor (list editor)
  */
-export function SettingsView({ role }: SettingsViewProps) {
+export function SettingsView({ role, authHeader }: SettingsViewProps) {
   const supabase = useSupabase();
   const isEnabled = role === "owner" || role === "manager";
 
@@ -78,19 +81,32 @@ export function SettingsView({ role }: SettingsViewProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <AccountsManagerCard
-        accounts={accounts}
-        currentUserAuthId={currentAccount.auth_user_id}
-      />
-      <SignupRequestsCard requests={signupRequestsQuery.data ?? []} />
-      <SidebarConfigForm
-        sidebarDefaults={appSettings.sidebar_defaults}
-        accounts={accounts}
-        currentUserAuthId={currentAccount.auth_user_id}
-      />
-      <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
-      <KiotvietConfigForm />
-    </div>
+    <Tabs defaultValue="general" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="general">Cài đặt chung</TabsTrigger>
+        <TabsTrigger value="backup">Sao lưu / Khôi phục</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="general">
+        <div className="space-y-6">
+          <AccountsManagerCard
+            accounts={accounts}
+            currentUserAuthId={currentAccount.auth_user_id}
+          />
+          <SignupRequestsCard requests={signupRequestsQuery.data ?? []} />
+          <SidebarConfigForm
+            sidebarDefaults={appSettings.sidebar_defaults}
+            accounts={accounts}
+            currentUserAuthId={currentAccount.auth_user_id}
+          />
+          <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
+          <KiotvietConfigForm />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="backup">
+        <BackupRestoreSection role={role} authHeader={authHeader} />
+      </TabsContent>
+    </Tabs>
   );
 }

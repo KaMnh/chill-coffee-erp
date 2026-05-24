@@ -25,5 +25,9 @@ mirrors/
 # Vitest coverage output (not generated yet — Phase 6 will turn this on)
 coverage/
 
+# Migration tooling (one-time v2 → v4) — chứa SQL dump + reports, KHÔNG commit
+/migration/
+/backup/
+
 # Claude Code harness config (worktree-local launch.json, etc.)
 .claude/

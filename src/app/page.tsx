@@ -92,6 +92,19 @@ export default function HomePage() {
   }, []);
 
   const [view, setView] = useState<ViewKey>("dashboard");
+  const [authHeader, setAuthHeader] = useState<string | null>(null);
+
+  // Keep authHeader in sync with Supabase session for BackupRestoreSection.
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthHeader(data.session ? `Bearer ${data.session.access_token}` : null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthHeader(session ? `Bearer ${session.access_token}` : null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [supabase]);
   // If role change hides current view, snap to first visible.
   useEffect(() => {
     if (status === "authed" && account && !canSee(view)) {
@@ -255,7 +268,7 @@ export default function HomePage() {
           <HandoverView businessDate={businessDate} role={account.role} />
         )}
         {view === "inventory" && <InventoryView role={account.role} />}
-        {view === "settings" && <SettingsView role={account.role} />}
+        {view === "settings" && <SettingsView role={account.role} authHeader={authHeader} />}
       </div>
     </AppShell>
   );

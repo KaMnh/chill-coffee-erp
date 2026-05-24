@@ -82,7 +82,12 @@ services:
         condition: service_healthy
       kong:
         condition: service_healthy
-    command: ["npm", "run", "deploy:init"]
+    # Override image ENTRYPOINT — docker-entrypoint.sh exists to sed NEXT_PUBLIC_*
+    # placeholders into the Next.js bundle for the APP container. Migrator doesn't
+    # serve the bundle, doesn't have NEXT_PUBLIC_SUPABASE_ANON_KEY in its env (we
+    # only inject what migrator scripts actually need), so the entrypoint would
+    # fail-loud on a leftover placeholder. Skip it entirely.
+    entrypoint: ["npm", "run", "deploy:init"]
     restart: "no"
     logging:
       driver: json-file

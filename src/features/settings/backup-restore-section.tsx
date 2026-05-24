@@ -53,7 +53,7 @@ export function BackupRestoreSection({ role, authHeader }: Props) {
 
 function BackupPanel({ authHeader }: { authHeader: string | null }) {
   const { toast } = useToast();
-  const runs = useBackupRunsQuery(authHeader, 1).data;
+  const runs = useBackupRunsQuery(authHeader, 10).data;
   const lastBackup = runs?.find((r) => r.kind === "backup" && r.status === "success");
   const download = useDownloadBackupMutation(authHeader);
 

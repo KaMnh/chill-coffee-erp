@@ -97,6 +97,8 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   let stderrBuffer = "";
 
+  let proc: ReturnType<typeof spawn> | null = null;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
@@ -111,26 +113,32 @@ export async function POST(req: NextRequest) {
 
         // 5b. Stream upload file → psql stdin
         controller.enqueue(encoder.encode(">>> Restoring from backup file...\n"));
-        const proc = spawn("psql", [
+        proc = spawn("psql", [
           POSTGRES_BACKUP_URL!,
           "--single-transaction",
           "-v",
           "ON_ERROR_STOP=1",
         ]);
+        const psqlProc = proc; // local non-null ref for use inside closures below
 
         // Stream uploaded file → psql stdin (avoid loading 100MB into RAM)
+        const psqlStdin = psqlProc.stdin!;
         const reader = file.stream().getReader();
         (async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            proc.stdin.write(value);
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              psqlStdin.write(value);
+            }
+            psqlStdin.end();
+          } catch {
+            /* psql exited early — EPIPE is expected, swallow */
           }
-          proc.stdin.end();
         })();
 
         // Capture stderr line by line → buffer + stream
-        proc.stderr.on("data", (data: Buffer) => {
+        psqlProc.stderr!.on("data", (data: Buffer) => {
           const text = data.toString();
           if (stderrBuffer.length < 1_000_000) {
             stderrBuffer += text;
@@ -140,7 +148,7 @@ export async function POST(req: NextRequest) {
 
         // Wait for exit
         const code = await new Promise<number>((resolve) => {
-          proc.on("exit", (c) => resolve(c ?? 1));
+          psqlProc.on("exit", (c) => resolve(c ?? 1));
         });
 
         const finishedAt = new Date().toISOString();
@@ -202,6 +210,12 @@ export async function POST(req: NextRequest) {
           );
         }
         controller.close();
+      }
+    },
+    cancel() {
+      if (proc) {
+        proc.kill();
+        proc = null;
       }
     },
   });

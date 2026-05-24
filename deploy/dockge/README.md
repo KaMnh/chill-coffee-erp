@@ -109,12 +109,29 @@ Public packages skip this step.
 
 ### 8. Initialize the database schema and seed
 
+The `db:init` and `db:seed` scripts run from a machine that has both
+`docker compose` access to the stack AND the project source code. The
+simplest workflow on the mini-PC: clone the repo alongside the stack folder.
+
 ```bash
-docker exec -it chill-app sh -c "npm run db:init && npm run db:seed"
+# On the mini-PC, in a shell with docker compose access:
+git clone https://github.com/<your-org>/chill-coffee-erp.git /opt/chill-coffee-erp-src
+cd /opt/chill-coffee-erp-src
+npm install --omit=dev
+
+# The scripts read POSTGRES_PASSWORD from supabase/.env (legacy) — symlink it
+# to the consolidated .env so the scripts find the value:
+ln -sf /opt/stacks/chill-coffee-erp/.env supabase/.env
+
+# Apply schema (~30 SQL files)
+node scripts/db-init.mjs
+
+# Create the first owner account (set OWNER_EMAIL/OWNER_PASSWORD inline)
+OWNER_EMAIL=admin@example.com OWNER_PASSWORD='choose-a-strong-pw-here' \
+  node scripts/seed.mjs
 ```
 
-Expected: `db:init` applies schema (~30 SQL files), `db:seed` inserts demo
-inventory/recipes/etc. Roughly 60 seconds total.
+Total ~60 seconds. After this, the owner can sign in at `https://app.example.com`.
 
 ### 9. Smoke test
 
@@ -190,3 +207,7 @@ recent `.sql` backup via App Settings → Backup → "Restore from file"
 | Kong healthcheck never passes | `volumes/api/kong.yml` missing or stale | Re-run `deploy/dockge/sync-volumes.sh` from dev machine and re-rsync |
 | Dockge "Pull" doesn't find image | GHCR package is private + no docker login | Step 6 of first-time setup |
 | `docker compose config` errors with `ANON_KEY is missing` | Section 3 secrets not pasted into `.env` | Edit `.env`, paste values from `generate-keys.sh` |
+| `supabase-vector` keeps restarting with "Configuration error" | `volumes/logs/vector.yml` missing or invalid | Re-run `deploy/dockge/sync-volumes.sh` from dev machine; if the stub doesn't work for your needs, copy the official `vector.yml` from https://github.com/supabase/supabase/tree/master/docker/volumes/logs |
+| `supabase-pooler` keeps restarting with "cat: pooler.exs: Is a directory" | `volumes/pooler/pooler.exs` missing | Same as above; copy official `pooler.exs` if needed |
+| `supabase-edge-functions` keeps restarting with "could not find an appropriate entrypoint" | `volumes/functions/main/index.ts` missing | Re-run `deploy/dockge/sync-volumes.sh` |
+| `node scripts/db-init.mjs` errors with "Không tìm thấy POSTGRES_PASSWORD" | The script reads `supabase/.env` but the consolidated stack uses one `.env`; symlink fix needed | `ln -sf /opt/stacks/chill-coffee-erp/.env supabase/.env` from the repo clone |

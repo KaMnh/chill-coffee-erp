@@ -26,5 +26,13 @@ for f in _supabase.sql jwt.sql logs.sql pooler.sql realtime.sql roles.sql webhoo
   cp "$SRC_DB/$f" "$DST_DB/$f"
 done
 
-echo "Synced static volumes: api/ + db/"
+# Edge Functions sources (Deno runtime bind-mounts these)
+SRC_FUNCTIONS="$REPO_ROOT/supabase/volumes/functions"
+DST_FUNCTIONS="$SCRIPT_DIR/volumes/functions"
+mkdir -p "$DST_FUNCTIONS/main" "$DST_FUNCTIONS/hello"
+cp "$SRC_FUNCTIONS/main/index.ts"  "$DST_FUNCTIONS/main/index.ts"
+cp "$SRC_FUNCTIONS/hello/index.ts" "$DST_FUNCTIONS/hello/index.ts"
+
+echo "Synced static volumes: api/ + db/ + functions/"
+echo "Note: logs/vector.yml and pooler/pooler.exs are committed stubs (upstream supabase/volumes/ doesn't ship them)."
 echo "Note: runtime dirs (data/, storage/, backups/, ...) are populated by containers on first start."

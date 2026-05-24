@@ -1,30 +1,30 @@
-# Minimal Supavisor pooler tenant config for Chill Coffee ERP self-hosted Supabase.
-# Replace with the official supabase/docker pooler.exs from
-# https://github.com/supabase/supabase/blob/master/docker/volumes/pooler/pooler.exs
-# if you need multi-tenant pooler features.
-
-if !System.get_env("POSTGRES_PASSWORD") do
-  raise "POSTGRES_PASSWORD is required"
-end
-
 {:ok, _} = Application.ensure_all_started(:supavisor)
 
-{:ok, _version} =
-  Supavisor.Repo.query("SELECT version()", [])
-  |> case do
-    {:ok, %{rows: [[v]]}} -> {:ok, v}
-    other -> other
+{:ok, version} =
+  case Supavisor.Repo.query!("select version()") do
+    %{rows: [[ver]]} -> Supavisor.Helpers.parse_pg_version(ver)
+    _ -> nil
   end
 
-tenant_id = System.get_env("POOLER_TENANT_ID", "chill-coffee-erp")
+params = %{
+  "external_id" => System.get_env("POOLER_TENANT_ID"),
+  "db_host" => System.get_env("POSTGRES_HOST") || "db",
+  "db_port" => System.get_env("POSTGRES_PORT"),
+  "db_database" => System.get_env("POSTGRES_DB"),
+  "require_user" => false,
+  "auth_query" => "SELECT * FROM pgbouncer.get_auth($1)",
+  "default_max_clients" => System.get_env("POOLER_MAX_CLIENT_CONN"),
+  "default_pool_size" => System.get_env("POOLER_DEFAULT_POOL_SIZE"),
+  "default_parameter_status" => %{"server_version" => version},
+  "users" => [%{
+    "db_user" => "pgbouncer",
+    "db_password" => System.get_env("POSTGRES_PASSWORD"),
+    "mode_type" => System.get_env("POOLER_POOL_MODE"),
+    "pool_size" => System.get_env("POOLER_DEFAULT_POOL_SIZE"),
+    "is_manager" => true
+  }]
+}
 
-{:ok, _} = Supavisor.Tenants.create_tenant(%{
-  external_id: tenant_id,
-  db_host: System.get_env("POSTGRES_HOST", "db"),
-  db_port: String.to_integer(System.get_env("POSTGRES_PORT", "5432")),
-  db_database: System.get_env("POSTGRES_DB", "postgres"),
-  db_user: "supabase_admin",
-  db_password: System.get_env("POSTGRES_PASSWORD"),
-  default_parameter_status: %{},
-  ip_version: :v4
-})
+if !Supavisor.Tenants.get_tenant_by_external_id(params["external_id"]) do
+  {:ok, _} = Supavisor.Tenants.create_tenant(params)
+end

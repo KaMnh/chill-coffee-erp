@@ -113,25 +113,86 @@ export async function POST(req: NextRequest) {
 
         // 5b. Stream upload file → psql stdin
         controller.enqueue(encoder.encode(">>> Restoring from backup file...\n"));
+        // psql -c executes BEFORE -f. With --single-transaction, both run in
+        // one txn. We use -c to set session_replication_role=replica which
+        // disables FK constraint enforcement triggers for this session, then
+        // pipe the dump via stdin (-f -). Without this, dumps from /api/backup/full
+        // (public-schema-only) fail when restored to an instance with different
+        // auth.users (after a full wipe + reinstall, common scenario).
+        // Dangling FK refs after restore are acceptable for historical records.
         proc = spawn("psql", [
           POSTGRES_BACKUP_URL!,
           "--single-transaction",
           "-v",
           "ON_ERROR_STOP=1",
+          "-c",
+          "SET session_replication_role = replica",
+          "-f",
+          "-",
         ]);
         const psqlProc = proc; // local non-null ref for use inside closures below
 
-        // Stream uploaded file → psql stdin (avoid loading 100MB into RAM)
+        // Stream uploaded file → psql stdin (avoid loading 100MB into RAM).
+        // Filter lines that pg_dump 18+ emits but PostgreSQL 15 doesn't recognize.
+        // pg_dump always writes the dumping-server's CURRENT version's SET commands;
+        // when client > server, dump contains SETs the server rejects. We strip
+        // them in-stream to keep restore working across version skew.
         const psqlStdin = psqlProc.stdin!;
         const reader = file.stream().getReader();
+        const dumpDecoder = new TextDecoder("utf-8", { fatal: false });
+        const dumpEncoder = new TextEncoder();
+        // Patterns to strip from the dump:
+        //   1. SET commands the server doesn't recognize (pg_dump > server version)
+        //   2. CREATE SCHEMA public; — we pre-create above; dump's would conflict
+        //   3. \restrict/\unrestrict — psql 18+ meta-commands that drop session
+        //      privileges (kills our SET session_replication_role = replica)
+        // Match conservatively — only exact known lines, line-anchored.
+        const INCOMPATIBLE_LINE_PATTERNS = [
+          /^SET transaction_timeout = 0;\s*$/m, // PG 17+ only
+          /^CREATE SCHEMA public;\s*$/m, // pre-created in step 5a
+          /^\\restrict\s+\S+\s*$/m, // psql 18+ restrict
+          /^\\unrestrict\s+\S+\s*$/m, // psql 18+ unrestrict
+        ];
+        const filterText = (text: string): string => {
+          let out = text;
+          for (const pat of INCOMPATIBLE_LINE_PATTERNS) {
+            out = out.replace(pat, "");
+          }
+          // Append NOT VALID to FK constraints referencing auth.users. Backup
+          // dumps the public schema only; after a wipe + reinstall, auth.users
+          // has a new owner with a different UUID, so the dump's historical
+          // user_id columns won't match. ADD CONSTRAINT validates the existing
+          // data (post-COPY) → FK violation → restore fails. With NOT VALID,
+          // the constraint is added but doesn't scan existing rows; future
+          // inserts/updates ARE still validated (via trigger).
+          // Capture group preserves optional clauses like ON DELETE CASCADE
+          // that appear between REFERENCES and the trailing semicolon.
+          out = out.replace(
+            / REFERENCES auth\.users\(id\)([^;]*);$/gm,
+            " REFERENCES auth.users(id)$1 NOT VALID;",
+          );
+          return out;
+        };
         (async () => {
+          let lineBuffer = "";
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
-              psqlStdin.write(value);
+              if (done) {
+                // Flush any remaining buffered text
+                if (lineBuffer) psqlStdin.write(filterText(lineBuffer));
+                psqlStdin.end();
+                break;
+              }
+              // Decode + split by newlines; keep last partial line in buffer
+              lineBuffer += dumpDecoder.decode(value, { stream: true });
+              const lastNewline = lineBuffer.lastIndexOf("\n");
+              if (lastNewline >= 0) {
+                const completeLines = lineBuffer.slice(0, lastNewline + 1);
+                lineBuffer = lineBuffer.slice(lastNewline + 1);
+                psqlStdin.write(dumpEncoder.encode(filterText(completeLines)));
+              }
             }
-            psqlStdin.end();
           } catch {
             /* psql exited early — EPIPE is expected, swallow */
           }

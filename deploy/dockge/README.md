@@ -172,10 +172,12 @@ recent `.sql` backup via App Settings → Backup → "Restore from file"
 - **Manual**: App → Settings → Backup → "Download now". Saves a `.sql` to
   `volumes/backups/` on the server AND triggers a browser download.
 - **Recommended cadence**: nightly via cron job on the mini-PC OS (NOT a
-  stack container — out of scope of this stack):
+  stack container — out of scope of this stack). **Important:** cron does
+  not source `.env`, so paste the literal `CRON_SECRET` value from your
+  `.env` into the line below (replace `<your-cron-secret>`):
 
 ```cron
-0 2 * * * docker exec chill-app sh -c "curl -fsS -X POST -H 'Authorization: Bearer $CRON_SECRET' http://localhost:3000/api/backup/full" >> /var/log/chill-backup.log 2>&1
+0 2 * * * docker exec chill-app sh -c "curl -fsS -X POST -H 'Authorization: Bearer <your-cron-secret>' http://localhost:3000/api/backup/full" >> /var/log/chill-backup.log 2>&1
 ```
 
 ## Troubleshooting

@@ -8,6 +8,7 @@
     "start": "next start -p 3009",
     "db:init": "node scripts/db-init.mjs",
     "db:seed": "node scripts/seed.mjs",
+    "deploy:init": "node scripts/db-init.mjs && node scripts/deploy-seed.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "test": "vitest",
     "test:run": "vitest run",

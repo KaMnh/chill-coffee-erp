@@ -38,6 +38,13 @@ RUN apk add --no-cache postgresql-client \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Schema + migrator scripts. Used by the `migrator` service in
+# deploy/dockge/compose.yaml (command: npm run deploy:init). Overwrite the
+# stripped package.json that Next.js standalone generated so `npm run
+# deploy:init` resolves to the script defined in the project's real package.json.
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=nextjs:nodejs /app/database ./database
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 USER nextjs

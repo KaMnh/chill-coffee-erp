@@ -42,6 +42,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
@@ -53,6 +55,40 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # One-shot init container: applies database/*.sql + migrations, then seeds
+  # the first owner account if OWNER_EMAIL/OWNER_PASSWORD are set in .env.
+  # Reuses the chill-app image (which now ships scripts/ + database/).
+  # Idempotent: runs on every `docker compose up`; re-runs are no-ops thanks to
+  # CREATE IF NOT EXISTS / CREATE OR REPLACE in SQL and existence checks in seed.
+  migrator:
+    container_name: ${STACK_NAMESPACE:-}chill-migrator
+    image: ${CHILL_ERP_IMAGE:-ghcr.io/REPLACE_WITH_GITHUB_OWNER/chill-coffee-erp:latest}
+    env_file: .env
+    environment:
+      # Direct psql to db service over Docker network (triggers container-mode
+      # in scripts/db-init.mjs via the POSTGRES_HOST check).
+      POSTGRES_HOST: db
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Section 3}
+      # For deploy-seed.mjs Supabase Auth API call.
+      SUPABASE_INTERNAL_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in Section 3}
+      # Optional owner-account seed. If both empty → seed is skipped (no-op).
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    command: ["npm", "run", "deploy:init"]
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
 
   studio:
     container_name: ${STACK_NAMESPACE:-}supabase-studio

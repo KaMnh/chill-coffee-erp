@@ -4,8 +4,6 @@ node_modules
 .env
 .env.*
 supabase
-database
-scripts
 docs
 deploy
 *.md

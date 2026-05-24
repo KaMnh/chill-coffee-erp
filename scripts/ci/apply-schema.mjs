@@ -17,7 +17,7 @@
 // Idempotent — the schema files use CREATE OR REPLACE / CREATE IF NOT
 // EXISTS throughout, so this can be run repeatedly against a fresh DB.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,5 +97,16 @@ psqlExec(AUTH_SCHEMA_MOCK, "auth schema mock");
 applyFile("database/001_schema.sql", "001_schema.sql");
 applyFile("database/002_functions.sql", "002_functions.sql");
 applyFile("database/003_rls.sql", "003_rls.sql");
+
+// Apply all migrations in alphabetical order (filenames are date-prefixed,
+// so alphabetical = chronological). Migrations may add new functions/columns
+// that later pgTAP tests depend on (e.g. cash_flow_overview RPC).
+const migrationsDir = resolve(REPO_ROOT, "database/migrations");
+const migrations = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith(".sql"))
+  .sort();
+for (const mig of migrations) {
+  applyFile(`database/migrations/${mig}`, `migrations/${mig}`);
+}
 
 console.log(">>> apply-schema.mjs DONE");

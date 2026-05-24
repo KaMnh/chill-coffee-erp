@@ -28,3 +28,6 @@ coverage/
 # Migration tooling (one-time v2 → v4) — chứa SQL dump + reports, KHÔNG commit
 /migration/
 /backup/
+
+# Claude Code harness config (worktree-local launch.json, etc.)
+.claude/

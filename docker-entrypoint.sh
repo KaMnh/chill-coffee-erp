@@ -20,6 +20,20 @@ if [ ! -d "$STANDALONE_DIR" ]; then
   exec "$@"
 fi
 
+# Reset $STANDALONE_DIR/.next from pristine snapshot (created at Dockerfile
+# build time as /app/.next-pristine). This guarantees sed always operates on
+# the original placeholders, regardless of what the writable overlay layer
+# may have accumulated from previous runs. Without this, fixing a bad env
+# value would require `docker compose up --force-recreate` (destroys the
+# overlay); with this, plain `restart` is enough.
+PRISTINE_DIR="$STANDALONE_DIR/.next-pristine"
+TARGET_DIR="$STANDALONE_DIR/.next"
+if [ -d "$PRISTINE_DIR" ]; then
+  rm -rf "$TARGET_DIR"
+  cp -r "$PRISTINE_DIR" "$TARGET_DIR"
+  echo "entrypoint: reset $TARGET_DIR from pristine snapshot"
+fi
+
 replace_in_bundle() {
   placeholder="$1"
   value="$2"

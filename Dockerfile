@@ -52,6 +52,17 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/database ./database
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
+# Pristine snapshot of /app/.next BEFORE entrypoint can touch it. The
+# entrypoint resets /app/.next from this snapshot on every container start,
+# so sed always operates on the original placeholders. Without this, a
+# `docker compose restart app` after fixing a bad NEXT_PUBLIC_* value in
+# .env wouldn't replace the wrong value baked into the writable overlay
+# layer (placeholder is gone after first sed → nothing for sed to match).
+# chown /app so the nextjs user can rm/recreate /app/.next at startup
+# (deletion needs write+execute on the parent dir, not the target).
+RUN cp -r /app/.next /app/.next-pristine \
+    && chown -R nextjs:nodejs /app/.next-pristine \
+    && chown nextjs:nodejs /app
 USER nextjs
 EXPOSE 3000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

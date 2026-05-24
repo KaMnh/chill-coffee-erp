@@ -26,6 +26,15 @@ services:
       # Override SUPABASE_INTERNAL_URL so server-side fetches use the Docker network,
       # not the public URL. The .env value is ignored for this var.
       SUPABASE_INTERNAL_URL: http://kong:8000
+      # Admin Postgres URL for in-app backup/restore. Constructed here because
+      # .env.example can't forward-reference POSTGRES_PASSWORD safely.
+      POSTGRES_BACKUP_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/postgres"
+      # App-facing copies of ANON_KEY / SERVICE_ROLE_KEY. Constructed here because
+      # .env.example can't forward-reference these without breaking Compose's
+      # top-down .env parser. Fail loud if Section 3 wasn't filled.
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
+      SUPABASE_ANON_KEY: ${ANON_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
     ports:
       - "${APP_PORT:-3009}:3000"
     depends_on:
@@ -551,6 +560,8 @@ services:
     container_name: supabase-db
     image: supabase/postgres:15.8.1.085
     restart: unless-stopped
+    # ports:
+      # - ${POSTGRES_PORT}:5432    # Postgres stays internal; use `docker exec` for admin tasks
     volumes:
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
       # Must be superuser to create event trigger
@@ -639,9 +650,9 @@ services:
     container_name: supabase-pooler
     image: supabase/supavisor:2.7.4
     restart: unless-stopped
-    ports:
-      - ${POSTGRES_PORT}:5432
-      - ${POOLER_PROXY_PORT_TRANSACTION}:6543
+    # ports:
+      # - ${POSTGRES_PORT}:5432    # Pooler stays internal; app connects via Docker network
+      # - ${POOLER_PROXY_PORT_TRANSACTION}:6543    # Pooler stays internal; app connects via Docker network
     volumes:
       - ./volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro,z
     healthcheck:

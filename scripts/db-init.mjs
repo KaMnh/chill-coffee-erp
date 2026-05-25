@@ -109,6 +109,13 @@ for (const file of ALL_FILES) {
 console.log("\n>>> Set timezone Asia/Ho_Chi_Minh");
 psql("ALTER DATABASE postgres SET timezone TO 'Asia/Ho_Chi_Minh';");
 
+// Force PostgREST to re-introspect the schema. Without this, any RPC/table
+// added or changed by the migrations above stays invisible to PostgREST until
+// the rest container restarts — producing PGRST202 "could not find ... in the
+// schema cache" errors on first request (see cash_flow_overview bug 2026-05).
+console.log("\n>>> Notify PostgREST to reload schema cache");
+psql("notify pgrst, 'reload schema';");
+
 console.log("\nDone. Schema + migrations applied.");
 if (!isContainer) {
   console.log("Restart connection pool to pick up timezone:");

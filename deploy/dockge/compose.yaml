@@ -818,10 +818,17 @@ services:
           log "retention pruned $$d_old dumps + $$c_old config snapshots (kept $${BACKUP_RETENTION_DAYS}d)"
         }
         mkdir -p /backups /backups/pre-restore
-        # World-writable + sticky so the app container (UID 1001 nextjs) can
-        # write pre-restore snapshots here without ownership coordination.
+        # World-writable + sticky on BOTH the parent and the subdir so the
+        # app container (UID 1001 nextjs) can:
+        #   - create /backups/pre-restore itself if backup-cron lost the race
+        #     to create it first (depends_on: service_started doesn't block
+        #     on the entrypoint script finishing — only on container start)
+        #   - write pre-restore snapshots into the subdir without us having
+        #     to chown to a specific UID
         # Sticky bit means each container can only delete its own files.
-        chmod 1777 /backups/pre-restore
+        # /backups stays root-owned for the dump files written by this
+        # container, but the mode lets nextjs mkdir + write inside.
+        chmod 1777 /backups /backups/pre-restore
         log "booted; daily run at $$BACKUP_TIME_UTC UTC, retention=$${BACKUP_RETENTION_DAYS}d"
         if [ "$${RUN_INITIAL_BACKUP:-0}" = "1" ]; then
           log "running initial backup at container start"

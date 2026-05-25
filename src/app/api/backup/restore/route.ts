@@ -44,6 +44,12 @@ const PG_DUMP_HEADER_REGEX = /-- PostgreSQL database dump/i;
 const MIN_PRE_RESTORE_BYTES = 1024;
 const PRE_RESTORE_DIR =
   process.env.PRE_RESTORE_DIR || "/backups/pre-restore";
+// Fallback inside the container's writable /tmp if PRE_RESTORE_DIR is not
+// accessible (volume not mounted, perms wrong, backup-cron sidecar missing).
+// /tmp is always writable by the nextjs UID but is tmpfs/ephemeral — snapshot
+// is lost on container restart, so we WARN loudly when this kicks in.
+const PRE_RESTORE_FALLBACK_DIR =
+  process.env.PRE_RESTORE_FALLBACK_DIR || "/tmp/chill-restore-snapshots";
 
 export async function POST(req: NextRequest) {
   // 1. Auth check (owner-only)
@@ -123,20 +129,49 @@ export async function POST(req: NextRequest) {
           .toISOString()
           .replace(/[:.]/g, "")
           .slice(0, 15); // YYYYMMDDTHHMMSS
-        const candidatePath = `${PRE_RESTORE_DIR}/pre-restore-${runId}-${timestamp}.sql`;
+        // Pick the writable directory: prefer the persistent /backups mount
+        // (visible to chill-backup-cron for off-host rsync), fall back to
+        // ephemeral /tmp if the volume isn't there or perms block us.
+        // Try mkdir-with-recursive on the preferred dir; if it throws EACCES
+        // (or any error), switch to fallback and warn loudly.
+        let snapshotDir = PRE_RESTORE_DIR;
+        let usedFallback = false;
+        try {
+          mkdirSync(PRE_RESTORE_DIR, { recursive: true });
+        } catch (dirErr) {
+          const code = (dirErr as NodeJS.ErrnoException).code;
+          if (code === "EACCES" || code === "EROFS" || code === "ENOENT") {
+            mkdirSync(PRE_RESTORE_FALLBACK_DIR, { recursive: true });
+            snapshotDir = PRE_RESTORE_FALLBACK_DIR;
+            usedFallback = true;
+            controller.enqueue(
+              encoder.encode(
+                `>>> WARNING: ${PRE_RESTORE_DIR} not writable (${code}). ` +
+                  `Falling back to ephemeral ${PRE_RESTORE_FALLBACK_DIR} ` +
+                  `(snapshot will be LOST on container restart — ` +
+                  `docker cp it out if restore fails).\n`
+              )
+            );
+          } else {
+            throw dirErr;
+          }
+        }
+        const candidatePath = `${snapshotDir}/pre-restore-${runId}-${timestamp}.sql`;
         controller.enqueue(
           encoder.encode(
             `>>> Pre-restore snapshot → ${candidatePath}\n`
           )
         );
         try {
-          mkdirSync(PRE_RESTORE_DIR, { recursive: true });
           await runPgDumpToFile(POSTGRES_BACKUP_URL!, candidatePath);
           verifyPgDumpFile(candidatePath); // throws if invalid
           preRestoreDumpPath = candidatePath;
+          const persistedNote = usedFallback
+            ? ` (ephemeral — copy out with: docker cp chill-app:${candidatePath} ./)`
+            : "";
           controller.enqueue(
             encoder.encode(
-              `    ✓ Snapshot saved (${statSync(candidatePath).size} bytes). ` +
+              `    ✓ Snapshot saved (${statSync(candidatePath).size} bytes)${persistedNote}. ` +
                 `Rollback command: psql "$POSTGRES_BACKUP_URL" < "${candidatePath}"\n\n`
             )
           );

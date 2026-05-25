@@ -80,22 +80,36 @@ export type IngestBatchPayload = {
 };
 
 /**
- * Derive business_date (YYYY-MM-DD) từ purchase_at ISO string. Sử dụng tz
- * Asia/Ho_Chi_Minh tường minh để đảm bảo:
- *   - Order lúc 23:30 VN ngày 4/5 → business_date = "2024-05-04" (đúng)
- *   - Order lúc 00:30 VN ngày 5/5 → business_date = "2024-05-05" (đúng)
+ * Derive business_date (YYYY-MM-DD) từ purchase_at ISO string trong múi giờ
+ * Asia/Ho_Chi_Minh.
  *
- * Trước đây dùng `new Date(purchaseDate).toISOString().slice(0, 10)` — phụ
- * thuộc vào server timezone (UTC vs Vietnam), dễ off-by-1-day cho order
- * sát midnight.
+ * Quirk KV: API trả naive timestamp ("2026-05-25T20:58:44", KHÔNG có Z/offset)
+ * và string đó đại diện giờ VN (wall-clock). Nếu pass thẳng `new Date(naive)`,
+ * JS engine interpret naive theo PROCESS.TZ:
+ *   - Server VN tz (laptop dev) → đúng.
+ *   - Server UTC tz (container Docker mặc định) → lệch 7h → đơn 17:00-23:59 VN
+ *     bị bucket sang ngày kế tiếp (off-by-1).
+ *
+ * Fix: detect TZ marker. Nếu thiếu, append "+07:00" trước khi parse. Sau khi
+ * có instant chính xác, extract date theo wall-clock VN bằng en-CA locale.
+ *
+ * Test cases (xem __tests__/transform.test.ts):
+ *   - Naive evening "2026-05-25T20:58:44"          → "2026-05-25"
+ *   - Naive midnight-1 "2026-05-25T23:59:59"       → "2026-05-25"
+ *   - Naive midnight+1 "2026-05-26T00:00:01"       → "2026-05-26"
+ *   - UTC Z "2026-05-25T13:58:44Z" (= 20:58 VN)    → "2026-05-25"
+ *   - Explicit +07 "2026-05-25T20:58:44+07:00"     → "2026-05-25"
  */
-function deriveBusinessDate(purchaseAtIso: string | undefined): string {
-  const dt = purchaseAtIso ? new Date(purchaseAtIso) : new Date();
+export function deriveBusinessDate(purchaseAtIso: string | undefined): string {
+  if (!purchaseAtIso) {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+  }
+  const hasTzMarker = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(purchaseAtIso);
+  const normalized = hasTzMarker ? purchaseAtIso : `${purchaseAtIso}+07:00`;
+  const dt = new Date(normalized);
   if (Number.isNaN(dt.getTime())) {
     return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
   }
-  // 'en-CA' locale outputs YYYY-MM-DD. timeZone option đảm bảo extract date
-  // theo Vietnam wall-clock của instant đã parse.
   return dt.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 

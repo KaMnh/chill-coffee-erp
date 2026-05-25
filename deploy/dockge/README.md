@@ -278,6 +278,38 @@ to another machine or S3 bucket. Example crontab (replace placeholder):
 | Container name conflict like `Conflict. The container name "/supabase-db" is already in use` | Another Supabase stack on the same Docker daemon already uses these names | Set `STACK_NAMESPACE=quan2-` (note trailing hyphen) in `.env` to prefix all container names. Default is empty = keep original names. |
 | `/api/kiotviet/sync` returns `Integration client không hợp lệ.` | Env `INGEST_CLIENT_SECRET` does not match the bcrypt hash in `public.integration_clients`. From v4.1.4+ the migrator verifies this at deploy and refuses to start the app if they drift, but rotated/restored databases predating v4.1.4 can still hit it. | Run `docker exec <stack>chill-app npm run kiotviet:check` for diagnostic + step-by-step remediation. Most often: `docker compose up -d --force-recreate migrator` re-seeds from the current `.env`. |
 | App container won't start, migrator exits 1 with `integration_clients verify FAILED` | v4.1.4+ deploy-time guard caught a hash drift before the app saw it. `.env` and DB are out of sync. | Same fix: `npm run kiotviet:check` from the migrator container, or recreate migrator after fixing `.env`. |
+| After restore, login OK but landing on "Tài khoản chờ duyệt — owner/manager chưa kích hoạt employee_accounts" | The backup only includes `public` schema (`pg_dump --schema=public`), not `auth.users`. Restored `employee_accounts.auth_user_id` references UUIDs from the backup environment that don't exist in current `auth.users`. v4.1.5+ auto-relinks the OWNER row via `OWNER_EMAIL` env. Manager/staff rows still need manual re-link. | See "After restore — re-link orphan accounts" below. |
+
+### After restore — re-link orphan accounts
+
+v4.1.5+ automatically re-links the OWNER `employee_accounts` row by matching `OWNER_EMAIL` env to current `auth.users`. You should see a `[relink-owner] OK:` line in the restore stream. If the owner is still stuck, the env wasn't set or no orphan row existed.
+
+For **manager / staff_operator / employee_viewer** accounts, the backup doesn't include the email link (no email column in `public`), so the system can't auto-fix them. The owner must:
+
+**Option A — re-invite via UI**: Settings → Tài khoản → invite the user again with the same email. They sign in once, then owner activates their account. Old orphan row stays harmless (no matching `auth_user_id` so it's invisible).
+
+**Option B — manual SQL re-link** (preserves any history pointing at the orphan ea.id):
+
+```bash
+# 1. Find the orphan row(s) for the user — they need to know which `employees.id` was theirs
+docker exec -it <stack>supabase-db psql -U postgres -d postgres -c \
+  "select ea.id as ea_id, ea.role, ea.status, ea.auth_user_id, e.full_name
+   from public.employee_accounts ea
+   left join public.employees e on e.id = ea.employee_id
+   where ea.auth_user_id not in (select id from auth.users);"
+
+# 2. Find the user's current auth.users.id (they must have logged in once)
+docker exec -it <stack>supabase-db psql -U postgres -d postgres -c \
+  "select id, email from auth.users where email = 'their.email@example.com';"
+
+# 3. Re-link (replace the UUIDs with values from steps 1 & 2)
+docker exec -it <stack>supabase-db psql -U postgres -d postgres -c \
+  "update public.employee_accounts
+   set auth_user_id = '<NEW_AUTH_USERS_ID>'
+   where id = '<EA_ID_FROM_STEP_1>';"
+```
+
+After re-link, the user reloads the app — should land on the dashboard, not the "chờ duyệt" screen.
 
 ### Container name reference (with STACK_NAMESPACE)
 

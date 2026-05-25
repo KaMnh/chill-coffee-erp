@@ -383,6 +383,83 @@ export async function POST(req: NextRequest) {
               )
             );
           }
+
+          // 5e. RE-LINK OWNER — backup only includes public schema (pg_dump
+          // --schema=public), NOT auth.users. After restore, employee_accounts
+          // rows reference auth_user_id UUIDs that came from the BACKUP's
+          // auth.users, which don't exist in the current auth.users. Login
+          // succeeds (auth.users matches admin@chill.local) but
+          // requireAuth's lookup `where auth_user_id = current_id` returns
+          // null → user gets the "owner/manager chưa kích hoạt
+          // employee_accounts" screen even though they ARE the owner.
+          //
+          // Auto-fix: find the orphan owner row + look up current auth.users.id
+          // by OWNER_EMAIL env (already set in app container via .env), then
+          // UPDATE the link. Only handles the owner; manager/staff accounts
+          // need manual re-link (documented in deploy/dockge/README.md).
+          // Idempotent: skips silently if not needed.
+          const ownerEmail = process.env.OWNER_EMAIL?.trim();
+          if (ownerEmail) {
+            controller.enqueue(
+              encoder.encode(`>>> Re-linking owner employee_accounts row to auth.users[email=${ownerEmail}]...\n`)
+            );
+            const safeOwnerEmail = ownerEmail.replace(/'/g, "''");
+            const relinkSQL = `do $$
+declare
+  v_email text := '${safeOwnerEmail}';
+  v_current_id uuid;
+  v_orphan_id uuid;
+  v_old_auth_id uuid;
+begin
+  select id into v_current_id from auth.users where email = v_email limit 1;
+  if v_current_id is null then
+    raise notice '[relink-owner] no auth.users with email %, skipping', v_email;
+    return;
+  end if;
+  if exists (select 1 from public.employee_accounts where auth_user_id = v_current_id) then
+    raise notice '[relink-owner] employee_accounts already links to %, no relink needed', v_email;
+    return;
+  end if;
+  select id, auth_user_id into v_orphan_id, v_old_auth_id
+  from public.employee_accounts
+  where role = 'owner' and status = 'active'
+    and auth_user_id not in (select id from auth.users)
+  order by created_at asc
+  limit 1;
+  if v_orphan_id is null then
+    raise notice '[relink-owner] no orphan owner row found, nothing to relink';
+    return;
+  end if;
+  update public.employee_accounts set auth_user_id = v_current_id where id = v_orphan_id;
+  raise notice '[relink-owner] OK: ea.id=% old auth_user_id=% -> new=% (email=%)',
+    v_orphan_id, v_old_auth_id, v_current_id, v_email;
+end $$;`;
+            try {
+              await runPsqlCommand(POSTGRES_BACKUP_URL!, relinkSQL);
+              controller.enqueue(
+                encoder.encode(
+                  "    ✓ Owner re-link checked (see stderr above for action taken).\n\n"
+                )
+              );
+            } catch (relinkErr) {
+              const msg = relinkErr instanceof Error ? relinkErr.message : String(relinkErr);
+              controller.enqueue(
+                encoder.encode(
+                  `    ⚠ WARN: owner re-link failed: ${msg}\n` +
+                    `      Restore data is intact. You may need to manually update\n` +
+                    `      public.employee_accounts.auth_user_id for the owner row.\n` +
+                    `      See deploy/dockge/README.md → "After restore — re-link orphan accounts".\n\n`
+                )
+              );
+            }
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                ">>> Skipping owner re-link: OWNER_EMAIL env not set.\n" +
+                  "    If login fails with 'chưa kích hoạt employee_accounts', see README.\n\n"
+              )
+            );
+          }
           controller.enqueue(encoder.encode("===END=== status=success\n"));
           const { error: updateErr } = await supabase
             .from("backup_runs")

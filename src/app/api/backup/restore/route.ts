@@ -460,6 +460,72 @@ end $$;`;
               )
             );
           }
+
+          // 5f. RE-BCRYPT INGEST_CLIENT_SECRET — backup restores
+          // public.integration_clients with the bcrypt hash at backup time.
+          // If INGEST_CLIENT_SECRET env was rotated since the backup (or the
+          // backup came from a different instance), the hash won't match
+          // current env → /api/kiotviet/sync returns "Integration client
+          // không hợp lệ.". Re-bcrypt the env value and UPSERT — mirrors
+          // scripts/deploy-seed.mjs but runs in the restore path so the
+          // operator doesn't have to recreate the migrator container.
+          // Idempotent; skipped when env is not set.
+          const ingestSecret = process.env.INGEST_CLIENT_SECRET?.trim();
+          const ingestId = process.env.INGEST_CLIENT_ID?.trim() || "chill-erp";
+          if (ingestSecret) {
+            controller.enqueue(
+              encoder.encode(
+                `>>> Re-bcrypting INGEST_CLIENT_SECRET for integration_clients.client_id='${ingestId}'...\n`
+              )
+            );
+            const safeId = ingestId.replace(/'/g, "''");
+            const safeSecret = ingestSecret.replace(/'/g, "''");
+            const rebcryptSQL =
+              `insert into public.integration_clients (client_id, client_secret_hash, name, is_active) ` +
+              `values ('${safeId}', crypt('${safeSecret}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
+              `on conflict (client_id) do update set ` +
+              `  client_secret_hash = excluded.client_secret_hash, ` +
+              `  is_active = true; ` +
+              `do $$ ` +
+              `declare v_ok boolean; ` +
+              `begin ` +
+              `  select exists ( ` +
+              `    select 1 from public.integration_clients ` +
+              `    where client_id = '${safeId}' and is_active = true ` +
+              `      and client_secret_hash = crypt('${safeSecret}', client_secret_hash) ` +
+              `  ) into v_ok; ` +
+              `  if v_ok then ` +
+              `    raise notice '[rebcrypt-ingest] OK: integration_clients[%].client_secret_hash matches env', '${safeId}'; ` +
+              `  else ` +
+              `    raise exception '[rebcrypt-ingest] verify FAILED for client_id=%', '${safeId}'; ` +
+              `  end if; ` +
+              `end $$;`;
+            try {
+              await runPsqlCommand(POSTGRES_BACKUP_URL!, rebcryptSQL);
+              controller.enqueue(
+                encoder.encode(
+                  "    ✓ INGEST_CLIENT_SECRET re-bcrypted + verified. /api/kiotviet/sync should work.\n\n"
+                )
+              );
+            } catch (rebcryptErr) {
+              const msg = rebcryptErr instanceof Error ? rebcryptErr.message : String(rebcryptErr);
+              controller.enqueue(
+                encoder.encode(
+                  `    ⚠ WARN: INGEST_CLIENT_SECRET re-bcrypt failed: ${msg}\n` +
+                    `      Restore data is intact. /api/kiotviet/sync may return\n` +
+                    `      'Integration client không hợp lệ.' until you run:\n` +
+                    `      docker exec <stack>chill-app npm run kiotviet:check\n\n`
+                )
+              );
+            }
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                ">>> Skipping INGEST_CLIENT_SECRET re-bcrypt: env not set.\n\n"
+              )
+            );
+          }
+
           controller.enqueue(encoder.encode("===END=== status=success\n"));
           const { error: updateErr } = await supabase
             .from("backup_runs")

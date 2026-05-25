@@ -33,10 +33,30 @@ alter table public.integration_clients enable row level security;
 alter table public.pos_sync_attempts enable row level security;
 alter table public.audit_log enable row level security;
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant select on all tables in schema public to anon;
 grant execute on all functions in schema public to anon, authenticated;
+
+-- service_role: server-only client used by API routes that need to bypass RLS
+-- (e.g. /api/backup/full, /api/backup/restore, /api/backup/runs). service_role
+-- has BYPASSRLS but STILL needs explicit table-level GRANTs in Postgres.
+-- Supabase upstream sets these via default privileges, but that doesn't apply
+-- if the table was created before the default-privilege grant, or if any
+-- advisor-suggested REVOKE removed them. Granting explicitly here is
+-- idempotent and immune to both gotchas.
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+
+-- Future tables created by the role running this script (typically `postgres`
+-- via scripts/db-init.mjs or the migrator) automatically receive these grants.
+-- Without this, every new table relies on inherited Supabase defaults that can
+-- silently drift out of sync — the exact failure mode that broke
+-- /api/backup/restore in production.
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to service_role;
+alter default privileges in schema public
+  grant execute on functions to service_role;
 
 -- profiles
 drop policy if exists profiles_self_select on public.profiles;

@@ -39,9 +39,11 @@ create schema if not exists auth;
 
 -- Supabase role stubs. These roles exist on Supabase but not on a vanilla
 -- Postgres install. Both 002_functions.sql and 003_rls.sql contain
--- \`grant ... to anon, authenticated;\` statements that would fail without
--- these roles. PostgreSQL has no \`CREATE ROLE IF NOT EXISTS\` syntax —
--- the DO block is the idiomatic guard.
+-- \`grant ... to anon, authenticated, service_role;\` statements that
+-- would fail without these roles. service_role normally has BYPASSRLS on
+-- real Supabase; the CI mock doesn't need it because pgTAP tests don't
+-- exercise the bypass path (they switch role via SET ROLE within
+-- transactions).
 do $do$
 begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
@@ -49,6 +51,9 @@ begin
   end if;
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then
     create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
   end if;
 end
 $do$;

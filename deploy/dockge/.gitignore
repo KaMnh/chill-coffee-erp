@@ -2,7 +2,10 @@
 .env
 .env.local
 
-# Postgres data (Supabase image manages contents — UID 70)
+# Postgres data — now lives in the EXTERNAL named volume `chill-erp-db-data`
+# (see compose.yaml + README). If volumes/db/data/ exists on disk, the bind-
+# mount → named-volume migration has NOT been run yet. See README section
+# "Migrating an existing installation".
 volumes/db/data/
 
 # Storage uploads

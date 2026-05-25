@@ -9,6 +9,7 @@
     "db:init": "node scripts/db-init.mjs",
     "db:seed": "node scripts/seed.mjs",
     "deploy:init": "node scripts/db-init.mjs && node scripts/deploy-seed.mjs",
+    "kiotviet:check": "node scripts/check-kiotviet-creds.mjs",
     "smoke": "node scripts/smoke-test.mjs",
     "test": "vitest",
     "test:run": "vitest run",
@@ -21,7 +22,8 @@
     "migrate:inspect": "node scripts/migrate/01-inspect-dump.mjs",
     "migrate:load": "node scripts/migrate/02-load-staging.mjs",
     "migrate:apply": "node scripts/migrate/03-run-all.mjs",
-    "migrate:reset": "node scripts/migrate/03z-reset.mjs",
+    "db:DANGEROUS-reset": "node scripts/migrate/03z-reset.mjs",
+    "migrate:reset": "node -e \"console.error('\\n[DEPRECATED] migrate:reset is renamed to db:DANGEROUS-reset to reduce accidental wipes.\\n              Run: npm run db:DANGEROUS-reset -- --confirm --i-know-this-wipes-data\\n'); process.exit(1)\"",
     "migrate:verify": "node scripts/migrate/04-verify.mjs"
   },
   "dependencies": {

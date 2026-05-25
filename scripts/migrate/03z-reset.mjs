@@ -1,14 +1,22 @@
 // scripts/migrate/03z-reset.mjs — Cleanup script trước khi re-run migration.
 // Xóa toàn bộ rows đã migrate từ public.* (giữ seed owner), drop id_maps.
 //
-// Yêu cầu: --confirm flag để tránh accidental run.
+// Yêu cầu HAI flags (muscle-memory protection):
+//   --confirm                    -- dry-run vs. real
+//   --i-know-this-wipes-data     -- second-stop, must be typed manually
 //
 // Usage:
-//   node scripts/migrate/03z-reset.mjs            # in cảnh báo + abort
-//   node scripts/migrate/03z-reset.mjs --confirm  # execute
+//   node scripts/migrate/03z-reset.mjs
+//     → print dry-run; exit 0
+//   node scripts/migrate/03z-reset.mjs --confirm
+//     → still abort; prints reminder about the extra flag; exit 1
+//   node scripts/migrate/03z-reset.mjs --confirm --i-know-this-wipes-data
+//     → actually delete
 import { psqlExec, psqlQuery, parseTabular } from "./_lib/psql.mjs";
 
-const CONFIRMED = process.argv.includes("--confirm") || process.env.RESET_CONFIRMED === "1";
+const HAS_CONFIRM = process.argv.includes("--confirm") || process.env.RESET_CONFIRMED === "1";
+const HAS_ACK = process.argv.includes("--i-know-this-wipes-data");
+const CONFIRMED = HAS_CONFIRM && HAS_ACK;
 
 function getCount(t) {
   try {
@@ -82,8 +90,16 @@ const idMapTables = parseTabular(psqlQuery(
 console.log(`\n[id_map tables sẽ drop] ${idMapTables.length > 0 ? idMapTables.join(", ") : "(none)"}`);
 
 if (!CONFIRMED) {
-  console.log("\n⚠️  Đây là DRY-RUN. Để thực sự DELETE, chạy lại với --confirm:");
-  console.log("    node scripts/migrate/03z-reset.mjs --confirm");
+  if (HAS_CONFIRM && !HAS_ACK) {
+    // User typed --confirm out of muscle memory. Refuse and require the
+    // extra acknowledgment flag.
+    console.log("\n❌  --confirm is no longer sufficient. This script wipes migrated data.");
+    console.log("    Add --i-know-this-wipes-data ONLY when you really mean it:");
+    console.log("    node scripts/migrate/03z-reset.mjs --confirm --i-know-this-wipes-data");
+    process.exit(1);
+  }
+  console.log("\n⚠️  Đây là DRY-RUN. Để thực sự DELETE, chạy lại với CẢ HAI flags:");
+  console.log("    node scripts/migrate/03z-reset.mjs --confirm --i-know-this-wipes-data");
   process.exit(0);
 }
 

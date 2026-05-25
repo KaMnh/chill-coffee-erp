@@ -11,17 +11,24 @@
  *   3. Validate pg_dump header (first 500 bytes)
  *   4. INSERT backup_runs row (kind='restore', status='running')
  *   5. Stream response:
- *      a. Pre-restore: DROP SCHEMA public CASCADE + recreate
- *      b. Pipe uploaded file → psql stdin (--single-transaction)
- *      c. UPDATE backup_runs on exit
+ *      a. Pre-restore SNAPSHOT — dump CURRENT public schema to /backups/pre-restore/
+ *         BEFORE any destructive operation. If snapshot fails, abort the
+ *         restore (no DROP) so existing data is preserved.
+ *      b. DROP SCHEMA public CASCADE + recreate
+ *      c. Pipe uploaded file → psql stdin (--single-transaction)
+ *      d. UPDATE backup_runs on exit (incl. pre_restore_dump_path for rollback)
  *
  * WARNING: This endpoint DROPS THE PUBLIC SCHEMA. ALL DATA IS DESTROYED before restore.
  * --single-transaction makes the restore atomic (all-or-nothing per psql).
+ * The pre-restore snapshot path is recorded in backup_runs.pre_restore_dump_path
+ * so operators can recover from a bad restore by piping it back into psql.
  *
  * Yêu cầu:
  *   - postgresql15-client cài trong Dockerfile
  *   - Env POSTGRES_BACKUP_URL set với admin credential
+ *   - /backups/pre-restore/ writable (provided by chill-backup-cron, mode 1777)
  */
+import { mkdirSync, statSync, openSync, readSync, closeSync, unlinkSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { spawn } from "node:child_process";
 import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
@@ -32,6 +39,48 @@ export const maxDuration = 300; // 5 min
 const POSTGRES_BACKUP_URL = process.env.POSTGRES_BACKUP_URL;
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const PG_DUMP_HEADER_REGEX = /-- PostgreSQL database dump/i;
+// Min size for a valid pg_dump (header + at least one statement). A truly
+// empty schema dumps to ~2KB of SET / SELECT pg_catalog... boilerplate.
+const MIN_PRE_RESTORE_BYTES = 1024;
+const PRE_RESTORE_DIR =
+  process.env.PRE_RESTORE_DIR || "/backups/pre-restore";
+
+// SQL block re-applied AFTER a successful restore. The DROP SCHEMA public
+// CASCADE earlier in this endpoint wipes every grant on the public schema,
+// and pg_dump --no-privileges (used by /api/backup/full for portability)
+// produces dumps without GRANT statements. Without re-granting, Supabase
+// roles cannot see any restored data — login itself fails because
+// employee_accounts is invisible to the authenticated role.
+//
+// Kept in lockstep with database/003_rls.sql + database/migrations/
+// 2026-05-25-grant-service-role.sql. If you change one, change the others.
+//
+// NOTIFY pgrst forces PostgREST to re-introspect the schema immediately so
+// the new tables are visible to the REST API without waiting for the next
+// periodic refresh.
+const POST_RESTORE_GRANTS_SQL = `
+grant usage on schema public to authenticated, anon, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema public to anon;
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to authenticated, anon, service_role;
+grant execute on all functions in schema public to authenticated, anon, service_role;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant select on tables to anon;
+alter default privileges in schema public
+  grant all on tables to service_role;
+alter default privileges in schema public
+  grant execute on functions to authenticated, anon, service_role;
+notify pgrst, 'reload schema';
+`;
+// Fallback inside the container's writable /tmp if PRE_RESTORE_DIR is not
+// accessible (volume not mounted, perms wrong, backup-cron sidecar missing).
+// /tmp is always writable by the nextjs UID but is tmpfs/ephemeral — snapshot
+// is lost on container restart, so we WARN loudly when this kicks in.
+const PRE_RESTORE_FALLBACK_DIR =
+  process.env.PRE_RESTORE_FALLBACK_DIR || "/tmp/chill-restore-snapshots";
 
 export async function POST(req: NextRequest) {
   // 1. Auth check (owner-only)
@@ -96,13 +145,102 @@ export async function POST(req: NextRequest) {
   // 5. Setup streaming response
   const encoder = new TextEncoder();
   let stderrBuffer = "";
+  let preRestoreDumpPath: string | null = null;
 
   let proc: ReturnType<typeof spawn> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        // 5a. Pre-restore: drop + recreate public schema
+        // 5a. PRE-RESTORE SNAPSHOT — dump current public schema BEFORE any
+        // destructive operation. Skipping or silently swallowing this step
+        // would re-create the original data loss bug. If snapshot fails, we
+        // abort the restore (no DROP) so existing data is preserved.
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, "")
+          .slice(0, 15); // YYYYMMDDTHHMMSS
+        // Pick the writable directory: prefer the persistent /backups mount
+        // (visible to chill-backup-cron for off-host rsync), fall back to
+        // ephemeral /tmp if the volume isn't there or perms block us.
+        // Try mkdir-with-recursive on the preferred dir; if it throws EACCES
+        // (or any error), switch to fallback and warn loudly.
+        let snapshotDir = PRE_RESTORE_DIR;
+        let usedFallback = false;
+        try {
+          mkdirSync(PRE_RESTORE_DIR, { recursive: true });
+        } catch (dirErr) {
+          const code = (dirErr as NodeJS.ErrnoException).code;
+          if (code === "EACCES" || code === "EROFS" || code === "ENOENT") {
+            mkdirSync(PRE_RESTORE_FALLBACK_DIR, { recursive: true });
+            snapshotDir = PRE_RESTORE_FALLBACK_DIR;
+            usedFallback = true;
+            controller.enqueue(
+              encoder.encode(
+                `>>> WARNING: ${PRE_RESTORE_DIR} not writable (${code}). ` +
+                  `Falling back to ephemeral ${PRE_RESTORE_FALLBACK_DIR} ` +
+                  `(snapshot will be LOST on container restart — ` +
+                  `docker cp it out if restore fails).\n`
+              )
+            );
+          } else {
+            throw dirErr;
+          }
+        }
+        const candidatePath = `${snapshotDir}/pre-restore-${runId}-${timestamp}.sql`;
+        controller.enqueue(
+          encoder.encode(
+            `>>> Pre-restore snapshot → ${candidatePath}\n`
+          )
+        );
+        try {
+          await runPgDumpToFile(POSTGRES_BACKUP_URL!, candidatePath);
+          verifyPgDumpFile(candidatePath); // throws if invalid
+          preRestoreDumpPath = candidatePath;
+          const persistedNote = usedFallback
+            ? ` (ephemeral — copy out with: docker cp chill-app:${candidatePath} ./)`
+            : "";
+          controller.enqueue(
+            encoder.encode(
+              `    ✓ Snapshot saved (${statSync(candidatePath).size} bytes)${persistedNote}. ` +
+                `Rollback command: psql "$POSTGRES_BACKUP_URL" < "${candidatePath}"\n\n`
+            )
+          );
+          // Persist path NOW so even if subsequent steps crash, the row tells
+          // the operator where the rollback file is.
+          await supabase
+            .from("backup_runs")
+            .update({ pre_restore_dump_path: candidatePath })
+            .eq("id", runId);
+        } catch (snapErr) {
+          // Snapshot failed — DO NOT proceed to DROP SCHEMA. Mark run failed.
+          const msg =
+            snapErr instanceof Error ? snapErr.message : String(snapErr);
+          // Clean up partial file if any
+          try {
+            unlinkSync(candidatePath);
+          } catch {
+            /* ignore — file may not exist */
+          }
+          controller.enqueue(
+            encoder.encode(
+              `    ✗ Snapshot FAILED — aborting restore to preserve data: ${msg}\n` +
+                `===END=== status=failed (pre-restore snapshot)\n`
+            )
+          );
+          await supabase
+            .from("backup_runs")
+            .update({
+              status: "failed",
+              finished_at: new Date().toISOString(),
+              error_message: `pre-restore snapshot failed: ${msg.slice(0, 400)}`,
+            })
+            .eq("id", runId);
+          controller.close();
+          return;
+        }
+
+        // 5b. Pre-restore: drop + recreate public schema
         controller.enqueue(encoder.encode(">>> Dropping public schema...\n"));
         await runPsqlCommand(
           POSTGRES_BACKUP_URL!,
@@ -111,7 +249,7 @@ export async function POST(req: NextRequest) {
         );
         controller.enqueue(encoder.encode("    ✓ Schema dropped + recreated\n\n"));
 
-        // 5b. Stream upload file → psql stdin
+        // 5c. Stream upload file → psql stdin
         controller.enqueue(encoder.encode(">>> Restoring from backup file...\n"));
         // psql -c executes BEFORE -f. With --single-transaction, both run in
         // one txn. We use -c to set session_replication_role=replica which
@@ -214,7 +352,181 @@ export async function POST(req: NextRequest) {
 
         const finishedAt = new Date().toISOString();
         if (code === 0) {
-          controller.enqueue(encoder.encode("\n===END=== status=success\n"));
+          // 5d. RE-APPLY SCHEMA PRIVILEGES — the DROP SCHEMA public CASCADE in
+          // step 5b wipes all grants on the public schema. The dump runs with
+          // pg_dump --no-privileges (intentional for portability), so the
+          // restored objects have NO grants either. Without this step the
+          // Supabase roles (anon/authenticated/service_role) can't see ANY
+          // restored data — even logging in fails because employee_accounts
+          // is invisible. Mirrors database/003_rls.sql which is the single
+          // source of truth for the grant policy; keep them in sync.
+          // Also NOTIFY pgrst so PostgREST refreshes its schema cache
+          // immediately instead of after the next poll interval.
+          controller.enqueue(
+            encoder.encode(">>> Re-applying schema privileges + reloading PostgREST cache...\n")
+          );
+          try {
+            await runPsqlCommand(POSTGRES_BACKUP_URL!, POST_RESTORE_GRANTS_SQL);
+            controller.enqueue(
+              encoder.encode("    ✓ Privileges re-applied; pgrst cache reload notified\n\n")
+            );
+          } catch (grantErr) {
+            // Don't fail the restore — data IS there, just privileges need
+            // attention. Surface the error loudly so the operator can run
+            // the GRANT block manually.
+            const msg = grantErr instanceof Error ? grantErr.message : String(grantErr);
+            controller.enqueue(
+              encoder.encode(
+                `    ⚠ WARN: re-grant failed: ${msg}\n` +
+                  `      Data is restored but Supabase roles may not see it until you run:\n` +
+                  `      docker exec -i supabase-db psql -U postgres -d postgres < <(cat <<'SQL'\n${POST_RESTORE_GRANTS_SQL}SQL\n)\n\n`
+              )
+            );
+          }
+
+          // 5e. RE-LINK OWNER — backup only includes public schema (pg_dump
+          // --schema=public), NOT auth.users. After restore, employee_accounts
+          // rows reference auth_user_id UUIDs that came from the BACKUP's
+          // auth.users, which don't exist in the current auth.users. Login
+          // succeeds (auth.users matches admin@chill.local) but
+          // requireAuth's lookup `where auth_user_id = current_id` returns
+          // null → user gets the "owner/manager chưa kích hoạt
+          // employee_accounts" screen even though they ARE the owner.
+          //
+          // Auto-fix: find the orphan owner row + look up current auth.users.id
+          // by OWNER_EMAIL env (already set in app container via .env), then
+          // UPDATE the link. Only handles the owner; manager/staff accounts
+          // need manual re-link (documented in deploy/dockge/README.md).
+          // Idempotent: skips silently if not needed.
+          const ownerEmail = process.env.OWNER_EMAIL?.trim();
+          if (ownerEmail) {
+            controller.enqueue(
+              encoder.encode(`>>> Re-linking owner employee_accounts row to auth.users[email=${ownerEmail}]...\n`)
+            );
+            const safeOwnerEmail = ownerEmail.replace(/'/g, "''");
+            const relinkSQL = `do $$
+declare
+  v_email text := '${safeOwnerEmail}';
+  v_current_id uuid;
+  v_orphan_id uuid;
+  v_old_auth_id uuid;
+begin
+  select id into v_current_id from auth.users where email = v_email limit 1;
+  if v_current_id is null then
+    raise notice '[relink-owner] no auth.users with email %, skipping', v_email;
+    return;
+  end if;
+  if exists (select 1 from public.employee_accounts where auth_user_id = v_current_id) then
+    raise notice '[relink-owner] employee_accounts already links to %, no relink needed', v_email;
+    return;
+  end if;
+  select id, auth_user_id into v_orphan_id, v_old_auth_id
+  from public.employee_accounts
+  where role = 'owner' and status = 'active'
+    and auth_user_id not in (select id from auth.users)
+  order by created_at asc
+  limit 1;
+  if v_orphan_id is null then
+    raise notice '[relink-owner] no orphan owner row found, nothing to relink';
+    return;
+  end if;
+  update public.employee_accounts set auth_user_id = v_current_id where id = v_orphan_id;
+  raise notice '[relink-owner] OK: ea.id=% old auth_user_id=% -> new=% (email=%)',
+    v_orphan_id, v_old_auth_id, v_current_id, v_email;
+end $$;`;
+            try {
+              await runPsqlCommand(POSTGRES_BACKUP_URL!, relinkSQL);
+              controller.enqueue(
+                encoder.encode(
+                  "    ✓ Owner re-link checked (see stderr above for action taken).\n\n"
+                )
+              );
+            } catch (relinkErr) {
+              const msg = relinkErr instanceof Error ? relinkErr.message : String(relinkErr);
+              controller.enqueue(
+                encoder.encode(
+                  `    ⚠ WARN: owner re-link failed: ${msg}\n` +
+                    `      Restore data is intact. You may need to manually update\n` +
+                    `      public.employee_accounts.auth_user_id for the owner row.\n` +
+                    `      See deploy/dockge/README.md → "After restore — re-link orphan accounts".\n\n`
+                )
+              );
+            }
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                ">>> Skipping owner re-link: OWNER_EMAIL env not set.\n" +
+                  "    If login fails with 'chưa kích hoạt employee_accounts', see README.\n\n"
+              )
+            );
+          }
+
+          // 5f. RE-BCRYPT INGEST_CLIENT_SECRET — backup restores
+          // public.integration_clients with the bcrypt hash at backup time.
+          // If INGEST_CLIENT_SECRET env was rotated since the backup (or the
+          // backup came from a different instance), the hash won't match
+          // current env → /api/kiotviet/sync returns "Integration client
+          // không hợp lệ.". Re-bcrypt the env value and UPSERT — mirrors
+          // scripts/deploy-seed.mjs but runs in the restore path so the
+          // operator doesn't have to recreate the migrator container.
+          // Idempotent; skipped when env is not set.
+          const ingestSecret = process.env.INGEST_CLIENT_SECRET?.trim();
+          const ingestId = process.env.INGEST_CLIENT_ID?.trim() || "chill-erp";
+          if (ingestSecret) {
+            controller.enqueue(
+              encoder.encode(
+                `>>> Re-bcrypting INGEST_CLIENT_SECRET for integration_clients.client_id='${ingestId}'...\n`
+              )
+            );
+            const safeId = ingestId.replace(/'/g, "''");
+            const safeSecret = ingestSecret.replace(/'/g, "''");
+            const rebcryptSQL =
+              `insert into public.integration_clients (client_id, client_secret_hash, name, is_active) ` +
+              `values ('${safeId}', crypt('${safeSecret}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
+              `on conflict (client_id) do update set ` +
+              `  client_secret_hash = excluded.client_secret_hash, ` +
+              `  is_active = true; ` +
+              `do $$ ` +
+              `declare v_ok boolean; ` +
+              `begin ` +
+              `  select exists ( ` +
+              `    select 1 from public.integration_clients ` +
+              `    where client_id = '${safeId}' and is_active = true ` +
+              `      and client_secret_hash = crypt('${safeSecret}', client_secret_hash) ` +
+              `  ) into v_ok; ` +
+              `  if v_ok then ` +
+              `    raise notice '[rebcrypt-ingest] OK: integration_clients[%].client_secret_hash matches env', '${safeId}'; ` +
+              `  else ` +
+              `    raise exception '[rebcrypt-ingest] verify FAILED for client_id=%', '${safeId}'; ` +
+              `  end if; ` +
+              `end $$;`;
+            try {
+              await runPsqlCommand(POSTGRES_BACKUP_URL!, rebcryptSQL);
+              controller.enqueue(
+                encoder.encode(
+                  "    ✓ INGEST_CLIENT_SECRET re-bcrypted + verified. /api/kiotviet/sync should work.\n\n"
+                )
+              );
+            } catch (rebcryptErr) {
+              const msg = rebcryptErr instanceof Error ? rebcryptErr.message : String(rebcryptErr);
+              controller.enqueue(
+                encoder.encode(
+                  `    ⚠ WARN: INGEST_CLIENT_SECRET re-bcrypt failed: ${msg}\n` +
+                    `      Restore data is intact. /api/kiotviet/sync may return\n` +
+                    `      'Integration client không hợp lệ.' until you run:\n` +
+                    `      docker exec <stack>chill-app npm run kiotviet:check\n\n`
+                )
+              );
+            }
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                ">>> Skipping INGEST_CLIENT_SECRET re-bcrypt: env not set.\n\n"
+              )
+            );
+          }
+
+          controller.enqueue(encoder.encode("===END=== status=success\n"));
           const { error: updateErr } = await supabase
             .from("backup_runs")
             .update({
@@ -230,8 +542,15 @@ export async function POST(req: NextRequest) {
             );
           }
         } else {
+          // Restore failed AFTER the destructive DROP — pre-restore snapshot
+          // is the rollback path. Surface it loudly in the response.
+          const rollback = preRestoreDumpPath
+            ? ` ROLLBACK: psql "$POSTGRES_BACKUP_URL" < "${preRestoreDumpPath}"`
+            : " (no pre-restore snapshot — manual recovery needed)";
           controller.enqueue(
-            encoder.encode(`\n===END=== status=failed (exit ${code})\n`)
+            encoder.encode(
+              `\n===END=== status=failed (exit ${code})${rollback}\n`
+            )
           );
           const { error: updateErr } = await supabase
             .from("backup_runs")
@@ -252,8 +571,14 @@ export async function POST(req: NextRequest) {
         controller.close();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // If snapshot succeeded earlier, surface the rollback path. The
+        // snapshot-failure path returns before reaching this catch, so any
+        // exception here means the destructive DROP may have already run.
+        const rollback = preRestoreDumpPath
+          ? ` ROLLBACK: psql "$POSTGRES_BACKUP_URL" < "${preRestoreDumpPath}"`
+          : "";
         controller.enqueue(
-          encoder.encode(`\n===END=== status=failed (${msg})\n`)
+          encoder.encode(`\n===END=== status=failed (${msg})${rollback}\n`)
         );
         const { error: updateErr } = await supabase
           .from("backup_runs")
@@ -303,4 +628,61 @@ function runPsqlCommand(url: string, sql: string): Promise<void> {
       else reject(new Error(`psql exit ${code}: ${stderr.slice(-500)}`));
     });
   });
+}
+
+/**
+ * Run `pg_dump --schema=public` to the given output path. Plain SQL format
+ * (matches /api/backup/full output), so the snapshot is directly pipeable
+ * back into psql for rollback. Throws on non-zero exit.
+ */
+function runPgDumpToFile(url: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("pg_dump", [
+      "--schema=public",
+      "--no-owner",
+      "--no-privileges",
+      "--format=plain",
+      "--file",
+      outputPath,
+      url,
+    ]);
+    let stderr = "";
+    proc.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+    proc.on("exit", (code) => {
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(`pg_dump exit ${code}: ${stderr.slice(-500) || "(no stderr)"}`)
+        );
+    });
+    proc.on("error", (e) => reject(e));
+  });
+}
+
+/**
+ * Sanity-check a freshly-written pg_dump file. Verifies size >= MIN bytes
+ * AND header matches PG_DUMP_HEADER_REGEX. Throws if invalid.
+ * Caller is responsible for cleaning up partial files on failure.
+ */
+function verifyPgDumpFile(path: string): void {
+  const st = statSync(path);
+  if (st.size < MIN_PRE_RESTORE_BYTES) {
+    throw new Error(
+      `snapshot too small (${st.size} bytes, min ${MIN_PRE_RESTORE_BYTES}) — refusing to proceed`
+    );
+  }
+  // Read first 500 bytes to validate header (synchronous, file is tiny here)
+  const fd = openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(500);
+    const n = readSync(fd, buf, 0, 500, 0);
+    const header = buf.subarray(0, n).toString("utf-8");
+    if (!PG_DUMP_HEADER_REGEX.test(header)) {
+      throw new Error("snapshot header does not match expected pg_dump format");
+    }
+  } finally {
+    closeSync(fd);
+  }
 }

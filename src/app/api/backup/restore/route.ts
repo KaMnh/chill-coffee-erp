@@ -44,6 +44,37 @@ const PG_DUMP_HEADER_REGEX = /-- PostgreSQL database dump/i;
 const MIN_PRE_RESTORE_BYTES = 1024;
 const PRE_RESTORE_DIR =
   process.env.PRE_RESTORE_DIR || "/backups/pre-restore";
+
+// SQL block re-applied AFTER a successful restore. The DROP SCHEMA public
+// CASCADE earlier in this endpoint wipes every grant on the public schema,
+// and pg_dump --no-privileges (used by /api/backup/full for portability)
+// produces dumps without GRANT statements. Without re-granting, Supabase
+// roles cannot see any restored data — login itself fails because
+// employee_accounts is invisible to the authenticated role.
+//
+// Kept in lockstep with database/003_rls.sql + database/migrations/
+// 2026-05-25-grant-service-role.sql. If you change one, change the others.
+//
+// NOTIFY pgrst forces PostgREST to re-introspect the schema immediately so
+// the new tables are visible to the REST API without waiting for the next
+// periodic refresh.
+const POST_RESTORE_GRANTS_SQL = `
+grant usage on schema public to authenticated, anon, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema public to anon;
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to authenticated, anon, service_role;
+grant execute on all functions in schema public to authenticated, anon, service_role;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant select on tables to anon;
+alter default privileges in schema public
+  grant all on tables to service_role;
+alter default privileges in schema public
+  grant execute on functions to authenticated, anon, service_role;
+notify pgrst, 'reload schema';
+`;
 // Fallback inside the container's writable /tmp if PRE_RESTORE_DIR is not
 // accessible (volume not mounted, perms wrong, backup-cron sidecar missing).
 // /tmp is always writable by the nextjs UID but is tmpfs/ephemeral — snapshot
@@ -321,7 +352,38 @@ export async function POST(req: NextRequest) {
 
         const finishedAt = new Date().toISOString();
         if (code === 0) {
-          controller.enqueue(encoder.encode("\n===END=== status=success\n"));
+          // 5d. RE-APPLY SCHEMA PRIVILEGES — the DROP SCHEMA public CASCADE in
+          // step 5b wipes all grants on the public schema. The dump runs with
+          // pg_dump --no-privileges (intentional for portability), so the
+          // restored objects have NO grants either. Without this step the
+          // Supabase roles (anon/authenticated/service_role) can't see ANY
+          // restored data — even logging in fails because employee_accounts
+          // is invisible. Mirrors database/003_rls.sql which is the single
+          // source of truth for the grant policy; keep them in sync.
+          // Also NOTIFY pgrst so PostgREST refreshes its schema cache
+          // immediately instead of after the next poll interval.
+          controller.enqueue(
+            encoder.encode(">>> Re-applying schema privileges + reloading PostgREST cache...\n")
+          );
+          try {
+            await runPsqlCommand(POSTGRES_BACKUP_URL!, POST_RESTORE_GRANTS_SQL);
+            controller.enqueue(
+              encoder.encode("    ✓ Privileges re-applied; pgrst cache reload notified\n\n")
+            );
+          } catch (grantErr) {
+            // Don't fail the restore — data IS there, just privileges need
+            // attention. Surface the error loudly so the operator can run
+            // the GRANT block manually.
+            const msg = grantErr instanceof Error ? grantErr.message : String(grantErr);
+            controller.enqueue(
+              encoder.encode(
+                `    ⚠ WARN: re-grant failed: ${msg}\n` +
+                  `      Data is restored but Supabase roles may not see it until you run:\n` +
+                  `      docker exec -i supabase-db psql -U postgres -d postgres < <(cat <<'SQL'\n${POST_RESTORE_GRANTS_SQL}SQL\n)\n\n`
+              )
+            );
+          }
+          controller.enqueue(encoder.encode("===END=== status=success\n"));
           const { error: updateErr } = await supabase
             .from("backup_runs")
             .update({

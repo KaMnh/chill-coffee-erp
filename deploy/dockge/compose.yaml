@@ -37,6 +37,11 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
     ports:
       - "${APP_PORT:-3009}:3000"
+    volumes:
+      # Shared with chill-backup-cron. The restore endpoint writes pre-restore
+      # snapshots to /backups/pre-restore/ (chmod 1777 by backup-cron init) so
+      # a bad restore can be rolled back from the dump file left behind.
+      - chill-erp-db-backups:/backups
     depends_on:
       kong:
         condition: service_healthy
@@ -44,6 +49,10 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+      # Ensures /backups/pre-restore exists with the right perms before app
+      # accepts requests. backup-cron's entrypoint creates it on start.
+      backup-cron:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
@@ -611,8 +620,15 @@ services:
       - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
       # Initialize the database settings with JWT_SECRET and JWT_EXP
       - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
-      # PGDATA directory is persisted between restarts
-      - ./volumes/db/data:/var/lib/postgresql/data:Z
+      # Refuse-to-init guard. Prefix 00- ensures it runs BEFORE any 97-/98-/99-
+      # script. Aborts bootstrap if CHILL_REQUIRE_EXISTING_DATA=1 and PGDATA is
+      # empty — converts silent data loss into a loud, recoverable failure.
+      - ./init-guard.sh:/docker-entrypoint-initdb.d/00-guard.sh:ro,Z
+      # PGDATA lives in an EXTERNAL named volume, NOT a bind mount. External
+      # means `docker compose down -v`, `prune`, and Dockge "Delete stack folder"
+      # cannot remove it. Create once: `docker volume create chill-erp-db-data`.
+      # Migration runbook: deploy/dockge/README.md → "Migrating an existing installation".
+      - chill-erp-db-data:/var/lib/postgresql/data:Z
       # Changes required for internal supabase data such as _analytics
       - ./volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:Z
       # Changes required for Analytics support
@@ -644,6 +660,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY}
+      # Read by init-guard.sh. Set =1 in .env AFTER first successful deploy.
+      # When =1, an empty PGDATA triggers FATAL exit instead of silent fresh init.
+      CHILL_REQUIRE_EXISTING_DATA: ${CHILL_REQUIRE_EXISTING_DATA:-0}
     command:
       [
         "postgres",
@@ -740,6 +759,103 @@ services:
         "/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"
       ]
 
+  # Nightly pg_dump (custom format, restore via pg_restore) + db-config tarball.
+  # Writes into chill-erp-db-backups (external volume) and prunes files older
+  # than BACKUP_RETENTION_DAYS. Runs an initial backup at startup so there's
+  # always at least one snapshot, then daily at BACKUP_TIME_UTC.
+  backup-cron:
+    container_name: ${STACK_NAMESPACE:-}chill-backup-cron
+    image: postgres:15-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Section 3}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      # HH:MM in UTC. Default 02:00 UTC = 09:00 ICT.
+      BACKUP_TIME_UTC: ${BACKUP_TIME_UTC:-02:00}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      RUN_INITIAL_BACKUP: ${RUN_INITIAL_BACKUP:-1}
+    volumes:
+      - chill-erp-db-backups:/backups
+      # Read-only mount so we can tar the pgsodium key alongside the SQL dump.
+      # Losing db-config means encrypted columns (vault.secrets) become unreadable;
+      # snapshotting it keeps the recovery path complete.
+      - db-config:/db-config-source:ro
+    entrypoint:
+      # IMPORTANT: shell variables MUST be doubled ($$) so Docker Compose
+      # does NOT interpolate them at config-parse time. Compose-managed env
+      # vars (POSTGRES_HOST, BACKUP_TIME_UTC, ...) are injected at container
+      # runtime via `environment:` above and reachable as $$VAR in the shell.
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        log() { printf '[backup-cron] %s %s\n' "$$(date -u +%FT%TZ)" "$$*"; }
+        do_backup() {
+          stamp=$$(date -u +%FT%H%MZ)
+          dump_file="/backups/db-$$stamp.dump"
+          cfg_file="/backups/db-config-$$stamp.tgz"
+          log "starting pg_dump -> $$dump_file"
+          if pg_dump -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U postgres -d "$$POSTGRES_DB" -Fc -f "$$dump_file"; then
+            log "pg_dump OK ($$(du -h "$$dump_file" | cut -f1))"
+          else
+            log "ERROR pg_dump failed; removing partial file"
+            rm -f "$$dump_file"
+            return 1
+          fi
+          if tar -czf "$$cfg_file" -C /db-config-source .; then
+            log "db-config tarball OK ($$(du -h "$$cfg_file" | cut -f1))"
+          else
+            log "ERROR db-config tar failed"
+            rm -f "$$cfg_file"
+          fi
+          d_old=$$(find /backups -maxdepth 1 -name 'db-*.dump' -type f -mtime "+$$BACKUP_RETENTION_DAYS" -print -delete | wc -l)
+          c_old=$$(find /backups -maxdepth 1 -name 'db-config-*.tgz' -type f -mtime "+$$BACKUP_RETENTION_DAYS" -print -delete | wc -l)
+          log "retention pruned $$d_old dumps + $$c_old config snapshots (kept $${BACKUP_RETENTION_DAYS}d)"
+        }
+        mkdir -p /backups /backups/pre-restore
+        # World-writable + sticky so the app container (UID 1001 nextjs) can
+        # write pre-restore snapshots here without ownership coordination.
+        # Sticky bit means each container can only delete its own files.
+        chmod 1777 /backups/pre-restore
+        log "booted; daily run at $$BACKUP_TIME_UTC UTC, retention=$${BACKUP_RETENTION_DAYS}d"
+        if [ "$${RUN_INITIAL_BACKUP:-0}" = "1" ]; then
+          log "running initial backup at container start"
+          do_backup || log "initial backup failed (will retry at scheduled time)"
+        fi
+        while true; do
+          if [ "$$(date -u +%H:%M)" = "$$BACKUP_TIME_UTC" ]; then
+            do_backup || true
+            sleep 65
+          fi
+          sleep 30
+        done
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
+  # CRITICAL: external — operator must `docker volume create chill-erp-db-data`
+  # ONCE before first deploy. External volumes survive `down -v`, `prune --volumes`
+  # (while in use), Dockge "Delete stack folder", and accidental compose edits.
+  # Remove only with explicit `docker volume rm`.
+  chill-erp-db-data:
+    name: chill-erp-db-data
+    external: true
+  # Holds nightly pg_dump output + db-config snapshots from the backup-cron service.
+  # Also external for the same safety reason. Create with
+  # `docker volume create chill-erp-db-backups`.
+  chill-erp-db-backups:
+    name: chill-erp-db-backups
+    external: true
+  # Compose-managed (NOT external) — auto-created on first deploy. Holds
+  # pgsodium decryption key; if lost, encrypted columns (vault.secrets) become
+  # unreadable. Protected by the nightly tar snapshot inside chill-erp-db-backups.
   db-config:
   deno-cache:

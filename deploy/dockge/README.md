@@ -276,6 +276,22 @@ to another machine or S3 bucket. Example crontab (replace placeholder):
 | `chill-migrator` exits with non-zero status, `chill-app` never starts | Migration SQL failed (bad migration file) or seed step failed (Auth API unreachable, bad OWNER_PASSWORD) | Check `docker logs chill-migrator` in Dockge. Common causes: (a) new migration has syntax error → fix and re-push image; (b) `kong` not healthy yet → wait/restart migrator only; (c) `OWNER_PASSWORD` < 8 chars → fix `.env` and recreate migrator |
 | Migrator runs every restart and that's wasteful | Working as intended — but step is fast (~5s if no new migrations) and provides safety on every deploy | If you really want to skip it once, `docker compose up -d --no-deps app` (skips deps including migrator). NOT recommended. |
 | Container name conflict like `Conflict. The container name "/supabase-db" is already in use` | Another Supabase stack on the same Docker daemon already uses these names | Set `STACK_NAMESPACE=quan2-` (note trailing hyphen) in `.env` to prefix all container names. Default is empty = keep original names. |
+| `/api/kiotviet/sync` returns `Integration client không hợp lệ.` | Env `INGEST_CLIENT_SECRET` does not match the bcrypt hash in `public.integration_clients`. From v4.1.4+ the migrator verifies this at deploy and refuses to start the app if they drift, but rotated/restored databases predating v4.1.4 can still hit it. | Run `docker exec <stack>chill-app npm run kiotviet:check` for diagnostic + step-by-step remediation. Most often: `docker compose up -d --force-recreate migrator` re-seeds from the current `.env`. |
+| App container won't start, migrator exits 1 with `integration_clients verify FAILED` | v4.1.4+ deploy-time guard caught a hash drift before the app saw it. `.env` and DB are out of sync. | Same fix: `npm run kiotviet:check` from the migrator container, or recreate migrator after fixing `.env`. |
+
+### Container name reference (with STACK_NAMESPACE)
+
+When `STACK_NAMESPACE=chill-erp-` is set in `.env`, every container name gains that prefix. Substitute as needed when copy-pasting diagnostic commands:
+
+| Default name | With `STACK_NAMESPACE=chill-erp-` |
+|---|---|
+| `chill-app` | `chill-erp-chill-app` |
+| `chill-migrator` | `chill-erp-chill-migrator` |
+| `supabase-db` | `chill-erp-supabase-db` |
+| `supabase-kong` | `chill-erp-supabase-kong` |
+| ... | (same prefix on every container) |
+
+Quick check: `docker ps --format '{{.Names}}' | grep -E 'chill|supabase'`.
 
 ## Migrating an existing installation (bind mount → named volume)
 

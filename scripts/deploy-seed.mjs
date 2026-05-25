@@ -156,7 +156,52 @@ if (INGEST_CLIENT_SECRET && POSTGRES_PASSWORD) {
       env: { ...process.env, PGPASSWORD: POSTGRES_PASSWORD },
     }
   );
-  console.log("deploy-seed: integration_clients seeded:", INGEST_CLIENT_ID);
+
+  // POST-UPSERT VERIFY — round-trips the env secret through bcrypt and
+  // confirms it matches the stored hash. Catches every class of "looks-ok
+  // but isn't" bug: hidden whitespace in .env, container-vs-host env drift,
+  // restored backup overwriting the row with a stale hash, etc. If verify
+  // fails, exit non-zero — the migrator container then exits non-zero, the
+  // app container's `depends_on migrator condition: service_completed_successfully`
+  // refuses to start, and the operator sees the failure at deploy time
+  // instead of when KiotViet sync is first tried hours later.
+  const verifySQL =
+    `select case when exists (` +
+    `  select 1 from public.integration_clients ` +
+    `  where client_id = '${safeId}' ` +
+    `    and is_active = true ` +
+    `    and client_secret_hash = crypt('${safeSecret}', client_secret_hash) ` +
+    `) then 'ok' else 'mismatch' end;`;
+  const verifyOut = execFileSync(
+    "psql",
+    [
+      "-h", POSTGRES_HOST,
+      "-p", POSTGRES_PORT,
+      "-U", "postgres",
+      "-d", "postgres",
+      "-AtX",
+      "-v", "ON_ERROR_STOP=1",
+      "-c", verifySQL,
+    ],
+    {
+      encoding: "utf8",
+      env: { ...process.env, PGPASSWORD: POSTGRES_PASSWORD },
+    }
+  ).trim();
+  if (verifyOut !== "ok") {
+    console.error(
+      `deploy-seed: ❌ integration_clients verify FAILED (got '${verifyOut}').\n` +
+        `  Env INGEST_CLIENT_SECRET does not match the stored bcrypt hash for ` +
+        `client_id='${INGEST_CLIENT_ID}'. This blocks /api/kiotviet/sync.\n` +
+        `  Common causes:\n` +
+        `    - .env has hidden whitespace or quote chars around INGEST_CLIENT_SECRET\n` +
+        `    - The row pre-existed with a different hash (restore from older backup)\n` +
+        `    - INGEST_CLIENT_ID was changed but the old row is still inactive\n` +
+        `  Diagnose with: npm run kiotviet:check`
+    );
+    process.exit(1);
+  }
+  console.log(`deploy-seed: ✓ integration_clients seeded + verified: ${INGEST_CLIENT_ID}`);
 } else {
   console.log("deploy-seed: skipping integration_clients (INGEST_CLIENT_SECRET or POSTGRES_PASSWORD not set).");
 }

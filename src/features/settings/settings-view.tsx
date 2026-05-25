@@ -13,6 +13,7 @@ import {
 import type { UserRole } from "@/lib/types";
 import { SidebarConfigForm } from "./sidebar-config-form";
 import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
+import { ShiftBonusConfigForm } from "./shift-bonus-config-form";
 import { KiotvietConfigForm } from "./kiotviet-config-form";
 import { AccountsManagerCard } from "./accounts-manager-card";
 import { SignupRequestsCard } from "./signup-requests-card";
@@ -98,6 +99,9 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
             sidebarDefaults={appSettings.sidebar_defaults}
             accounts={accounts}
             currentUserAuthId={currentAccount.auth_user_id}
+          />
+          <ShiftBonusConfigForm
+            config={appSettings.shift_bonus_config ?? { threshold_hours: 7, bonus_amount: 10000 }}
           />
           <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
           <KiotvietConfigForm />

@@ -40,14 +40,18 @@ export function InventoryView({ role }: InventoryViewProps) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="ingredients">
+      <Tabs defaultValue="stock">
         <TabsList>
+          <TabsTrigger value="stock">Tồn kho</TabsTrigger>
           <TabsTrigger value="ingredients">Nguyên liệu</TabsTrigger>
           <TabsTrigger value="menu_items">Sản phẩm</TabsTrigger>
           <TabsTrigger value="recipes">Công thức</TabsTrigger>
-          <TabsTrigger value="stock">Tồn kho</TabsTrigger>
           <TabsTrigger value="dashboard">Tổng quan</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="stock">
+          <StockTab role={role} />
+        </TabsContent>
 
         <TabsContent value="ingredients">
           <IngredientsTab role={role} />
@@ -59,10 +63,6 @@ export function InventoryView({ role }: InventoryViewProps) {
 
         <TabsContent value="recipes">
           <RecipesTab role={role} />
-        </TabsContent>
-
-        <TabsContent value="stock">
-          <StockTab role={role} />
         </TabsContent>
 
         <TabsContent value="dashboard">

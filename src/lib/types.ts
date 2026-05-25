@@ -1,5 +1,9 @@
 ﻿export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer";
 
+export type DashboardPreferences = {
+  stock_sort?: string | null;
+};
+
 export type Account = {
   id: string;
   auth_user_id: string;
@@ -11,6 +15,7 @@ export type Account = {
     position: string | null;
   } | null;
   sidebar_config?: string[] | null;
+  dashboard_preferences?: DashboardPreferences | null;
 };
 
 export type AppSettings = {
@@ -18,6 +23,7 @@ export type AppSettings = {
   handover_default_tasks: Array<{ key: string; label: string }>;
   denominations?: number[];
   cash_diff_threshold?: Record<string, number>;
+  shift_bonus_config?: { threshold_hours: number; bonus_amount: number };
 };
 
 export type SettingsAccount = {

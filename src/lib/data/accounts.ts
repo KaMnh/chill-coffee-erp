@@ -83,6 +83,13 @@ export async function loadCurrentAccount(supabase: SupabaseClient): Promise<Acco
   if (error) throw toAppError(error, "Không tải được tài khoản.");
   if (!data) return null;
 
+  // Pull profile dashboard_preferences (best-effort; missing profile is fine).
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("dashboard_preferences")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const row = data as unknown as Account & { employees?: Account["employee"] };
   return {
     id: row.id,
@@ -90,7 +97,8 @@ export async function loadCurrentAccount(supabase: SupabaseClient): Promise<Acco
     employee_id: row.employee_id,
     role: row.role,
     status: row.status,
-    employee: row.employees ?? row.employee ?? null
+    employee: row.employees ?? row.employee ?? null,
+    dashboard_preferences: (profile?.dashboard_preferences as Account["dashboard_preferences"]) ?? null
   };
 }
 

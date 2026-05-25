@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Wallet, Users, Banknote, PiggyBank, FileText,
   BarChart3, Settings,
   // Phase 3A — action icons
-  LogOut, Menu, RefreshCw, Download, Clock, Lock, Printer,
+  LogOut, Menu, RefreshCw, Download, Clock, Lock, LockOpen, Printer, ChevronUp,
   // Phase 3B.1 — action icons
   Trash2, Save,
   // Phase 3B.2b.i — action icons
@@ -60,6 +60,8 @@ export const Icons = {
   download: Download,
   clock: Clock,
   lock: Lock,
+  lockOpen: LockOpen,
+  chevronUp: ChevronUp,
   printer: Printer,
   // Phase 3B.1 actions
   trash: Trash2,

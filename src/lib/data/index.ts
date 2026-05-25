@@ -1,6 +1,7 @@
 export * from "./_common";
 export * from "./accounts";
 export * from "./app-settings";
+export * from "./profiles";
 export * from "./dashboard";
 export * from "./expenses";
 export * from "./employees";

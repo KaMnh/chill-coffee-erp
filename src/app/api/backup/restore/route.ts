@@ -11,17 +11,24 @@
  *   3. Validate pg_dump header (first 500 bytes)
  *   4. INSERT backup_runs row (kind='restore', status='running')
  *   5. Stream response:
- *      a. Pre-restore: DROP SCHEMA public CASCADE + recreate
- *      b. Pipe uploaded file → psql stdin (--single-transaction)
- *      c. UPDATE backup_runs on exit
+ *      a. Pre-restore SNAPSHOT — dump CURRENT public schema to /backups/pre-restore/
+ *         BEFORE any destructive operation. If snapshot fails, abort the
+ *         restore (no DROP) so existing data is preserved.
+ *      b. DROP SCHEMA public CASCADE + recreate
+ *      c. Pipe uploaded file → psql stdin (--single-transaction)
+ *      d. UPDATE backup_runs on exit (incl. pre_restore_dump_path for rollback)
  *
  * WARNING: This endpoint DROPS THE PUBLIC SCHEMA. ALL DATA IS DESTROYED before restore.
  * --single-transaction makes the restore atomic (all-or-nothing per psql).
+ * The pre-restore snapshot path is recorded in backup_runs.pre_restore_dump_path
+ * so operators can recover from a bad restore by piping it back into psql.
  *
  * Yêu cầu:
  *   - postgresql15-client cài trong Dockerfile
  *   - Env POSTGRES_BACKUP_URL set với admin credential
+ *   - /backups/pre-restore/ writable (provided by chill-backup-cron, mode 1777)
  */
+import { mkdirSync, statSync, openSync, readSync, closeSync, unlinkSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { spawn } from "node:child_process";
 import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
@@ -32,6 +39,11 @@ export const maxDuration = 300; // 5 min
 const POSTGRES_BACKUP_URL = process.env.POSTGRES_BACKUP_URL;
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const PG_DUMP_HEADER_REGEX = /-- PostgreSQL database dump/i;
+// Min size for a valid pg_dump (header + at least one statement). A truly
+// empty schema dumps to ~2KB of SET / SELECT pg_catalog... boilerplate.
+const MIN_PRE_RESTORE_BYTES = 1024;
+const PRE_RESTORE_DIR =
+  process.env.PRE_RESTORE_DIR || "/backups/pre-restore";
 
 export async function POST(req: NextRequest) {
   // 1. Auth check (owner-only)
@@ -96,13 +108,73 @@ export async function POST(req: NextRequest) {
   // 5. Setup streaming response
   const encoder = new TextEncoder();
   let stderrBuffer = "";
+  let preRestoreDumpPath: string | null = null;
 
   let proc: ReturnType<typeof spawn> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        // 5a. Pre-restore: drop + recreate public schema
+        // 5a. PRE-RESTORE SNAPSHOT — dump current public schema BEFORE any
+        // destructive operation. Skipping or silently swallowing this step
+        // would re-create the original data loss bug. If snapshot fails, we
+        // abort the restore (no DROP) so existing data is preserved.
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, "")
+          .slice(0, 15); // YYYYMMDDTHHMMSS
+        const candidatePath = `${PRE_RESTORE_DIR}/pre-restore-${runId}-${timestamp}.sql`;
+        controller.enqueue(
+          encoder.encode(
+            `>>> Pre-restore snapshot → ${candidatePath}\n`
+          )
+        );
+        try {
+          mkdirSync(PRE_RESTORE_DIR, { recursive: true });
+          await runPgDumpToFile(POSTGRES_BACKUP_URL!, candidatePath);
+          verifyPgDumpFile(candidatePath); // throws if invalid
+          preRestoreDumpPath = candidatePath;
+          controller.enqueue(
+            encoder.encode(
+              `    ✓ Snapshot saved (${statSync(candidatePath).size} bytes). ` +
+                `Rollback command: psql "$POSTGRES_BACKUP_URL" < "${candidatePath}"\n\n`
+            )
+          );
+          // Persist path NOW so even if subsequent steps crash, the row tells
+          // the operator where the rollback file is.
+          await supabase
+            .from("backup_runs")
+            .update({ pre_restore_dump_path: candidatePath })
+            .eq("id", runId);
+        } catch (snapErr) {
+          // Snapshot failed — DO NOT proceed to DROP SCHEMA. Mark run failed.
+          const msg =
+            snapErr instanceof Error ? snapErr.message : String(snapErr);
+          // Clean up partial file if any
+          try {
+            unlinkSync(candidatePath);
+          } catch {
+            /* ignore — file may not exist */
+          }
+          controller.enqueue(
+            encoder.encode(
+              `    ✗ Snapshot FAILED — aborting restore to preserve data: ${msg}\n` +
+                `===END=== status=failed (pre-restore snapshot)\n`
+            )
+          );
+          await supabase
+            .from("backup_runs")
+            .update({
+              status: "failed",
+              finished_at: new Date().toISOString(),
+              error_message: `pre-restore snapshot failed: ${msg.slice(0, 400)}`,
+            })
+            .eq("id", runId);
+          controller.close();
+          return;
+        }
+
+        // 5b. Pre-restore: drop + recreate public schema
         controller.enqueue(encoder.encode(">>> Dropping public schema...\n"));
         await runPsqlCommand(
           POSTGRES_BACKUP_URL!,
@@ -111,7 +183,7 @@ export async function POST(req: NextRequest) {
         );
         controller.enqueue(encoder.encode("    ✓ Schema dropped + recreated\n\n"));
 
-        // 5b. Stream upload file → psql stdin
+        // 5c. Stream upload file → psql stdin
         controller.enqueue(encoder.encode(">>> Restoring from backup file...\n"));
         // psql -c executes BEFORE -f. With --single-transaction, both run in
         // one txn. We use -c to set session_replication_role=replica which
@@ -230,8 +302,15 @@ export async function POST(req: NextRequest) {
             );
           }
         } else {
+          // Restore failed AFTER the destructive DROP — pre-restore snapshot
+          // is the rollback path. Surface it loudly in the response.
+          const rollback = preRestoreDumpPath
+            ? ` ROLLBACK: psql "$POSTGRES_BACKUP_URL" < "${preRestoreDumpPath}"`
+            : " (no pre-restore snapshot — manual recovery needed)";
           controller.enqueue(
-            encoder.encode(`\n===END=== status=failed (exit ${code})\n`)
+            encoder.encode(
+              `\n===END=== status=failed (exit ${code})${rollback}\n`
+            )
           );
           const { error: updateErr } = await supabase
             .from("backup_runs")
@@ -252,8 +331,14 @@ export async function POST(req: NextRequest) {
         controller.close();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // If snapshot succeeded earlier, surface the rollback path. The
+        // snapshot-failure path returns before reaching this catch, so any
+        // exception here means the destructive DROP may have already run.
+        const rollback = preRestoreDumpPath
+          ? ` ROLLBACK: psql "$POSTGRES_BACKUP_URL" < "${preRestoreDumpPath}"`
+          : "";
         controller.enqueue(
-          encoder.encode(`\n===END=== status=failed (${msg})\n`)
+          encoder.encode(`\n===END=== status=failed (${msg})${rollback}\n`)
         );
         const { error: updateErr } = await supabase
           .from("backup_runs")
@@ -303,4 +388,61 @@ function runPsqlCommand(url: string, sql: string): Promise<void> {
       else reject(new Error(`psql exit ${code}: ${stderr.slice(-500)}`));
     });
   });
+}
+
+/**
+ * Run `pg_dump --schema=public` to the given output path. Plain SQL format
+ * (matches /api/backup/full output), so the snapshot is directly pipeable
+ * back into psql for rollback. Throws on non-zero exit.
+ */
+function runPgDumpToFile(url: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("pg_dump", [
+      "--schema=public",
+      "--no-owner",
+      "--no-privileges",
+      "--format=plain",
+      "--file",
+      outputPath,
+      url,
+    ]);
+    let stderr = "";
+    proc.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+    proc.on("exit", (code) => {
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(`pg_dump exit ${code}: ${stderr.slice(-500) || "(no stderr)"}`)
+        );
+    });
+    proc.on("error", (e) => reject(e));
+  });
+}
+
+/**
+ * Sanity-check a freshly-written pg_dump file. Verifies size >= MIN bytes
+ * AND header matches PG_DUMP_HEADER_REGEX. Throws if invalid.
+ * Caller is responsible for cleaning up partial files on failure.
+ */
+function verifyPgDumpFile(path: string): void {
+  const st = statSync(path);
+  if (st.size < MIN_PRE_RESTORE_BYTES) {
+    throw new Error(
+      `snapshot too small (${st.size} bytes, min ${MIN_PRE_RESTORE_BYTES}) — refusing to proceed`
+    );
+  }
+  // Read first 500 bytes to validate header (synchronous, file is tiny here)
+  const fd = openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(500);
+    const n = readSync(fd, buf, 0, 500, 0);
+    const header = buf.subarray(0, n).toString("utf-8");
+    if (!PG_DUMP_HEADER_REGEX.test(header)) {
+      throw new Error("snapshot header does not match expected pg_dump format");
+    }
+  } finally {
+    closeSync(fd);
+  }
 }

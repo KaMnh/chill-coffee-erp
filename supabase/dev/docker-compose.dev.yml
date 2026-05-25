@@ -35,10 +35,18 @@ services:
   db:
     restart: 'no'
     volumes:
-      # Always use a fresh database when developing
-      - /var/lib/postgresql/data
-      # Seed data should be inserted last (alphabetical order)
+      # Removed: anonymous volume `- /var/lib/postgresql/data` which the
+      # upstream Supabase template used to force a fresh DB on every
+      # `docker compose up`. That behavior caused silent dev data loss on
+      # every restart and contradicted this project's persistence requirements.
+      # Dev now inherits the bind mount
+      # `./volumes/db/data:/var/lib/postgresql/data:Z` from
+      # supabase/docker-compose.yml, matching production semantics.
+      # To explicitly wipe local dev data, run `bash supabase/reset.sh`
+      # (interactive, requires typed confirmation).
+      # Seed data still applies on first init.
       - ./dev/data.sql:/docker-entrypoint-initdb.d/seed.sql
-  storage:
-    volumes:
-      - /var/lib/storage
+  # NOTE: the `storage:` block previously here also overrode the storage
+  # bind mount with an anonymous volume (`- /var/lib/storage`), causing the
+  # same silent-loss issue for uploaded files. Removed entirely so dev
+  # inherits `./volumes/storage:/var/lib/storage:z` from the base compose.

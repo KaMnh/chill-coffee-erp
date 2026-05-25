@@ -9,32 +9,27 @@ interface KpiBarProps {
 }
 
 /**
- * Top-of-dashboard KPI strip — 5 pastel StatCards mirroring v3 MetricsBar.
+ * Top-of-dashboard KPI strip — 4 pastel StatCards.
  *
- * Mapping vs v3 MetricsBar:
- *   pos     -> "Thu POS"          = total_sales - cash_sales (non-cash POS)
- *   cash    -> "Thu tiền mặt"     = cash_sales
+ * Mapping:
+ *   pos     -> "Thu POS"          = total_sales (cash + non-cash, recorded via POS)
  *   expense -> "Tổng chi"         = total_expenses
  *   payroll -> "Lương đã phát"    = payroll_paid
  *   staff   -> "Đang trong ca"    = active_staff (integer)
  *
- * Color order: peach / blue / mint / lilac / peach — alternates warm/cool.
+ * Note: quán bán 100% qua POS nên một thẻ "Thu POS" đủ thể hiện doanh thu.
+ * Cash vs non-cash breakdown vẫn được dùng ở Chốt két (reads from RPC fields).
+ *
+ * Color order: peach / mint / lilac / peach — alternates warm/cool.
  */
 export function KpiBar({ data }: KpiBarProps) {
-  const posSales = Math.max(0, (data.total_sales ?? 0) - (data.cash_sales ?? 0));
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4">
       <StatCard
         color="peach"
         title="Thu POS"
-        subtitle="Không tiền mặt"
-        value={formatVND(posSales)}
-      />
-      <StatCard
-        color="blue"
-        title="Thu tiền mặt"
-        subtitle="Đếm trong két"
-        value={formatVND(data.cash_sales)}
+        subtitle="Tổng doanh thu"
+        value={formatVND(data.total_sales)}
       />
       <StatCard
         color="mint"

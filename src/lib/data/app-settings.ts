@@ -6,7 +6,13 @@ export async function loadAppSettings(supabase: SupabaseClient): Promise<AppSett
   const { data, error } = await supabase
     .from("app_settings")
     .select("key, value")
-    .in("key", ["sidebar_defaults", "handover_default_tasks", "denominations", "cash_diff_threshold"]);
+    .in("key", [
+      "sidebar_defaults",
+      "handover_default_tasks",
+      "denominations",
+      "cash_diff_threshold",
+      "shift_bonus_config"
+    ]);
   if (error) throw toAppError(error, "Không tải được cấu hình.");
 
   const settings: AppSettings = { sidebar_defaults: {}, handover_default_tasks: [] };
@@ -23,8 +29,20 @@ export async function loadAppSettings(supabase: SupabaseClient): Promise<AppSett
     if (row.key === "cash_diff_threshold" && row.value && typeof row.value === "object") {
       settings.cash_diff_threshold = row.value as Record<string, number>;
     }
+    if (row.key === "shift_bonus_config" && row.value && typeof row.value === "object") {
+      settings.shift_bonus_config = row.value as AppSettings["shift_bonus_config"];
+    }
   }
   return settings;
+}
+
+export async function updateShiftBonusConfig(
+  supabase: SupabaseClient,
+  config: { threshold_hours: number; bonus_amount: number }
+) {
+  const { data, error } = await supabase.rpc("update_shift_bonus_config", { p_config: config });
+  if (error) throw toAppError(error, "Không lưu được cấu hình bồi dưỡng.");
+  return data as { threshold_hours: number; bonus_amount: number };
 }
 
 export async function updateSidebarDefaults(supabase: SupabaseClient, role: string, items: string[]) {

@@ -6,6 +6,7 @@ import {
   updateSidebarDefaults,
   updateUserSidebarConfig,
   updateHandoverDefaultTasks,
+  updateShiftBonusConfig,
   createUserAccount,
   updateUserAccount,
   deactivateUserAccount,
@@ -76,6 +77,24 @@ export function useUpdateHandoverDefaultTasks(supabase: SupabaseClient | null) {
     mutationFn: async (input: UpdateHandoverDefaultTasksInput) => {
       if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
       return updateHandoverDefaultTasks(supabase, input.tasks);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.appSettings() });
+    }
+  });
+}
+
+export interface UpdateShiftBonusConfigInput {
+  threshold_hours: number;
+  bonus_amount: number;
+}
+
+export function useUpdateShiftBonusConfig(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateShiftBonusConfigInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return updateShiftBonusConfig(supabase, input);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.appSettings() });

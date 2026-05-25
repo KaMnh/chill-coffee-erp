@@ -15,9 +15,12 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useCheckOut } from "@/hooks/mutations/use-shift-mutations";
+import { useAppSettingsQuery } from "@/hooks/queries";
 import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
 import { durationLabel, formatVND, moneyFromInput } from "@/lib/format";
 import type { Employee, ShiftAssignment } from "@/lib/types";
+
+const DEFAULT_BONUS_CONFIG = { threshold_hours: 7, bonus_amount: 10000 };
 
 interface CheckOutModalProps {
   open: boolean;
@@ -50,21 +53,33 @@ export function CheckOutModal({
   const supabase = useSupabase();
   const { toast } = useToast();
   const checkOutM = useCheckOut(supabase, businessDate);
+  const appSettingsQuery = useAppSettingsQuery(supabase, true);
+  const bonusConfig = appSettingsQuery.data?.shift_bonus_config ?? DEFAULT_BONUS_CONFIG;
 
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [allowance, setAllowance] = useState("0");
+  const [allowanceAutoFilled, setAllowanceAutoFilled] = useState(false);
   const [note, setNote] = useState("");
 
   // Reset state when modal opens with a new shift.
+  // Auto-fill allowance khi ca đã đủ threshold (dùng elapsed-time tại lúc mở modal).
   useEffect(() => {
     if (open && shift) {
-      setStartTime(toDatetimeLocal(shift.check_in_at ?? new Date().toISOString()));
-      setEndTime(toDatetimeLocal(new Date().toISOString()));
-      setAllowance("0");
+      const checkInIso = shift.check_in_at ?? new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      setStartTime(toDatetimeLocal(checkInIso));
+      setEndTime(toDatetimeLocal(nowIso));
+      const minutesEst = Math.max(
+        0,
+        Math.round((Date.now() - new Date(checkInIso).getTime()) / 60_000)
+      );
+      const shouldAutoFill = minutesEst >= bonusConfig.threshold_hours * 60;
+      setAllowance(shouldAutoFill ? String(bonusConfig.bonus_amount) : "0");
+      setAllowanceAutoFilled(shouldAutoFill);
       setNote("");
     }
-  }, [open, shift?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, shift?.id, bonusConfig.threshold_hours, bonusConfig.bonus_amount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const minutes = useMemo(() => {
     if (!startTime || !endTime) return 0;
@@ -175,9 +190,17 @@ export function CheckOutModal({
           <TextField
             label="Bồi dưỡng"
             value={allowance}
-            onChange={(e) => setAllowance(e.target.value)}
+            onChange={(e) => {
+              setAllowance(e.target.value);
+              setAllowanceAutoFilled(false);
+            }}
             inputMode="numeric"
             disabled={isBusy}
+            helper={
+              allowanceAutoFilled
+                ? `Tự động — ca từ ${bonusConfig.threshold_hours}h (${formatVND(bonusConfig.bonus_amount)}). Sửa để override.`
+                : undefined
+            }
           />
           <Textarea
             label="Ghi chú"

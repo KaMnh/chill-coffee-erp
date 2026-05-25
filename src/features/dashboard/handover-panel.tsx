@@ -3,7 +3,8 @@
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { AlertBanner } from "@/components/ui/alert-banner";
+import { Tooltip } from "@/components/ui/tooltip";
+import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { HandoverSession } from "@/lib/types";
 
@@ -42,7 +43,20 @@ export function HandoverPanel({ handover }: HandoverPanelProps) {
     <Card>
       <CardHeader>
         <div className="flex w-full items-center justify-between">
-          <CardTitle>Sổ bàn giao</CardTitle>
+          <div className="flex items-center gap-1.5">
+            <CardTitle>Sổ bàn giao</CardTitle>
+            <Tooltip
+              content={`Tóm tắt nhanh — bấm "Bàn giao" ở sidebar để chỉnh sửa checklist.`}
+              side="bottom"
+            >
+              <IconButton
+                icon="info"
+                size={32}
+                variant="ghost"
+                aria-label="Tóm tắt nhanh sổ bàn giao"
+              />
+            </Tooltip>
+          </div>
           <span className="font-display text-sm text-ink">
             {done}/{total} việc
           </span>
@@ -50,10 +64,6 @@ export function HandoverPanel({ handover }: HandoverPanelProps) {
       </CardHeader>
       <CardBody className="space-y-4">
         {total > 0 && <ProgressBar value={pct} />}
-        <AlertBanner variant="info">
-          Tóm tắt nhanh — bấm &quot;Bàn giao&quot; ở sidebar để chỉnh sửa
-          checklist.
-        </AlertBanner>
         {total === 0 ? (
           <EmptyState
             icon="info"

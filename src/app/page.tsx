@@ -246,6 +246,7 @@ export default function HomePage() {
           <DashboardView
             businessDate={businessDate}
             onNavigate={setView}
+            account={account}
           />
         )}
         {view === "reports" && <ReportsView businessDate={businessDate} />}

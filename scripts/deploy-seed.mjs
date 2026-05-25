@@ -127,10 +127,19 @@ if (INGEST_CLIENT_SECRET && POSTGRES_PASSWORD) {
   // Use direct psql (uses crypt() + gen_salt() which need pgcrypto, not REST API).
   const safeId = INGEST_CLIENT_ID.replace(/'/g, "''");
   const safeSecret = INGEST_CLIENT_SECRET.replace(/'/g, "''");
+  // ON CONFLICT DO UPDATE (not DO NOTHING) so changing INGEST_CLIENT_SECRET
+  // in .env actually rotates the hash. Previously, DO NOTHING meant any
+  // re-deploy after the first seed (rotation, restored backup, fresh re-key)
+  // silently kept the stale hash and /api/kiotviet/sync returned
+  // "Integration client không hợp lệ.".
+  // `excluded.client_secret_hash` refers to the newly-bcrypted value from
+  // the VALUES clause above, so each apply re-hashes with a fresh salt.
   const sql =
     `insert into public.integration_clients (client_id, client_secret_hash, name, is_active) ` +
     `values ('${safeId}', crypt('${safeSecret}', gen_salt('bf')), 'Chill ERP Next.js', true) ` +
-    `on conflict (client_id) do nothing;`;
+    `on conflict (client_id) do update set ` +
+    `  client_secret_hash = excluded.client_secret_hash, ` +
+    `  is_active = true;`;
 
   execFileSync(
     "psql",

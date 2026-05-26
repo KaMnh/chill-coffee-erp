@@ -48,7 +48,8 @@ security definer
 set search_path = public, auth
 as $$ select public.app_role() in ('owner','manager','staff_operator'); $$;
 
-create or replace view public.daily_product_summary_view as
+create or replace view public.daily_product_summary_view
+with (security_invoker = true) as
 select
   so.business_date,
   soi.product_id,
@@ -62,7 +63,8 @@ from public.sales_orders so
 join public.sales_order_items soi on soi.sales_order_id = so.id
 group by so.business_date, soi.product_id, soi.product_code, soi.product_name, soi.category_name;
 
-create or replace view public.product_sales_hourly_view as
+create or replace view public.product_sales_hourly_view
+with (security_invoker = true) as
 select
   so.business_date,
   date_trunc('hour', so.purchase_at) as sale_hour,
@@ -73,14 +75,16 @@ from public.sales_orders so
 join public.sales_order_items soi on soi.sales_order_id = so.id
 group by so.business_date, date_trunc('hour', so.purchase_at), soi.product_name;
 
-create or replace view public.cash_drawer_timeline_view as
+create or replace view public.cash_drawer_timeline_view
+with (security_invoker = true) as
 select
   e.*,
   sum(case when e.direction = 'in' then e.amount when e.direction = 'out' then -e.amount else 0 end)
     over (partition by e.business_date order by e.occurred_at, e.created_at, e.id) as running_balance_delta
 from public.cash_drawer_events e;
 
-create or replace view public.cash_reconciliation_input_view as
+create or replace view public.cash_reconciliation_input_view
+with (security_invoker = true) as
 with openings as (
   select business_date, sum(opening_total) opening_cash from public.cash_day_openings group by business_date
 ), pos_cash as (
@@ -105,7 +109,8 @@ full join pos_cash p using (business_date)
 full join expenses e using (business_date)
 full join payroll pr using (business_date);
 
-create or replace view public.daily_cash_summary_view as
+create or replace view public.daily_cash_summary_view
+with (security_invoker = true) as
 select
   c.business_date,
   c.opening_cash,
@@ -132,7 +137,8 @@ left join lateral (
 -- chúng sẽ được create or replace lại bên dưới trong cùng file.
 drop view if exists public.daily_cash_close_report_view cascade;
 
-create view public.daily_cash_close_report_view as
+create view public.daily_cash_close_report_view
+with (security_invoker = true) as
 select
   r.*,
   coalesce(p.display_name, e.name) as closed_by_name

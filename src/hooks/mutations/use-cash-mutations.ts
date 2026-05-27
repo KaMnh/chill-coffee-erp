@@ -52,6 +52,8 @@ export function useSaveCashCount(supabase: SupabaseClient | null, businessDate: 
 export interface FinalizeCashCloseInput {
   cash_count_id: string;
   leave_for_next_day: number;
+  /** Optional: nếu pass, server tạo cash_day_openings cho business_date+1. */
+  next_day_denominations?: Record<string, number> | null;
 }
 
 export function useFinalizeCashClose(supabase: SupabaseClient | null, businessDate: string) {
@@ -61,6 +63,7 @@ export function useFinalizeCashClose(supabase: SupabaseClient | null, businessDa
       if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
       return finalizeCashCloseReport(supabase, input.cash_count_id, {
         leaveForNextDay: input.leave_for_next_day,
+        nextDayDenominations: input.next_day_denominations ?? null,
       });
     },
     onSuccess: () => {
@@ -69,6 +72,9 @@ export function useFinalizeCashClose(supabase: SupabaseClient | null, businessDa
       queryClient.invalidateQueries({ queryKey: queryKeys.reports(businessDate) });
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
       queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
+      // New: opening cho ngày mai có thể vừa được tạo → invalidate ALL cash-opening
+      // queries (prefix match) để bất kỳ business_date nào đang mở đều refetch.
+      queryClient.invalidateQueries({ queryKey: ["cash-opening"] });
     },
   });
 }

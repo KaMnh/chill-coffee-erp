@@ -5,11 +5,23 @@ import { toAppError, unwrapJson } from "./_common";
 export async function finalizeCashCloseReport(
   supabase: SupabaseClient,
   cashCountId: string,
-  options: { leaveForNextDay?: number } = {}
+  options: {
+    leaveForNextDay?: number;
+    /**
+     * Mệnh giá tiền đầu ngày mai (denomination → count). Nếu non-null/non-empty:
+     * server upsert cash_day_openings cho business_date+1. Server compute tổng
+     * từ object này làm canonical (override leaveForNextDay nếu lệch).
+     */
+    nextDayDenominations?: Record<string, number> | null;
+  } = {}
 ) {
   const { data, error } = await supabase.rpc("finalize_cash_close_report", {
     p_cash_count_id: cashCountId,
-    p_leave_for_next_day: Math.max(0, Number(options.leaveForNextDay ?? 0))
+    p_leave_for_next_day: Math.max(0, Number(options.leaveForNextDay ?? 0)),
+    p_next_day_denominations:
+      options.nextDayDenominations && Object.keys(options.nextDayDenominations).length > 0
+        ? options.nextDayDenominations
+        : null,
   });
   if (error) throw toAppError(error, "Không chốt được báo cáo két.");
   return data as { report_id?: string; safe_deposit?: number };

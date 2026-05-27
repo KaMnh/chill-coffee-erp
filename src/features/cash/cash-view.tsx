@@ -22,7 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatNumber, formatVND, moneyFromInput } from "@/lib/format";
 import { validateCashCount } from "@/lib/validation";
 import type { CashCount, UserRole } from "@/lib/types";
-import { DenominationGrid } from "./denomination-grid";
+import { CashCountWizard, type WizardStep } from "./cash-count-wizard";
 import { ReconciliationSummary } from "./reconciliation-summary";
 import { CashHistorySection } from "./cash-history-section";
 import { OpeningCashModal } from "./opening-cash-modal";
@@ -61,8 +61,12 @@ export function CashView({ businessDate, role }: CashViewProps) {
 
   // Main panel state.
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [nextDayDenoms, setNextDayDenoms] = useState<Record<string, number>>({});
+  const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [bankTransfer, setBankTransfer] = useState("");
   const [note, setNote] = useState("");
+  // Legacy state (kept for backward-compat with useCashDraftPersistence shape).
+  // Tổng "Để lại ngày mai" giờ derive từ nextDayDenoms; raw text giữ trống.
   const [leaveForNextDay, setLeaveForNextDay] = useState("");
   const [isManualPos, setIsManualPos] = useState(false);
   const [manualPosTotal, setManualPosTotal] = useState("");
@@ -127,8 +131,16 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const bankTransferConfirmed = moneyFromInput(bankTransfer);
   const expenseCashTotal = dashboard?.total_expenses ?? 0;
   const payrollCashTotal = dashboard?.payroll_paid ?? 0;
-  const leaveAmount = moneyFromInput(leaveForNextDay);
+  // Derive "leave for next day" từ bảng mệnh giá ngày mai (Step 2 wizard).
+  // Cho phép user override qua TextField fallback (legacy) chỉ khi chưa nhập
+  // mệnh giá nào — vd: ca cuối chưa kịp đếm tomorrow vẫn save được total.
+  const nextDayDenomTotal = computeDenominationTotal(nextDayDenoms);
+  const hasNextDayDenom = Object.values(nextDayDenoms).some((c) => c > 0);
+  const leaveAmount = hasNextDayDenom
+    ? nextDayDenomTotal
+    : moneyFromInput(leaveForNextDay);
   const safeDepositPreview = Math.max(0, physical - leaveAmount);
+  const nextDayExceeds = nextDayDenomTotal > physical;
 
   const canCreateOpening = canManage;
   const canOpenOpeningModal = Boolean(cashOpening) || canCreateOpening;
@@ -174,6 +186,9 @@ export function CashView({ businessDate, role }: CashViewProps) {
         const result = await finalizeM.mutateAsync({
           cash_count_id: saved.cash_count_id,
           leave_for_next_day: leaveAmount,
+          // Server upsert cash_day_openings cho business_date+1 nếu non-null.
+          // Bỏ qua nếu user chưa đếm mệnh giá ngày mai (backward compat).
+          next_day_denominations: hasNextDayDenom ? nextDayDenoms : null,
         });
         safeDeposit = result.safe_deposit ?? 0;
       }
@@ -191,6 +206,8 @@ export function CashView({ businessDate, role }: CashViewProps) {
       // Reset only after shift_close (spot_audit: counts stay for next audit).
       if (mode === "shift_close") {
         setCounts({});
+        setNextDayDenoms({});
+        setActiveStep(1);
         setBankTransfer("");
         setNote("");
         setLeaveForNextDay("");
@@ -247,28 +264,21 @@ export function CashView({ businessDate, role }: CashViewProps) {
         </CardHeader>
       </Card>
 
-      {/* Main 2-col: DenominationGrid left, ReconciliationSummary right */}
+      {/* Main 2-col: CashCountWizard left (Step 1 = today, Step 2 = next day),
+          ReconciliationSummary right */}
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <div className="flex w-full items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted">Đếm tiền mặt</p>
-                <CardTitle>Kiểm két theo mệnh giá</CardTitle>
-              </div>
-              <strong className="font-display text-base text-ink">{formatVND(physical)}</strong>
-            </div>
-          </CardHeader>
-          <CardBody>
-            <DenominationGrid
-              value={counts}
-              onChange={setCounts}
-              disabled={isBusy}
-              showQuickAdd={true}
-              totalLabel="Tổng đếm"
-            />
-          </CardBody>
-        </Card>
+        <CashCountWizard
+          todayDenominations={counts}
+          onTodayChange={setCounts}
+          todayTotal={physical}
+          nextDayDenominations={nextDayDenoms}
+          onNextDayChange={setNextDayDenoms}
+          nextDayTotal={nextDayDenomTotal}
+          activeStep={activeStep}
+          onActiveStepChange={setActiveStep}
+          safeDepositPreview={safeDepositPreview}
+          disabled={isBusy}
+        />
 
         <ReconciliationSummary
           posTotal={posTotal}
@@ -310,17 +320,6 @@ export function CashView({ businessDate, role }: CashViewProps) {
             placeholder="Lý do lệch két, tình trạng POS sync..."
             disabled={isBusy}
           />
-          <TextField
-            label="Để lại cho ngày mai"
-            value={leaveForNextDay}
-            onChange={(e) => setLeaveForNextDay(e.target.value)}
-            inputMode="numeric"
-            placeholder="0"
-            disabled={isBusy}
-            helper={
-              `Mặc định 0 = toàn bộ dư nạp vào sổ quỹ. Sổ quỹ sẽ nhận ${formatVND(safeDepositPreview)}.`
-            }
-          />
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -336,7 +335,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
               variant="primary"
               onClick={() => submit("shift_close")}
               loading={isBusy}
-              disabled={isBusy || physical === 0}
+              disabled={isBusy || physical === 0 || nextDayExceeds}
             >
               Chốt két &amp; tạo báo cáo
             </Button>

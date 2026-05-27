@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabase } from "@/hooks/use-supabase";
 import {
   useCashCountsQuery,
@@ -63,6 +63,10 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [nextDayDenoms, setNextDayDenoms] = useState<Record<string, number>>({});
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
+  // Bắt buộc user phải mở Bước 2 ("Tiền đầu ngày mai") ít nhất 1 lần trước khi
+  // được phép chốt — tránh tình huống quên Step 2 → safe_deposit = full physical
+  // mà không phản ánh ý định thật của user.
+  const [step2Opened, setStep2Opened] = useState(false);
   const [bankTransfer, setBankTransfer] = useState("");
   const [note, setNote] = useState("");
   // Legacy state (kept for backward-compat with useCashDraftPersistence shape).
@@ -141,6 +145,10 @@ export function CashView({ businessDate, role }: CashViewProps) {
     : moneyFromInput(leaveForNextDay);
   const safeDepositPreview = Math.max(0, physical - leaveAmount);
   const nextDayExceeds = nextDayDenomTotal > physical;
+  // Track step 2 visited (once true, stays true cho phiên hiện tại).
+  useEffect(() => {
+    if (activeStep === 2 && !step2Opened) setStep2Opened(true);
+  }, [activeStep, step2Opened]);
 
   const canCreateOpening = canManage;
   const canOpenOpeningModal = Boolean(cashOpening) || canCreateOpening;
@@ -208,6 +216,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
         setCounts({});
         setNextDayDenoms({});
         setActiveStep(1);
+        setStep2Opened(false);
         setBankTransfer("");
         setNote("");
         setLeaveForNextDay("");
@@ -320,6 +329,12 @@ export function CashView({ businessDate, role }: CashViewProps) {
             placeholder="Lý do lệch két, tình trạng POS sync..."
             disabled={isBusy}
           />
+          {physical > 0 && !step2Opened && (
+            <AlertBanner variant="warning">
+              Cần đếm tiền đầu ngày mai ở Bước 2 trước khi chốt két (cho phép
+              đếm 0 nếu nạp toàn bộ vào sổ quỹ).
+            </AlertBanner>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -335,7 +350,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
               variant="primary"
               onClick={() => submit("shift_close")}
               loading={isBusy}
-              disabled={isBusy || physical === 0 || nextDayExceeds}
+              disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened}
             >
               Chốt két &amp; tạo báo cáo
             </Button>

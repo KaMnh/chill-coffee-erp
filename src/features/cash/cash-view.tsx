@@ -67,6 +67,11 @@ export function CashView({ businessDate, role }: CashViewProps) {
   // được phép chốt — tránh tình huống quên Step 2 → safe_deposit = full physical
   // mà không phản ánh ý định thật của user.
   const [step2Opened, setStep2Opened] = useState(false);
+  // useEffect MUST stay above all conditional returns to satisfy Rules of Hooks.
+  // Track step 2 visited (once true, stays true cho phiên hiện tại).
+  useEffect(() => {
+    if (activeStep === 2 && !step2Opened) setStep2Opened(true);
+  }, [activeStep, step2Opened]);
   const [bankTransfer, setBankTransfer] = useState("");
   const [note, setNote] = useState("");
   // Legacy state (kept for backward-compat with useCashDraftPersistence shape).
@@ -145,10 +150,6 @@ export function CashView({ businessDate, role }: CashViewProps) {
     : moneyFromInput(leaveForNextDay);
   const safeDepositPreview = Math.max(0, physical - leaveAmount);
   const nextDayExceeds = nextDayDenomTotal > physical;
-  // Track step 2 visited (once true, stays true cho phiên hiện tại).
-  useEffect(() => {
-    if (activeStep === 2 && !step2Opened) setStep2Opened(true);
-  }, [activeStep, step2Opened]);
 
   const canCreateOpening = canManage;
   const canOpenOpeningModal = Boolean(cashOpening) || canCreateOpening;

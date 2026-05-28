@@ -420,13 +420,27 @@ export interface CashFlowDayPoint {
   date: string;
   in: number;
   out: number;
+  /** Sum of cash_close_reports.safe_deposit_amount for this date (excludes voided). */
+  safe_deposit: number;
 }
 
-export interface CashFlowTopCategory {
+/** A single expense row inside a category's drill-down list. */
+export interface CashFlowExpenseRow {
+  id: string;
+  business_date: string;
+  description: string;
+  amount: number;
+  occurred_at: string;
+  note: string | null;
+}
+
+/** A category aggregate with nested expense list (drill-down). */
+export interface CashFlowExpenseCategory {
+  category_id: string | null;
   category_name: string;
   amount: number;
-  /** 0..1 (fraction of total out). */
   pct: number;
+  expenses: CashFlowExpenseRow[];
 }
 
 export interface CashFlowOverview {
@@ -434,7 +448,7 @@ export interface CashFlowOverview {
   out: number;
   net: number;
   by_day: CashFlowDayPoint[];
-  top_categories: CashFlowTopCategory[];
+  expense_breakdown: CashFlowExpenseCategory[];
   /** Only present when caller supplied a comparison range. */
   prev_in?: number;
   prev_out?: number;

@@ -1,8 +1,9 @@
 "use client";
 
 import {
-  BarChart as RechartsBarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip as RechartsTooltip,
@@ -15,6 +16,10 @@ import type { CashFlowDayPoint } from "@/lib/types";
 
 interface CashFlowChartProps {
   byDay: CashFlowDayPoint[];
+  /** ISO date "YYYY-MM-DD" of the currently filtered day, or null for "all". */
+  selectedDate: string | null;
+  /** Called when user clicks a bar — passes the bar's date. */
+  onSelectDate(date: string): void;
 }
 
 function shortDate(iso: string): string {
@@ -42,29 +47,56 @@ function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
       <p className="font-medium">{label}</p>
       {payload.map((entry) => (
         <p key={entry.name} className="tabular-nums">
-          <span style={{ color: entry.color }}>●</span> {entry.name}: {formatVND(entry.value)}
+          <span style={{ color: entry.color }}>●</span>{" "}
+          {entry.name === "in"
+            ? "Thu"
+            : entry.name === "out"
+              ? "Chi"
+              : "Nạp két"}
+          : {formatVND(entry.value)}
         </p>
       ))}
     </div>
   );
 }
 
-export function CashFlowChart({ byDay }: CashFlowChartProps) {
+export function CashFlowChart({
+  byDay,
+  selectedDate,
+  onSelectDate,
+}: CashFlowChartProps) {
+  // We preserve `date` (raw ISO) for click handlers; `date_label` (DD/MM)
+  // is only for axis display.
   const data = byDay.map((d) => ({
+    date: d.date,
     date_label: shortDate(d.date),
     in: d.in,
     out: d.out,
+    safe_deposit: d.safe_deposit,
   }));
+
+  function handleBarClick(payload: unknown) {
+    const date = (payload as { date?: unknown })?.date;
+    if (typeof date === "string") onSelectDate(date);
+  }
 
   return (
     <Card>
       <CardBody>
-        <h3 className="text-sm font-medium text-ink mb-3">
-          Thu / Chi theo ngày
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-ink">Thu / Chi theo ngày</h3>
+          {selectedDate && (
+            <span className="text-xs text-muted">
+              Click bar khác để đổi ngày
+            </span>
+          )}
+        </div>
         <div className="w-full" style={{ height: 280 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <RechartsBarChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
+            <ComposedChart
+              data={data}
+              margin={{ top: 16, right: 8, left: 0, bottom: 8 }}
+            >
               <XAxis
                 dataKey="date_label"
                 tickLine={false}
@@ -84,11 +116,37 @@ export function CashFlowChart({ byDay }: CashFlowChartProps) {
               />
               <Legend
                 wrapperStyle={{ fontSize: 12 }}
-                formatter={(value) => (value === "in" ? "Thu" : "Chi")}
+                formatter={(value) =>
+                  value === "in"
+                    ? "Thu"
+                    : value === "out"
+                      ? "Chi"
+                      : "Nạp két"
+                }
               />
-              <Bar dataKey="in" fill="var(--color-success)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="out" fill="var(--color-danger)" radius={[6, 6, 0, 0]} />
-            </RechartsBarChart>
+              <Bar
+                dataKey="in"
+                fill="var(--color-success)"
+                radius={[6, 6, 0, 0]}
+                cursor="pointer"
+                onClick={handleBarClick}
+              />
+              <Bar
+                dataKey="out"
+                fill="var(--color-danger)"
+                radius={[6, 6, 0, 0]}
+                cursor="pointer"
+                onClick={handleBarClick}
+              />
+              <Line
+                type="monotone"
+                dataKey="safe_deposit"
+                stroke="var(--color-warning)"
+                strokeWidth={2.5}
+                dot={{ r: 3.5, fill: "var(--color-warning)" }}
+                activeDot={{ r: 5 }}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </CardBody>

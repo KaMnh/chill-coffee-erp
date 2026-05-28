@@ -14,7 +14,11 @@ supabase/.env
 supabase/volumes/db/data/
 supabase/volumes/storage/
 supabase/volumes/logs/
-supabase/volumes/pooler/
+# pooler dir contains pooler.exs config (must be tracked — Docker bind-mounts
+# nó vào container; nếu thiếu, Docker auto-tạo empty dir → pooler crash).
+# Chỉ ignore runtime data dưới đó nếu có.
+supabase/volumes/pooler/*
+!supabase/volumes/pooler/pooler.exs
 
 .DS_Store
 

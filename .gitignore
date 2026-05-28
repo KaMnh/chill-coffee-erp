@@ -35,3 +35,6 @@ coverage/
 
 # Claude Code harness config (worktree-local launch.json, etc.)
 .claude/
+
+# Superpowers brainstorming visual companion (mockups, state)
+.superpowers/

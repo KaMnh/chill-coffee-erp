@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { TextField } from "@/components/ui/text-field";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -8,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ListToolbar } from "@/components/ui/list-toolbar";
 import { formatVND, formatDateTime } from "@/lib/format";
+import { useListPreferences } from "@/hooks/use-list-preferences";
 import type { SafeTransaction, SafeTransactionType } from "@/lib/types";
 
 interface SafeHistorySectionProps {
@@ -122,6 +125,29 @@ export function SafeHistorySection({
     }
   ];
 
+  const { prefs, setSearch, setSort } = useListPreferences("safe-history");
+
+  const filteredSorted = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? transactions
+      : transactions.filter((t) => {
+          const desc = (t.description ?? "").toLowerCase();
+          const cat = (t.reason_category ?? "").toLowerCase();
+          return desc.includes(term) || cat.includes(term);
+        });
+    if (!prefs.sortColumn) return filtered;
+    const key = prefs.sortColumn;
+    const dir = prefs.sortDirection;
+    return [...filtered].sort((a, b) => {
+      const av = (a as Record<string, unknown>)[key];
+      const bv = (b as Record<string, unknown>)[key];
+      if (av === bv) return 0;
+      const cmp = (av as string | number) < (bv as string | number) ? -1 : 1;
+      return dir === "asc" ? cmp : -cmp;
+    });
+  }, [transactions, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
   return (
     <Card>
       <CardHeader>
@@ -131,53 +157,70 @@ export function SafeHistorySection({
         </div>
       </CardHeader>
       <CardBody className="space-y-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[10rem]">
-            <TextField
-              label="Từ ngày"
-              type="date"
-              value={fromDate}
-              onChange={(e) => onFromDateChange(e.target.value)}
-            />
-          </div>
-          <div className="flex-1 min-w-[10rem]">
-            <TextField
-              label="Đến ngày"
-              type="date"
-              value={toDate}
-              onChange={(e) => onToDateChange(e.target.value)}
-            />
-          </div>
-          <div className="flex-1 min-w-[10rem]">
-            <label className="text-xs font-medium text-ink-2">Loại</label>
-            <Select value={typeFilter} onValueChange={(v) => onTypeFilterChange(v as SafeTransactionType | "all")}>
-              <SelectTrigger className="mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>{TYPE_LABELS[t]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <ListToolbar
+          search={prefs.search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Tìm theo mô tả, hạng mục..."
+          resultCount={filteredSorted.length}
+          resultLabel="giao dịch"
+        >
+          <TextField
+            label="Từ ngày"
+            type="date"
+            value={fromDate}
+            onChange={(e) => onFromDateChange(e.target.value)}
+            className="min-w-[10rem]"
+          />
+          <TextField
+            label="Đến ngày"
+            type="date"
+            value={toDate}
+            onChange={(e) => onToDateChange(e.target.value)}
+            className="min-w-[10rem]"
+          />
+          <Select
+            value={typeFilter}
+            onValueChange={(v) => onTypeFilterChange(v as SafeTransactionType | "all")}
+          >
+            <SelectTrigger className="min-w-[10rem] h-10">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              {TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {TYPE_LABELS[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="ghost" onClick={onResetFilter}>
             Xóa lọc
           </Button>
-        </div>
+        </ListToolbar>
 
         {isLoading ? (
           <div className="flex justify-center py-8"><Spinner size={24} /></div>
-        ) : transactions.length === 0 ? (
+        ) : filteredSorted.length === 0 ? (
           <EmptyState
             icon="fileText"
-            title="Không có giao dịch nào"
-            subtitle="Thử mở rộng khoảng ngày hoặc xóa lọc."
+            title={prefs.search ? "Không tìm thấy giao dịch" : "Không có giao dịch nào"}
+            subtitle={
+              prefs.search
+                ? "Thử từ khóa khác hoặc xóa filter."
+                : "Thử mở rộng khoảng ngày hoặc xóa lọc."
+            }
           />
         ) : (
           <>
-            <DataTable columns={columns} data={transactions} rowKey={(row) => row.id} />
+            <DataTable
+              columns={columns}
+              data={filteredSorted}
+              rowKey={(row) => row.id}
+              sortKey={prefs.sortColumn}
+              sortDirection={prefs.sortDirection}
+              onSortChange={({ key }) => setSort(key)}
+            />
             <div className="flex justify-center">
               <Button variant="ghost" onClick={onLoadOlder}>
                 Tải thêm 90 ngày trước

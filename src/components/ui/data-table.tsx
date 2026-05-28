@@ -12,12 +12,26 @@ export interface DataTableColumn<T> {
   className?: string;
 }
 
+export interface DataTableSortState {
+  key: string;
+  direction: "asc" | "desc";
+}
+
 interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: T[];
   rowKey: (row: T) => string;
   emptyMessage?: string;
   className?: string;
+  /**
+   * Optional controlled sort state. When `sortKey` is provided (even as null),
+   * the table does NOT sort internally — the parent owns sorted data and
+   * handles sort changes via {@link onSortChange}. When omitted, internal
+   * state is used (backward compatible).
+   */
+  sortKey?: string | null;
+  sortDirection?: "asc" | "desc";
+  onSortChange?(next: DataTableSortState): void;
 }
 
 export function DataTable<T>({
@@ -26,25 +40,44 @@ export function DataTable<T>({
   rowKey,
   emptyMessage = "Không có dữ liệu",
   className,
+  sortKey: controlledSortKey,
+  sortDirection: controlledSortDirection,
+  onSortChange,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [internalSortKey, setInternalSortKey] = useState<string | null>(null);
+  const [internalSortDir, setInternalSortDir] = useState<"asc" | "desc">("asc");
 
-  const sorted = sortKey
-    ? [...data].sort((a, b) => {
-        const av = (a as Record<string, unknown>)[sortKey];
-        const bv = (b as Record<string, unknown>)[sortKey];
-        if (av === bv) return 0;
-        const cmp = (av as string | number) < (bv as string | number) ? -1 : 1;
-        return sortDir === "asc" ? cmp : -cmp;
-      })
-    : data;
+  const isControlled = controlledSortKey !== undefined;
+  const sortKey = isControlled ? controlledSortKey : internalSortKey;
+  const sortDir = isControlled
+    ? (controlledSortDirection ?? "asc")
+    : internalSortDir;
+
+  // Internal sort only applies when uncontrolled — parent passes pre-sorted
+  // data when controlled.
+  const sorted =
+    !isControlled && sortKey
+      ? [...data].sort((a, b) => {
+          const av = (a as Record<string, unknown>)[sortKey];
+          const bv = (b as Record<string, unknown>)[sortKey];
+          if (av === bv) return 0;
+          const cmp = (av as string | number) < (bv as string | number) ? -1 : 1;
+          return sortDir === "asc" ? cmp : -cmp;
+        })
+      : data;
 
   function toggleSort(key: string) {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortKey(key);
-      setSortDir("asc");
+    if (isControlled) {
+      const nextDir: "asc" | "desc" =
+        sortKey === key && sortDir === "asc" ? "desc" : "asc";
+      onSortChange?.({ key, direction: nextDir });
+      return;
+    }
+    if (internalSortKey === key) {
+      setInternalSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setInternalSortKey(key);
+      setInternalSortDir("asc");
     }
   }
 
@@ -58,7 +91,7 @@ export function DataTable<T>({
                 key={col.key}
                 className={cn(
                   "text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted",
-                  col.className
+                  col.className,
                 )}
               >
                 {col.sortable ? (
@@ -85,16 +118,29 @@ export function DataTable<T>({
         <tbody>
           {sorted.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="text-center py-8 text-muted text-sm">
+              <td
+                colSpan={columns.length}
+                className="text-center py-8 text-muted text-sm"
+              >
                 {emptyMessage}
               </td>
             </tr>
           ) : (
             sorted.map((row) => (
-              <tr key={rowKey(row)} className="border-t border-border tabular-nums">
+              <tr
+                key={rowKey(row)}
+                className="border-t border-border tabular-nums"
+              >
                 {columns.map((col) => (
-                  <td key={col.key} className={cn("px-4 py-3 text-ink", col.className)}>
-                    {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? "")}
+                  <td
+                    key={col.key}
+                    className={cn("px-4 py-3 text-ink", col.className)}
+                  >
+                    {col.render
+                      ? col.render(row)
+                      : String(
+                          (row as Record<string, unknown>)[col.key] ?? "",
+                        )}
                   </td>
                 ))}
               </tr>

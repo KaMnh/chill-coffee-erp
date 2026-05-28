@@ -14,7 +14,7 @@ import type { PeriodState, UserRole } from "@/lib/types";
 import { PeriodSelector } from "./period-selector";
 import { CashFlowKpiBar } from "./cash-flow-kpi-bar";
 import { CashFlowChart } from "./cash-flow-chart";
-import { TopCategoriesTable } from "./top-categories-table";
+import { ExpenseBreakdownTable } from "./expense-breakdown-table";
 import { LunarCalendarWidget } from "./lunar-calendar-widget";
 
 interface CashFlowViewProps {
@@ -29,6 +29,7 @@ function defaultPeriod(): PeriodState {
 export function CashFlowView({ role }: CashFlowViewProps) {
   const supabase = useSupabase();
   const [period, setPeriod] = useState<PeriodState>(defaultPeriod);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const compare = useMemo(
     () => getPreviousPeriod(period.start, period.end, period.preset),
@@ -76,9 +77,17 @@ export function CashFlowView({ role }: CashFlowViewProps) {
     <div className="space-y-6">
       <PeriodSelector value={period} onChange={setPeriod} />
       <CashFlowKpiBar data={query.data} preset={period.preset} />
-      <CashFlowChart byDay={query.data?.by_day ?? []} />
+      <CashFlowChart
+        byDay={query.data?.by_day ?? []}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
       <div className="grid gap-6 lg:grid-cols-2">
-        <TopCategoriesTable rows={query.data?.top_categories ?? []} />
+        <ExpenseBreakdownTable
+          rows={query.data?.expense_breakdown ?? []}
+          selectedDate={selectedDate}
+          onClearDate={() => setSelectedDate(null)}
+        />
         <LunarCalendarWidget start={period.start} end={period.end} />
       </div>
     </div>

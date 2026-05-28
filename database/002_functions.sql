@@ -1711,6 +1711,7 @@ declare
   v_balance numeric;
   v_next numeric;
   v_id uuid;
+  v_expense_id uuid;
 begin
   if public.app_role() <> 'owner' then
     raise exception 'Chỉ owner được rút sổ quỹ.';
@@ -1746,7 +1747,34 @@ begin
     p_category, p_description, auth.uid()
   ) returning id into v_id;
 
-  return jsonb_build_object('id', v_id, 'balance_after', v_next);
+  -- NEW: auto-create expense row linked to this safe withdrawal.
+  -- payment_method='other' → no cash_drawer_events side effect.
+  -- category_id=NULL → row appears as "(chưa phân loại)" in cashflow breakdown.
+  -- Description fallback: if user passed null/empty, use category as label so
+  -- owner can identify the row in sổ chi.
+  insert into public.expenses (
+    business_date,
+    description,
+    amount,
+    payment_method,
+    category_id,
+    safe_transaction_id,
+    created_by
+  ) values (
+    current_date,
+    coalesce(nullif(trim(p_description), ''), 'Rút quỹ — ' || p_category),
+    p_amount,
+    'other',
+    null,
+    v_id,
+    auth.uid()
+  ) returning id into v_expense_id;
+
+  return jsonb_build_object(
+    'id', v_id,
+    'balance_after', v_next,
+    'expense_id', v_expense_id
+  );
 end;
 $$;
 

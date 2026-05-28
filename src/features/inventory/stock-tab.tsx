@@ -15,6 +15,8 @@ import {
   type LedgerFilter,
 } from "./stock-ledger-section";
 import type { UserRole } from "@/lib/types";
+import { useListPreferences } from "@/hooks/use-list-preferences";
+import { ListToolbar } from "@/components/ui/list-toolbar";
 
 interface StockTabProps {
   role: UserRole;
@@ -65,6 +67,51 @@ export function StockTab({ role }: StockTabProps) {
     [ingredients]
   );
 
+  const { prefs, setSearch, setSortExplicit } = useListPreferences("inventory.stock");
+
+  const filteredSortedBalances = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? balances
+      : balances.filter((b) => b.name.toLowerCase().includes(term));
+    if (!prefs.sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av: string | number;
+      let bv: string | number;
+      switch (prefs.sortColumn) {
+        case "name":
+          av = a.name.toLowerCase();
+          bv = b.name.toLowerCase();
+          break;
+        case "balance":
+          av = a.theoretical_balance;
+          bv = b.theoretical_balance;
+          break;
+        default:
+          return 0;
+      }
+      if (av === bv) return 0;
+      const cmp = av < bv ? -1 : 1;
+      return prefs.sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [balances, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
+  const stockSortOptions = [
+    { value: "name:asc", label: "Tên (A→Z)" },
+    { value: "name:desc", label: "Tên (Z→A)" },
+    { value: "balance:desc", label: "Tồn (cao → thấp)" },
+    { value: "balance:asc", label: "Tồn (thấp → cao)" },
+  ];
+
+  const stockSortValue = prefs.sortColumn
+    ? `${prefs.sortColumn}:${prefs.sortDirection}`
+    : "name:asc";
+
+  function handleStockSortChange(value: string) {
+    const [col, dir] = value.split(":") as [string, "asc" | "desc"];
+    setSortExplicit(col, dir);
+  }
+
   function openEntryFromToolbar() {
     setInitialIngredientId(null);
     setEntryModalOpen(true);
@@ -94,8 +141,18 @@ export function StockTab({ role }: StockTabProps) {
 
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-ink">Tồn hiện tại</h3>
+        <ListToolbar
+          search={prefs.search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Tìm theo tên nguyên liệu..."
+          resultCount={filteredSortedBalances.length}
+          resultLabel="nguyên liệu"
+          sortOptions={stockSortOptions}
+          sortValue={stockSortValue}
+          onSortChange={handleStockSortChange}
+        />
         <StockBalanceList
-          balances={balances}
+          balances={filteredSortedBalances}
           isLoading={balancesQuery.isLoading}
           isError={balancesQuery.isError}
           onSelectIngredient={canWrite ? openEntryFromRow : undefined}

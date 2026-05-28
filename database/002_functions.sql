@@ -343,13 +343,10 @@ begin
   select to_jsonb(cc) into v_latest_count from (select id, business_date, count_type, counted_at, total_physical, total_theory, difference, pos_total, pos_cash_total, pos_non_cash_total, opening_cash, bank_transfer_confirmed, reconciliation_total from public.cash_counts where business_date = p_business_date order by counted_at desc limit 1) cc;
   select to_jsonb(sr) into v_latest_sync from (select id, source, status, started_at, finished_at from public.sales_sync_runs where business_date_from <= p_business_date and business_date_to >= p_business_date order by finished_at desc nulls last limit 1) sr;
 
-  -- v_expense_list: includes ALL payment_methods (not just cash). Filter
-  -- safe-sourced rows for non-owner roles via inline predicate.
   select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'business_date', e.business_date, 'description', e.description, 'quantity', e.quantity, 'unit', e.unit, 'unit_price', e.unit_price, 'amount', e.amount, 'note', e.note, 'created_at', e.created_at, 'category_id', e.category_id, 'category_name', c.name) order by e.created_at desc), '[]'::jsonb)
   into v_expense_list
   from public.expenses e left join public.expense_categories c on c.id = e.category_id
-  where e.business_date = p_business_date
-    and (e.safe_transaction_id is null or public.app_role() = 'owner');
+  where e.business_date = p_business_date;
 
   select coalesce(jsonb_agg(jsonb_build_object('id', so.id, 'invoice_code', so.invoice_code, 'order_code', so.table_or_order_code, 'sold_by_name', so.sold_by_name, 'payment_method', coalesce(sp.payment_method, 'mixed'), 'net_amount', so.net_amount, 'total_payment', so.total_payment, 'purchase_at', so.purchase_at) order by so.purchase_at desc), '[]'::jsonb)
   into v_sales_list
@@ -1714,7 +1711,6 @@ declare
   v_balance numeric;
   v_next numeric;
   v_id uuid;
-  v_expense_id uuid;
 begin
   if public.app_role() <> 'owner' then
     raise exception 'Chỉ owner được rút sổ quỹ.';
@@ -1750,34 +1746,7 @@ begin
     p_category, p_description, auth.uid()
   ) returning id into v_id;
 
-  -- NEW: auto-create expense row linked to this safe withdrawal.
-  -- payment_method='other' → no cash_drawer_events side effect.
-  -- category_id=NULL → row appears as "(chưa phân loại)" in cashflow breakdown.
-  -- Description fallback: if user passed null/empty, use category as label so
-  -- owner can identify the row in sổ chi.
-  insert into public.expenses (
-    business_date,
-    description,
-    amount,
-    payment_method,
-    category_id,
-    safe_transaction_id,
-    created_by
-  ) values (
-    current_date,
-    coalesce(nullif(trim(p_description), ''), 'Rút quỹ — ' || p_category),
-    p_amount,
-    'other',
-    null,
-    v_id,
-    auth.uid()
-  ) returning id into v_expense_id;
-
-  return jsonb_build_object(
-    'id', v_id,
-    'balance_after', v_next,
-    'expense_id', v_expense_id
-  );
+  return jsonb_build_object('id', v_id, 'balance_after', v_next);
 end;
 $$;
 
@@ -3251,7 +3220,6 @@ as $$
   left join public.expense_categories c on c.id = e.category_id
   where e.business_date >= p_from
     and e.business_date <= p_to
-    and (e.safe_transaction_id is null or public.app_role() = 'owner')
   group by e.category_id, c.name
   order by total_amount desc;
 $$;

@@ -17,6 +17,7 @@ import {
 import type { UserRole } from "@/lib/types";
 import { useListPreferences } from "@/hooks/use-list-preferences";
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface StockTabProps {
   role: UserRole;
@@ -151,12 +152,24 @@ export function StockTab({ role }: StockTabProps) {
           sortValue={stockSortValue}
           onSortChange={handleStockSortChange}
         />
-        <StockBalanceList
-          balances={filteredSortedBalances}
-          isLoading={balancesQuery.isLoading}
-          isError={balancesQuery.isError}
-          onSelectIngredient={canWrite ? openEntryFromRow : undefined}
-        />
+        {prefs.search &&
+          !balancesQuery.isLoading &&
+          !balancesQuery.isError &&
+          filteredSortedBalances.length === 0 ? (
+          <EmptyState
+            icon="package"
+            title="Không tìm thấy nguyên liệu"
+            subtitle="Thử từ khóa khác."
+            dashedBorder
+          />
+        ) : (
+          <StockBalanceList
+            balances={filteredSortedBalances}
+            isLoading={balancesQuery.isLoading}
+            isError={balancesQuery.isError}
+            onSelectIngredient={canWrite ? openEntryFromRow : undefined}
+          />
+        )}
       </section>
 
       <section className="space-y-3">

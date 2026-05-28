@@ -16,6 +16,8 @@ import {
   useUpdateIngredient,
   useDeleteIngredient,
 } from "@/hooks/mutations/use-inventory-mutations";
+import { useListPreferences } from "@/hooks/use-list-preferences";
+import { ListToolbar } from "@/components/ui/list-toolbar";
 import { formatUnit } from "./units";
 import { InventoryActionButtons } from "./inventory-action-buttons";
 import { IngredientFormModal } from "./ingredient-form-modal";
@@ -70,6 +72,39 @@ export function IngredientsTab({ role }: IngredientsTabProps) {
     () => (showInactive ? ingredients : ingredients.filter((i) => i.is_active)),
     [ingredients, showInactive]
   );
+
+  const { prefs, setSearch, setSortExplicit } = useListPreferences("inventory.ingredients");
+
+  const filteredSorted = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? visible
+      : visible.filter(
+          (i) =>
+            i.name.toLowerCase().includes(term) ||
+            (i.notes ?? "").toLowerCase().includes(term),
+        );
+    if (!prefs.sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      if (prefs.sortColumn !== "name") return 0;
+      const cmp = a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+      return prefs.sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [visible, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
+  const ingredientSortOptions = [
+    { value: "name:asc", label: "Tên (A→Z)" },
+    { value: "name:desc", label: "Tên (Z→A)" },
+  ];
+
+  const ingredientSortValue = prefs.sortColumn
+    ? `${prefs.sortColumn}:${prefs.sortDirection}`
+    : "name:asc";
+
+  function handleIngredientSortChange(value: string) {
+    const [col, dir] = value.split(":") as [string, "asc" | "desc"];
+    setSortExplicit(col, dir);
+  }
 
   function handleOpenCreate() {
     setEditingIngredient(null);
@@ -154,6 +189,17 @@ export function IngredientsTab({ role }: IngredientsTabProps) {
         )}
       </div>
 
+      <ListToolbar
+        search={prefs.search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Tìm theo tên, ghi chú..."
+        resultCount={filteredSorted.length}
+        resultLabel="nguyên liệu"
+        sortOptions={ingredientSortOptions}
+        sortValue={ingredientSortValue}
+        onSortChange={handleIngredientSortChange}
+      />
+
       {/* Filter info banner */}
       {!showInactive && inactiveCount > 0 && (
         <AlertBanner variant="info">
@@ -171,20 +217,26 @@ export function IngredientsTab({ role }: IngredientsTabProps) {
         <AlertBanner variant="danger">
           Không tải được danh sách nguyên liệu. Vui lòng tải lại trang.
         </AlertBanner>
-      ) : visible.length === 0 ? (
+      ) : filteredSorted.length === 0 ? (
         <EmptyState
           icon="package"
-          title="Chưa có nguyên liệu nào"
+          title={
+            prefs.search
+              ? "Không tìm thấy nguyên liệu"
+              : "Chưa có nguyên liệu nào"
+          }
           subtitle={
-            canWrite
-              ? "Bấm 'Thêm nguyên liệu' để bắt đầu."
-              : "Owner/manager có thể thêm nguyên liệu mới."
+            prefs.search
+              ? "Thử từ khóa khác."
+              : canWrite
+                ? "Bấm 'Thêm nguyên liệu' để bắt đầu."
+                : "Owner/manager có thể thêm nguyên liệu mới."
           }
           dashedBorder
         />
       ) : (
         <div className="space-y-2">
-          {visible.map((ing) => {
+          {filteredSorted.map((ing) => {
             const isDeletingThis = deletingId === ing.id;
             const isRowBusy = busyRowId === ing.id;
 

@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
+import { useListPreferences } from "@/hooks/use-list-preferences";
 import {
   useRecipesQuery,
   useMenuItemsQuery,
@@ -19,6 +20,7 @@ import {
 import { useUpsertRecipe } from "@/hooks/mutations/use-recipe-mutations";
 import { getRecipeByMenuItem } from "@/lib/data";
 import { InventoryActionButtons } from "./inventory-action-buttons";
+import { ListToolbar } from "@/components/ui/list-toolbar";
 import { RecipeBuilderModal } from "./recipe-builder-modal";
 import type { Recipe, UserRole } from "@/lib/types";
 
@@ -90,6 +92,40 @@ export function RecipesTab({ role }: RecipesTabProps) {
   const noMenuItems = menuItems.length === 0;
   const prereqMissing = noIngredients || noMenuItems;
   const canAddNew = canWrite && !prereqMissing && availableMenuItems.length > 0;
+
+  const { prefs, setSearch, setSortExplicit } = useListPreferences("inventory.recipes");
+
+  const filteredSortedRecipes = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? visibleRecipes
+      : visibleRecipes.filter((r) =>
+          r.menu_item_name.toLowerCase().includes(term)
+        );
+    if (!prefs.sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      if (prefs.sortColumn !== "name") return 0;
+      const cmp =
+        a.menu_item_name.toLowerCase() < b.menu_item_name.toLowerCase()
+          ? -1
+          : 1;
+      return prefs.sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [visibleRecipes, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
+  const recipeSortOptions = [
+    { value: "name:asc", label: "Tên (A→Z)" },
+    { value: "name:desc", label: "Tên (Z→A)" },
+  ];
+
+  const recipeSortValue = prefs.sortColumn
+    ? `${prefs.sortColumn}:${prefs.sortDirection}`
+    : "name:asc";
+
+  function handleRecipeSortChange(value: string) {
+    const [col, dir] = value.split(":") as [string, "asc" | "desc"];
+    setSortExplicit(col, dir);
+  }
 
   function handleOpenCreate(menuItemId?: string) {
     if (!canWrite) return;
@@ -244,6 +280,17 @@ export function RecipesTab({ role }: RecipesTabProps) {
           </AlertBanner>
         )}
 
+        <ListToolbar
+          search={prefs.search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Tìm theo tên sản phẩm..."
+          resultCount={filteredSortedRecipes.length}
+          resultLabel="công thức"
+          sortOptions={recipeSortOptions}
+          sortValue={recipeSortValue}
+          onSortChange={handleRecipeSortChange}
+        />
+
         {recipesQuery.isLoading ? (
           <div className="flex justify-center py-12">
             <Spinner size={32} />
@@ -252,20 +299,22 @@ export function RecipesTab({ role }: RecipesTabProps) {
           <AlertBanner variant="danger">
             Không tải được danh sách công thức. Vui lòng tải lại trang.
           </AlertBanner>
-        ) : visibleRecipes.length === 0 ? (
+        ) : filteredSortedRecipes.length === 0 ? (
           <EmptyState
             icon="checkCircle"
-            title="Chưa có công thức nào"
+            title={prefs.search ? "Không tìm thấy công thức" : "Chưa có công thức nào"}
             subtitle={
-              canWrite
-                ? "Bấm 'Thêm công thức' để bắt đầu."
-                : "Owner/manager có thể thêm công thức mới."
+              prefs.search
+                ? "Thử từ khóa khác."
+                : canWrite
+                  ? "Bấm 'Thêm công thức' để bắt đầu."
+                  : "Owner/manager có thể thêm công thức mới."
             }
             dashedBorder
           />
         ) : (
           <div className="space-y-2">
-            {visibleRecipes.map((r) => {
+            {filteredSortedRecipes.map((r) => {
               const isRowBusy = busyRecipeId === r.recipe_id;
               return (
                 <Card

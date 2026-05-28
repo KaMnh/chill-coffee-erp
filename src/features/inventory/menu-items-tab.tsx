@@ -16,6 +16,8 @@ import {
   useUpdateMenuItem,
   useDeleteMenuItem,
 } from "@/hooks/mutations/use-inventory-mutations";
+import { useListPreferences } from "@/hooks/use-list-preferences";
+import { ListToolbar } from "@/components/ui/list-toolbar";
 import { InventoryActionButtons } from "./inventory-action-buttons";
 import { MenuItemFormModal } from "./menu-item-form-modal";
 import type { MenuItem, UserRole } from "@/lib/types";
@@ -62,6 +64,39 @@ export function MenuItemsTab({ role }: MenuItemsTabProps) {
     () => (showInactive ? menuItems : menuItems.filter((m) => m.is_active)),
     [menuItems, showInactive]
   );
+
+  const { prefs, setSearch, setSortExplicit } = useListPreferences("inventory.menu-items");
+
+  const filteredSorted = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? visible
+      : visible.filter(
+          (m) =>
+            m.name.toLowerCase().includes(term) ||
+            (m.external_product_name ?? "").toLowerCase().includes(term),
+        );
+    if (!prefs.sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      if (prefs.sortColumn !== "name") return 0;
+      const cmp = a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+      return prefs.sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [visible, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
+  const menuItemSortOptions = [
+    { value: "name:asc", label: "Tên (A→Z)" },
+    { value: "name:desc", label: "Tên (Z→A)" },
+  ];
+
+  const menuItemSortValue = prefs.sortColumn
+    ? `${prefs.sortColumn}:${prefs.sortDirection}`
+    : "name:asc";
+
+  function handleMenuItemSortChange(value: string) {
+    const [col, dir] = value.split(":") as [string, "asc" | "desc"];
+    setSortExplicit(col, dir);
+  }
 
   function handleOpenCreate() {
     setEditingMenuItem(null);
@@ -144,6 +179,17 @@ export function MenuItemsTab({ role }: MenuItemsTabProps) {
         )}
       </div>
 
+      <ListToolbar
+        search={prefs.search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Tìm theo tên sản phẩm..."
+        resultCount={filteredSorted.length}
+        resultLabel="sản phẩm"
+        sortOptions={menuItemSortOptions}
+        sortValue={menuItemSortValue}
+        onSortChange={handleMenuItemSortChange}
+      />
+
       {!showInactive && inactiveCount > 0 && (
         <AlertBanner variant="info">
           Đang ẩn {inactiveCount} sản phẩm đã ngưng dùng. Bật &quot;Hiện cả
@@ -159,20 +205,26 @@ export function MenuItemsTab({ role }: MenuItemsTabProps) {
         <AlertBanner variant="danger">
           Không tải được danh sách sản phẩm. Vui lòng tải lại trang.
         </AlertBanner>
-      ) : visible.length === 0 ? (
+      ) : filteredSorted.length === 0 ? (
         <EmptyState
           icon="package"
-          title="Chưa có sản phẩm nào"
+          title={
+            prefs.search
+              ? "Không tìm thấy sản phẩm"
+              : "Chưa có sản phẩm nào"
+          }
           subtitle={
-            canWrite
-              ? "Bấm 'Thêm sản phẩm' để bắt đầu."
-              : "Owner/manager có thể thêm sản phẩm mới."
+            prefs.search
+              ? "Thử từ khóa khác."
+              : canWrite
+                ? "Bấm 'Thêm sản phẩm' để bắt đầu."
+                : "Owner/manager có thể thêm sản phẩm mới."
           }
           dashedBorder
         />
       ) : (
         <div className="space-y-2">
-          {visible.map((m) => {
+          {filteredSorted.map((m) => {
             const isDeletingThis = deletingId === m.id;
             const isRowBusy = busyRowId === m.id;
 

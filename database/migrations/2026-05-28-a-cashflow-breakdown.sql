@@ -3,7 +3,7 @@
 --
 -- Extends the existing function (created 2026-05-23):
 --   * by_day[].safe_deposit: numeric — sum of cash_close_reports.safe_deposit_amount
---     per business_date where status <> 'voided'
+--     per business_date where report_status <> 'voided'
 --   * expense_breakdown[]: REPLACES top_categories[] — full list of categories
 --     (sorted by amount desc) with nested expenses array for drill-down.
 --
@@ -76,7 +76,7 @@ begin
     select business_date as day, coalesce(sum(safe_deposit_amount), 0) as amt
       from public.cash_close_reports
      where business_date between p_start and p_end
-       and status <> 'voided'
+       and report_status <> 'voided'
      group by 1
   )
   select jsonb_agg(jsonb_build_object(
@@ -104,9 +104,9 @@ begin
           'business_date', to_char(e.business_date, 'YYYY-MM-DD'),
           'description', e.description,
           'amount', e.amount,
-          'occurred_at', to_char(e.occurred_at at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD"T"HH24:MI:SS'),
+          'occurred_at', to_char(e.created_at at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD"T"HH24:MI:SS'),
           'note', e.note
-        ) order by e.occurred_at desc
+        ) order by e.created_at desc
       ) as expenses
     from public.expenses e
     left join public.expense_categories ec on ec.id = e.category_id

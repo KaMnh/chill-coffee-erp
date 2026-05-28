@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icons";
+import { ListToolbar } from "@/components/ui/list-toolbar";
+import { useListPreferences } from "@/hooks/use-list-preferences";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatVND } from "@/lib/format";
 import type { CashCount } from "@/lib/types";
@@ -57,6 +59,51 @@ export function CashHistorySection({
 }: CashHistorySectionProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const { prefs, setSearch, setSortExplicit } = useListPreferences("cash.history");
+
+  const filteredSorted = useMemo(() => {
+    const term = prefs.search.trim().toLowerCase();
+    const filtered = !term
+      ? counts
+      : counts.filter((c) => (c.note ?? "").toLowerCase().includes(term));
+    if (!prefs.sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av: string | number;
+      let bv: string | number;
+      switch (prefs.sortColumn) {
+        case "counted_at":
+          av = a.counted_at;
+          bv = b.counted_at;
+          break;
+        case "total_physical":
+          av = a.total_physical;
+          bv = b.total_physical;
+          break;
+        default:
+          return 0;
+      }
+      if (av === bv) return 0;
+      const cmp = av < bv ? -1 : 1;
+      return prefs.sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [counts, prefs.search, prefs.sortColumn, prefs.sortDirection]);
+
+  const cashSortOptions = [
+    { value: "counted_at:desc", label: "Mới nhất" },
+    { value: "counted_at:asc", label: "Cũ nhất" },
+    { value: "total_physical:desc", label: "Số tiền (cao → thấp)" },
+    { value: "total_physical:asc", label: "Số tiền (thấp → cao)" },
+  ];
+
+  const cashSortValue = prefs.sortColumn
+    ? `${prefs.sortColumn}:${prefs.sortDirection}`
+    : "counted_at:desc";
+
+  function handleCashSortChange(value: string) {
+    const [col, dir] = value.split(":") as [string, "asc" | "desc"];
+    setSortExplicit(col, dir);
+  }
+
   function toggleExpand(id: string) {
     setExpandedId((current) => (current === id ? null : id));
   }
@@ -75,76 +122,96 @@ export function CashHistorySection({
         </div>
       </CardHeader>
       <CardBody>
-        {isLoading && counts.length === 0 ? (
-          <EmptyState icon="loader" title="Đang tải..." subtitle="Đang lấy lịch sử kiểm két." />
-        ) : counts.length === 0 ? (
-          <EmptyState
-            icon="banknote"
-            title="Chưa có lượt kiểm két nào hôm nay"
-            subtitle='Bấm "Kiểm két nhanh" để lưu spot audit, hoặc "Chốt két & tạo báo cáo" để chốt cuối ca.'
+        <div className="space-y-3">
+          <ListToolbar
+            search={prefs.search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm theo ghi chú..."
+            resultCount={filteredSorted.length}
+            resultLabel="lượt kiểm"
+            sortOptions={cashSortOptions}
+            sortValue={cashSortValue}
+            onSortChange={handleCashSortChange}
           />
-        ) : (
-          <div className="space-y-2">
-            {counts.map((count) => {
-              const isExpanded = expandedId === count.id;
-              const isVoided = count.report_status === "voided";
-              return (
-                <article
-                  key={count.id}
-                  className={cn(
-                    "rounded-md border border-border transition-colors",
-                    isVoided && "opacity-60 bg-surface-muted"
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
-                    onClick={() => toggleExpand(count.id)}
-                    aria-expanded={isExpanded}
+          {isLoading && counts.length === 0 ? (
+            <EmptyState icon="loader" title="Đang tải..." subtitle="Đang lấy lịch sử kiểm két." />
+          ) : filteredSorted.length === 0 ? (
+            <EmptyState
+              icon="banknote"
+              title={
+                prefs.search
+                  ? "Không tìm thấy lượt kiểm nào"
+                  : "Chưa có lượt kiểm két nào hôm nay"
+              }
+              subtitle={
+                prefs.search
+                  ? "Thử từ khóa khác."
+                  : 'Bấm "Kiểm két nhanh" để lưu spot audit, hoặc "Chốt két & tạo báo cáo" để chốt cuối ca.'
+              }
+            />
+          ) : (
+            <div className="space-y-2">
+              {filteredSorted.map((count) => {
+                const isExpanded = expandedId === count.id;
+                const isVoided = count.report_status === "voided";
+                return (
+                  <article
+                    key={count.id}
+                    className={cn(
+                      "rounded-md border border-border transition-colors",
+                      isVoided && "opacity-60 bg-surface-muted"
+                    )}
                   >
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      {countTypeBadge(count)}
-                      <span className="text-sm text-muted">{formatDateTime(count.counted_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
-                        <span className="block text-xs text-muted">Đếm thực</span>
-                        <strong className="font-display text-sm text-ink">
-                          {formatVND(count.total_physical)}
-                        </strong>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+                      onClick={() => toggleExpand(count.id)}
+                      aria-expanded={isExpanded}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        {countTypeBadge(count)}
+                        <span className="text-sm text-muted">{formatDateTime(count.counted_at)}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="block text-xs text-muted">Chênh lệch</span>
-                        <strong
-                          className={cn(
-                            "font-display text-sm",
-                            count.difference === 0 ? "text-success" : "text-danger"
-                          )}
-                        >
-                          {formatVND(count.difference)}
-                        </strong>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="block text-xs text-muted">Đếm thực</span>
+                          <strong className="font-display text-sm text-ink">
+                            {formatVND(count.total_physical)}
+                          </strong>
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-xs text-muted">Chênh lệch</span>
+                          <strong
+                            className={cn(
+                              "font-display text-sm",
+                              count.difference === 0 ? "text-success" : "text-danger"
+                            )}
+                          >
+                            {formatVND(count.difference)}
+                          </strong>
+                        </div>
+                        <Icon
+                          name="chevronDown"
+                          size={16}
+                          className={cn("transition-transform text-muted", isExpanded && "rotate-180")}
+                        />
                       </div>
-                      <Icon
-                        name="chevronDown"
-                        size={16}
-                        className={cn("transition-transform text-muted", isExpanded && "rotate-180")}
+                    </button>
+                    {isExpanded && (
+                      <CashHistoryDetail
+                        count={count}
+                        canManage={canManage}
+                        onEditReport={onEditReport}
+                        onVoidReport={onVoidReport}
+                        onEditCount={onEditCount}
                       />
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <CashHistoryDetail
-                      count={count}
-                      canManage={canManage}
-                      onEditReport={onEditReport}
-                      onVoidReport={onVoidReport}
-                      onEditCount={onEditCount}
-                    />
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        )}
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </CardBody>
     </Card>
   );

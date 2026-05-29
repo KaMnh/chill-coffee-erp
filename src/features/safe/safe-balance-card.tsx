@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CountUp } from "@/components/ui/count-up";
 import { formatVND } from "@/lib/format";
 
 interface SafeBalanceCardProps {
@@ -69,7 +70,7 @@ export function SafeBalanceCard({
           <div>
             <p className="text-xs uppercase tracking-wide text-muted">Số dư sổ quỹ</p>
             <p className="font-display text-4xl font-bold text-ink tabular-nums mt-1">
-              {formatVND(balance)}
+              <CountUp value={balance} format={formatVND} />
             </p>
           </div>
           <p className="text-xs text-muted">{txnCount} giao dịch</p>

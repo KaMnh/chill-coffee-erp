@@ -1,6 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Card, CardBody } from "@/components/ui/card";
+import { CountUp } from "@/components/ui/count-up";
 import { formatVND } from "@/lib/format";
 import type { HourlyRow } from "@/lib/data";
 
@@ -29,16 +31,19 @@ export function HourlyKpiRow({ data }: HourlyKpiRowProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <StatTile label="Giờ cao điểm" value={peakLabel} />
-      <StatTile label="Tổng doanh thu" value={formatVND(totalRevenue)} />
+      <StatTile
+        label="Tổng doanh thu"
+        value={<CountUp value={totalRevenue} format={formatVND} />}
+      />
       <StatTile
         label="Tổng đơn"
-        value={totalOrders.toLocaleString("vi-VN")}
+        value={<CountUp value={totalOrders} format={(n) => n.toLocaleString("vi-VN")} />}
       />
     </div>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Card>
       <CardBody>

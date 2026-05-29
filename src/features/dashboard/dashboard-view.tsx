@@ -8,6 +8,7 @@ import { useUpdateUserDashboardPreferences } from "@/hooks/mutations/use-profile
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { useToast } from "@/components/ui/toast";
 import type { Account, DashboardData } from "@/lib/types";
 import type { ViewKey } from "@/features/navigation/navigation";
@@ -150,28 +151,30 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div>
-            <CardTitle>Tồn kho hiện tại</CardTitle>
-            <p className="mt-1 text-xs text-muted">
-              Click vào tiêu đề cột để sắp xếp. Bấm khóa cạnh cột đang sort để
-              lưu làm mặc định riêng cho bạn.
-            </p>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <DashboardStockList
-            balances={stockQuery.data ?? []}
-            isLoading={stockQuery.isLoading}
-            isError={stockQuery.isError}
-            sort={sort}
-            onSortChange={setSort}
-            isLocked={isLocked}
-            onToggleLock={handleToggleLock}
-          />
-        </CardBody>
-      </Card>
+      <Reveal onScroll>
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Tồn kho hiện tại</CardTitle>
+              <p className="mt-1 text-xs text-muted">
+                Click vào tiêu đề cột để sắp xếp. Bấm khóa cạnh cột đang sort để
+                lưu làm mặc định riêng cho bạn.
+              </p>
+            </div>
+          </CardHeader>
+          <CardBody>
+            <DashboardStockList
+              balances={stockQuery.data ?? []}
+              isLoading={stockQuery.isLoading}
+              isError={stockQuery.isError}
+              sort={sort}
+              onSortChange={setSort}
+              isLocked={isLocked}
+              onToggleLock={handleToggleLock}
+            />
+          </CardBody>
+        </Card>
+      </Reveal>
     </div>
   );
 }

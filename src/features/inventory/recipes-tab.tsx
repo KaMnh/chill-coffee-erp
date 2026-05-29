@@ -21,6 +21,7 @@ import { useUpsertRecipe } from "@/hooks/mutations/use-recipe-mutations";
 import { getRecipeByMenuItem } from "@/lib/data";
 import { InventoryActionButtons } from "./inventory-action-buttons";
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Reveal } from "@/components/ui/reveal";
 import { RecipeBuilderModal } from "./recipe-builder-modal";
 import type { Recipe, UserRole } from "@/lib/types";
 
@@ -221,7 +222,7 @@ export function RecipesTab({ role }: RecipesTabProps) {
             Tất cả sản phẩm đã có công thức ✓
           </p>
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {availableMenuItems.map((m) => (
               <Card key={m.id}>
                 <CardBody>
@@ -259,7 +260,7 @@ export function RecipesTab({ role }: RecipesTabProps) {
                 </CardBody>
               </Card>
             ))}
-          </div>
+          </Reveal>
         )}
       </section>
 
@@ -313,7 +314,7 @@ export function RecipesTab({ role }: RecipesTabProps) {
             dashedBorder
           />
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {filteredSortedRecipes.map((r) => {
               const isRowBusy = busyRecipeId === r.recipe_id;
               return (
@@ -364,7 +365,7 @@ export function RecipesTab({ role }: RecipesTabProps) {
                 </Card>
               );
             })}
-          </div>
+          </Reveal>
         )}
       </section>
 

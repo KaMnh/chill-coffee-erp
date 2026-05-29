@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { solarToLunar } from "@/lib/lunar";
 
 interface LunarCalendarWidgetProps {
@@ -84,6 +85,7 @@ export function LunarCalendarWidget({ start, end }: LunarCalendarWidgetProps) {
   const grid = useMemo(() => buildGrid(start, end), [start, end]);
 
   return (
+    <Reveal>
     <Card>
       <CardHeader>
         <CardTitle>Lịch âm dương của kỳ</CardTitle>
@@ -129,5 +131,6 @@ export function LunarCalendarWidget({ start, end }: LunarCalendarWidgetProps) {
         </div>
       </CardBody>
     </Card>
+    </Reveal>
   );
 }

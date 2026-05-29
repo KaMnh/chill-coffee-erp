@@ -7,6 +7,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND } from "@/lib/format";
 import type { DateRange } from "./date-range-picker";
 
@@ -60,42 +61,44 @@ export function ExpenseByCategoryTable({ dateRange }: ExpenseByCategoryTableProp
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-ink">Chi phí theo danh mục</h3>
-          <Badge variant="soft" semantic="neutral">
-            {data.length} danh mục
-          </Badge>
-        </div>
-        <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th scope="col" className="text-left pb-2 font-medium">Danh mục</th>
-              <th scope="col" className="text-right pb-2 font-medium">Tổng tiền</th>
-              <th scope="col" className="text-right pb-2 font-medium">Số lần</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row, i) => (
-              <tr
-                key={row.category_id ?? `null-${i}`}
-                className="border-t border-border"
-              >
-                <td className="py-2 text-ink">
-                  {row.category_name ?? "Chưa phân loại"}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-ink">
-                  {formatVND(row.total_amount)}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-muted">
-                  {row.expense_count.toLocaleString("vi-VN")}
-                </td>
+    <Reveal onScroll>
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-ink">Chi phí theo danh mục</h3>
+            <Badge variant="soft" semantic="neutral">
+              {data.length} danh mục
+            </Badge>
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th scope="col" className="text-left pb-2 font-medium">Danh mục</th>
+                <th scope="col" className="text-right pb-2 font-medium">Tổng tiền</th>
+                <th scope="col" className="text-right pb-2 font-medium">Số lần</th>
               </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </CardBody>
-    </Card>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr
+                  key={row.category_id ?? `null-${i}`}
+                  className="border-t border-border"
+                >
+                  <td className="py-2 text-ink">
+                    {row.category_name ?? "Chưa phân loại"}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-ink">
+                    {formatVND(row.total_amount)}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-muted">
+                    {row.expense_count.toLocaleString("vi-VN")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </CardBody>
+      </Card>
+    </Reveal>
   );
 }

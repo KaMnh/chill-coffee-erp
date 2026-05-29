@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 import { formatDateTime, formatVND, durationLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { PayrollRecord } from "@/lib/types";
@@ -57,7 +59,7 @@ export function PayrollHistoryCard({
         <div className="flex w-full items-center justify-between">
           <CardTitle>Lương theo lượt</CardTitle>
           <strong className="font-display text-base text-ink">
-            {formatVND(total)}
+            <CountUp value={total} format={formatVND} />
           </strong>
         </div>
       </CardHeader>
@@ -69,8 +71,9 @@ export function PayrollHistoryCard({
             subtitle="Khi xác nhận ra ca, dòng lương mới sẽ nằm trên cùng."
           />
         ) : (
-          <ul className="divide-y divide-border">
-            {payroll.map((row) => (
+          <Reveal onScroll>
+            <ul className="divide-y divide-border">
+              {payroll.map((row) => (
               <li
                 key={row.id}
                 onClick={canManage ? () => open(row) : undefined}
@@ -112,7 +115,8 @@ export function PayrollHistoryCard({
                 </strong>
               </li>
             ))}
-          </ul>
+            </ul>
+          </Reveal>
         )}
       </CardBody>
     </Card>

@@ -10,6 +10,7 @@ import { ListToolbar } from "@/components/ui/list-toolbar";
 import { useListPreferences } from "@/hooks/use-list-preferences";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatVND } from "@/lib/format";
+import { Reveal } from "@/components/ui/reveal";
 import type { CashCount } from "@/lib/types";
 import { DENOMINATIONS } from "./denominations";
 
@@ -150,7 +151,7 @@ export function CashHistorySection({
               }
             />
           ) : (
-            <div className="space-y-2">
+            <Reveal onScroll className="space-y-2">
               {filteredSorted.map((count) => {
                 const isExpanded = expandedId === count.id;
                 const isVoided = count.report_status === "voided";
@@ -209,7 +210,7 @@ export function CashHistorySection({
                   </article>
                 );
               })}
-            </div>
+            </Reveal>
           )}
         </div>
       </CardBody>

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icons";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
 import type { StockBalance } from "@/lib/types";
 
@@ -49,7 +50,7 @@ export function LowStockList({ balances }: LowStockListProps) {
         {lowStock.length === 0 ? (
           <p className="text-sm text-muted">Tất cả nguyên liệu đủ tồn ✓</p>
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {lowStock.map((b) => (
               <div
                 key={b.ingredient_id}
@@ -70,7 +71,7 @@ export function LowStockList({ balances }: LowStockListProps) {
                 </div>
               </div>
             ))}
-          </div>
+          </Reveal>
         )}
       </CardBody>
     </Card>

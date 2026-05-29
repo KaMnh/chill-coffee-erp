@@ -1,6 +1,7 @@
 "use client";
 
 import { StatCard } from "@/components/ui/stat-card";
+import { CountUp } from "@/components/ui/count-up";
 import type { StockBalance, StockMovement } from "@/lib/types";
 
 interface InventoryKpiRowProps {
@@ -39,25 +40,25 @@ export function InventoryKpiRow({
         color="mint"
         title="Tổng nguyên liệu"
         subtitle="Đang dùng"
-        value={activeCount}
+        value={<CountUp value={activeCount} format={(n) => String(n)} />}
       />
       <StatCard
         color="peach"
         title="Sắp hết"
         subtitle={lowStockCount === 0 ? "Tất cả đủ" : "Cần đặt thêm"}
-        value={lowStockCount}
+        value={<CountUp value={lowStockCount} format={(n) => String(n)} />}
       />
       <StatCard
         color="lilac"
         title="Tồn âm"
         subtitle={negativeCount === 0 ? "Không có" : "Cần kiểm tra"}
-        value={negativeCount}
+        value={<CountUp value={negativeCount} format={(n) => String(n)} />}
       />
       <StatCard
         color="blue"
         title="Tiêu thụ tuần"
         subtitle="Giao dịch bán (lý thuyết)"
-        value={weeklySaleCount}
+        value={<CountUp value={weeklySaleCount} format={(n) => String(n)} />}
       />
     </div>
   );

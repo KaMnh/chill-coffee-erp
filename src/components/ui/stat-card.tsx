@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { IconButton } from "./icon-button";
 
@@ -7,7 +8,7 @@ interface StatCardProps {
   color: PastelColor;
   title: string;
   subtitle?: string;
-  value: string | number;
+  value: ReactNode;
   onAction?: () => void;
   actionAriaLabel?: string;
   className?: string;

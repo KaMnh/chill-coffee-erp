@@ -8,6 +8,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icons";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "@/features/inventory/units";
 import type { DateRange } from "./date-range-picker";
 import type { VarianceRow } from "@/lib/data";
@@ -68,28 +69,30 @@ export function VarianceAuditReport({ dateRange }: VarianceAuditReportProps) {
   const hidden = data.length - visible.length;
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-ink">Chênh lệch kiểm kê</h3>
-          <Badge variant="soft" semantic="neutral">
-            {data.length} lần kiểm
-          </Badge>
-        </div>
+    <Reveal onScroll>
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-ink">Chênh lệch kiểm kê</h3>
+            <Badge variant="soft" semantic="neutral">
+              {data.length} lần kiểm
+            </Badge>
+          </div>
 
-        <div className="divide-y divide-border">
-          {visible.map((row) => (
-            <VarianceRowItem key={row.movement_id} row={row} />
-          ))}
-        </div>
+          <div className="divide-y divide-border">
+            {visible.map((row) => (
+              <VarianceRowItem key={row.movement_id} row={row} />
+            ))}
+          </div>
 
-        {hidden > 0 && (
-          <p className="text-xs text-muted mt-3">
-            Hiển thị {VISIBLE_LIMIT} dòng gần nhất. Còn {hidden} dòng nữa — xem chi tiết hơn vào tab Tồn kho.
-          </p>
-        )}
-      </CardBody>
-    </Card>
+          {hidden > 0 && (
+            <p className="text-xs text-muted mt-3">
+              Hiển thị {VISIBLE_LIMIT} dòng gần nhất. Còn {hidden} dòng nữa — xem chi tiết hơn vào tab Tồn kho.
+            </p>
+          )}
+        </CardBody>
+      </Card>
+    </Reveal>
   );
 }
 

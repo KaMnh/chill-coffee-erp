@@ -17,6 +17,7 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useDeactivateUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { SettingsAccount } from "@/lib/types";
+import { Reveal } from "@/components/ui/reveal";
 import { CreateAccountModal } from "./create-account-modal";
 import { EditAccountModal } from "./edit-account-modal";
 
@@ -81,6 +82,7 @@ export function AccountsManagerCard({
               subtitle="Bấm 'Thêm tài khoản' để tạo người dùng đầu tiên."
             />
           ) : (
+            <Reveal onScroll>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -160,6 +162,7 @@ export function AccountsManagerCard({
                 </tbody>
               </table>
             </div>
+            </Reveal>
           )}
         </CardBody>
       </Card>

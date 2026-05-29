@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { Employee, ShiftAssignment } from "@/lib/types";
@@ -121,7 +122,7 @@ export function EmployeeGrid({
               subtitle="Nhấn 'Vào ca' ở cột bên cạnh khi nhân viên bắt đầu làm."
             />
           ) : (
-            <div className="space-y-2">{active.map(renderRow)}</div>
+            <Reveal stagger className="space-y-2">{active.map(renderRow)}</Reveal>
           )}
         </CardBody>
       </Card>
@@ -137,7 +138,7 @@ export function EmployeeGrid({
               subtitle="Không còn nhân viên chờ xác nhận."
             />
           ) : (
-            <div className="space-y-2">{inactive.map(renderRow)}</div>
+            <Reveal stagger className="space-y-2">{inactive.map(renderRow)}</Reveal>
           )}
         </CardBody>
       </Card>

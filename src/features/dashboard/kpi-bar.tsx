@@ -1,6 +1,8 @@
 "use client";
 
 import { StatCard } from "@/components/ui/stat-card";
+import { CountUp } from "@/components/ui/count-up";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND } from "@/lib/format";
 import type { DashboardData } from "@/lib/types";
 
@@ -24,31 +26,34 @@ interface KpiBarProps {
  */
 export function KpiBar({ data }: KpiBarProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4">
+    <Reveal
+      stagger
+      className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4"
+    >
       <StatCard
         color="peach"
         title="Thu POS"
         subtitle="Tổng doanh thu"
-        value={formatVND(data.total_sales)}
+        value={<CountUp value={data.total_sales} format={formatVND} />}
       />
       <StatCard
         color="mint"
         title="Tổng chi"
         subtitle="Hôm nay"
-        value={formatVND(data.total_expenses)}
+        value={<CountUp value={data.total_expenses} format={formatVND} />}
       />
       <StatCard
         color="lilac"
         title="Lương đã phát"
         subtitle="Trong ngày"
-        value={formatVND(data.payroll_paid)}
+        value={<CountUp value={data.payroll_paid} format={formatVND} />}
       />
       <StatCard
         color="peach"
         title="Đang trong ca"
         subtitle="Nhân viên"
-        value={`${data.active_staff} người`}
+        value={<CountUp value={data.active_staff} format={(n) => `${n} người`} />}
       />
-    </div>
+    </Reveal>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useUpdateHandoverTask } from "@/hooks/mutations/use-handover-mutations";
@@ -83,7 +84,7 @@ export function HandoverChecklist({
             subtitle="Owner/manager có thể thêm task từ nút 'Sửa task cho ngày này' hoặc từ Settings → Checklist mặc định."
           />
         ) : (
-          <div className="space-y-2">
+          <Reveal stagger className="space-y-2">
             {sortedTasks.map((task) => {
               const isRowSaving = savingTaskId === task.id;
               return (
@@ -106,7 +107,7 @@ export function HandoverChecklist({
                 </div>
               );
             })}
-          </div>
+          </Reveal>
         )}
       </CardBody>
     </Card>

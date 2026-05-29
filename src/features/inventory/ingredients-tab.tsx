@@ -18,6 +18,7 @@ import {
 } from "@/hooks/mutations/use-inventory-mutations";
 import { useListPreferences } from "@/hooks/use-list-preferences";
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
 import { InventoryActionButtons } from "./inventory-action-buttons";
 import { IngredientFormModal } from "./ingredient-form-modal";
@@ -235,7 +236,7 @@ export function IngredientsTab({ role }: IngredientsTabProps) {
           dashedBorder
         />
       ) : (
-        <div className="space-y-2">
+        <Reveal onScroll className="space-y-2">
           {filteredSorted.map((ing) => {
             const isDeletingThis = deletingId === ing.id;
             const isRowBusy = busyRowId === ing.id;
@@ -319,7 +320,7 @@ export function IngredientsTab({ role }: IngredientsTabProps) {
               </Card>
             );
           })}
-        </div>
+        </Reveal>
       )}
 
       <IngredientFormModal

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useAuthSession } from "@/hooks/use-auth-session";
@@ -60,7 +61,7 @@ export function LoginScreen() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-bg-app-from to-bg-app-to flex items-center justify-center p-6">
       <Card className="w-full max-w-md">
-        <CardBody className="space-y-6">
+        <Reveal stagger className="space-y-6">
           <div className="flex flex-col items-center gap-3">
             <Image
               src="/chill-logo.png"
@@ -155,7 +156,7 @@ export function LoginScreen() {
               </button>
             )}
           </div>
-        </CardBody>
+        </Reveal>
       </Card>
     </main>
   );

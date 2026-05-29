@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useRejectSignup } from "@/hooks/mutations/use-settings-mutations";
 import type { SignupRequest } from "@/lib/types";
+import { Reveal } from "@/components/ui/reveal";
 import { ApproveSignupModal } from "./approve-signup-modal";
 
 interface SignupRequestsCardProps {
@@ -73,6 +74,7 @@ export function SignupRequestsCard({ requests }: SignupRequestsCardProps) {
           </div>
         </CardHeader>
         <CardBody>
+          <Reveal onScroll>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -126,6 +128,7 @@ export function SignupRequestsCard({ requests }: SignupRequestsCardProps) {
               </tbody>
             </table>
           </div>
+          </Reveal>
         </CardBody>
       </Card>
 

@@ -7,6 +7,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND } from "@/lib/format";
 import type { DateRange } from "./date-range-picker";
 
@@ -62,48 +63,50 @@ export function ProductSummaryTable({ dateRange }: ProductSummaryTableProps) {
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-ink">Doanh thu theo sản phẩm</h3>
-          <Badge variant="soft" semantic="neutral">
-            {data.length} sản phẩm
-          </Badge>
-        </div>
-        <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th scope="col" className="text-left pb-2 font-medium">Sản phẩm</th>
-              <th scope="col" className="text-left pb-2 font-medium">Danh mục</th>
-              <th scope="col" className="text-right pb-2 font-medium">Số lượng</th>
-              <th scope="col" className="text-right pb-2 font-medium">Doanh thu</th>
-              <th scope="col" className="text-right pb-2 font-medium">Số đơn</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr
-                key={row.product_id || row.product_code || row.product_name}
-                className="border-t border-border"
-              >
-                <td className="py-2 text-ink">{row.product_name}</td>
-                <td className="py-2 text-muted">
-                  {row.category_name ?? "Chưa phân loại"}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-ink">
-                  {row.total_quantity.toLocaleString("vi-VN")}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-ink">
-                  {formatVND(row.total_revenue)}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-muted">
-                  {row.order_count.toLocaleString("vi-VN")}
-                </td>
+    <Reveal onScroll>
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-ink">Doanh thu theo sản phẩm</h3>
+            <Badge variant="soft" semantic="neutral">
+              {data.length} sản phẩm
+            </Badge>
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th scope="col" className="text-left pb-2 font-medium">Sản phẩm</th>
+                <th scope="col" className="text-left pb-2 font-medium">Danh mục</th>
+                <th scope="col" className="text-right pb-2 font-medium">Số lượng</th>
+                <th scope="col" className="text-right pb-2 font-medium">Doanh thu</th>
+                <th scope="col" className="text-right pb-2 font-medium">Số đơn</th>
               </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </CardBody>
-    </Card>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr
+                  key={row.product_id || row.product_code || row.product_name}
+                  className="border-t border-border"
+                >
+                  <td className="py-2 text-ink">{row.product_name}</td>
+                  <td className="py-2 text-muted">
+                    {row.category_name ?? "Chưa phân loại"}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-ink">
+                    {row.total_quantity.toLocaleString("vi-VN")}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-ink">
+                    {formatVND(row.total_revenue)}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-muted">
+                    {row.order_count.toLocaleString("vi-VN")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </CardBody>
+      </Card>
+    </Reveal>
   );
 }

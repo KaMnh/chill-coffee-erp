@@ -18,6 +18,7 @@ import {
 } from "@/hooks/mutations/use-inventory-mutations";
 import { useListPreferences } from "@/hooks/use-list-preferences";
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Reveal } from "@/components/ui/reveal";
 import { InventoryActionButtons } from "./inventory-action-buttons";
 import { MenuItemFormModal } from "./menu-item-form-modal";
 import type { MenuItem, UserRole } from "@/lib/types";
@@ -223,7 +224,7 @@ export function MenuItemsTab({ role }: MenuItemsTabProps) {
           dashedBorder
         />
       ) : (
-        <div className="space-y-2">
+        <Reveal onScroll className="space-y-2">
           {filteredSorted.map((m) => {
             const isDeletingThis = deletingId === m.id;
             const isRowBusy = busyRowId === m.id;
@@ -320,7 +321,7 @@ export function MenuItemsTab({ role }: MenuItemsTabProps) {
               </Card>
             );
           })}
-        </div>
+        </Reveal>
       )}
 
       <MenuItemFormModal

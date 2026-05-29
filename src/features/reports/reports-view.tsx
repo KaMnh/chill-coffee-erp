@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { Icon } from "@/components/ui/icons";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Reveal } from "@/components/ui/reveal";
+import { DUR } from "@/lib/gsap";
 import { ReportList } from "./report-list";
 import { PrintableReport } from "./printable-report";
 import { exportElementAsJpeg } from "./export-jpeg";
@@ -37,23 +39,33 @@ export function ReportsView({ businessDate }: ReportsViewProps) {
       </TabsList>
 
       <TabsContent value="cash_close">
-        <CashCloseTab businessDate={businessDate} />
+        <Reveal duration={DUR.fast}>
+          <CashCloseTab businessDate={businessDate} />
+        </Reveal>
       </TabsContent>
 
       <TabsContent value="inventory">
-        <InventoryAnalyticsTab />
+        <Reveal duration={DUR.fast}>
+          <InventoryAnalyticsTab />
+        </Reveal>
       </TabsContent>
 
       <TabsContent value="sales_product">
-        <SalesByProductTab />
+        <Reveal duration={DUR.fast}>
+          <SalesByProductTab />
+        </Reveal>
       </TabsContent>
 
       <TabsContent value="expense_payroll">
-        <ExpensePayrollTab />
+        <Reveal duration={DUR.fast}>
+          <ExpensePayrollTab />
+        </Reveal>
       </TabsContent>
 
       <TabsContent value="hourly">
-        <HourlyTrendsTab />
+        <Reveal duration={DUR.fast}>
+          <HourlyTrendsTab />
+        </Reveal>
       </TabsContent>
     </Tabs>
   );

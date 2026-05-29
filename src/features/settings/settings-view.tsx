@@ -17,6 +17,7 @@ import { SidebarConfigForm } from "./sidebar-config-form";
 import { HandoverDefaultTasksEditor } from "./handover-default-tasks-editor";
 import { ShiftBonusConfigForm } from "./shift-bonus-config-form";
 import { KiotvietConfigForm } from "./kiotviet-config-form";
+import { KiotvietExcelImportCard } from "./kiotviet-excel-import-card";
 import { AccountsManagerCard } from "./accounts-manager-card";
 import { SignupRequestsCard } from "./signup-requests-card";
 import { BackupRestoreSection } from "./backup-restore-section";
@@ -108,6 +109,7 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
           />
           <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
           <KiotvietConfigForm />
+          <KiotvietExcelImportCard role={role} authHeader={authHeader} />
         </div>
         </Reveal>
       </TabsContent>

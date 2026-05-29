@@ -232,6 +232,9 @@ create table if not exists public.sales_orders (
   updated_at timestamptz not null default now()
 );
 create index if not exists sales_orders_business_date_idx on public.sales_orders(business_date);
+-- One row per invoice_code (manual Excel import upsert key; guards backfill dupes).
+create unique index if not exists sales_orders_invoice_code_uidx
+  on public.sales_orders(invoice_code) where invoice_code is not null;
 drop trigger if exists sales_orders_set_updated_at on public.sales_orders;
 create trigger sales_orders_set_updated_at before update on public.sales_orders
   for each row execute function public.set_updated_at();

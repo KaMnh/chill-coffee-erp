@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icons";
@@ -75,6 +76,7 @@ export function ExpenseBreakdownTable({
   }
 
   return (
+    <Reveal onScroll>
     <Card>
       <CardHeader>
         <div className="flex w-full items-center justify-between gap-3">
@@ -201,5 +203,6 @@ export function ExpenseBreakdownTable({
         )}
       </CardBody>
     </Card>
+    </Reveal>
   );
 }

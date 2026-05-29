@@ -1,6 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Card, CardBody } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 import { formatVND } from "@/lib/format";
 import type { CashFlowOverview, PeriodPreset } from "@/lib/types";
 
@@ -24,7 +27,7 @@ function previousLabel(preset: PeriodPreset): string {
 
 interface KpiCardProps {
   label: string;
-  amount: number;
+  amount: ReactNode;
   deltaLabel: string;
   delta: string;
   /** "good" = positive direction green; "bad" = positive direction red (OUT). */
@@ -50,7 +53,7 @@ function KpiCard({ label, amount, deltaLabel, delta, semantic }: KpiCardProps) {
       <CardBody>
         <p className="text-xs uppercase tracking-wider text-muted">{label}</p>
         <p className="mt-2 text-2xl font-bold text-ink tabular-nums">
-          {formatVND(amount)}
+          {amount}
         </p>
         <p className={`mt-1 text-xs ${tone} tabular-nums`}>
           {delta} {deltaLabel}
@@ -70,28 +73,28 @@ export function CashFlowKpiBar({ data, preset }: CashFlowKpiBarProps) {
   const label = previousLabel(preset);
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <Reveal stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <KpiCard
         label="Tổng vào"
-        amount={in_}
+        amount={<CountUp value={in_} format={formatVND} />}
         deltaLabel={label}
         delta={formatDeltaPct(in_, prevIn)}
         semantic="good"
       />
       <KpiCard
         label="Tổng ra"
-        amount={out}
+        amount={<CountUp value={out} format={formatVND} />}
         deltaLabel={label}
         delta={formatDeltaPct(out, prevOut)}
         semantic="bad"
       />
       <KpiCard
         label="Chênh lệch"
-        amount={net}
+        amount={<CountUp value={net} format={formatVND} />}
         deltaLabel={label}
         delta={formatDeltaPct(net, prevNet)}
         semantic="good"
       />
-    </div>
+    </Reveal>
   );
 }

@@ -73,6 +73,14 @@ export async function POST(req: NextRequest) {
     body = {};
   }
 
+  // Date-range backfill (explicit fromDate+toDate) is owner/manager only —
+  // mirrors the owner/manager-only Settings card. staff_operator can still run
+  // the routine windowed/single sync (anchorDate path); cron is allowed.
+  const isRangeBackfill = Boolean(body.fromDate && body.toDate);
+  if (isRangeBackfill && !auth.isCron && auth.role !== "owner" && auth.role !== "manager") {
+    return badRequest("Chỉ owner/manager được đồng bộ theo khoảng ngày.", 403);
+  }
+
   const supabase = getServiceRoleClient();
 
   // Per-user rate limit (chỉ áp dụng cho mode user; cron bypass)

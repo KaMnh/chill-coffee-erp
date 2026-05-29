@@ -102,13 +102,19 @@ body {
   animation: toast-slide-in 200ms ease-out;
 }
 
-/* ===== Print — only the cash-close report (.print-target) goes to paper.
+/* ===== Print — the cash-close report (.print-target) on an 80mm thermal roll.
  * The "In" button calls window.print(); without these rules the browser prints
  * the entire app shell (sidebar, header, report list). Hide everything, reveal
- * only the report subtree, and pull it to the page origin so invisible siblings
- * don't push it onto a blank page. ===== */
+ * only the report, pin it to the sheet origin, and reflow the screen card into
+ * a narrow single-column receipt sized for an 80mm thermal printer. ===== */
 @media print {
-  /* Drop the app gradient so the sheet stays white. */
+  /* 80mm thermal roll: narrow width, continuous (auto height), tiny margin. */
+  @page {
+    size: 80mm auto;
+    margin: 2mm;
+  }
+
+  /* Drop the app gradient so the roll stays white. */
   body {
     background: #ffffff !important;
   }
@@ -125,6 +131,7 @@ body {
     visibility: visible;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    color: #000 !important; /* crisp black — grays print faint/dithered on thermal */
   }
   .print-target {
     position: absolute;
@@ -133,13 +140,41 @@ body {
     width: 100%;
     margin: 0;
     padding: 0;
+    font-size: 11px;
+    line-height: 1.35;
   }
-  /* The report's outer card border/rounding reads as a box on paper — drop it. */
+
+  /* Flatten the screen card into a single-column 80mm receipt. */
   .print-target > * {
+    /* the report <article> */
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
+    background: #fff !important;
   }
-  @page {
-    margin: 14mm;
+  .print-target h1 {
+    font-size: 15px !important;
+  }
+  .print-target img {
+    /* logo */
+    width: 40px !important;
+    height: 40px !important;
+  }
+  .print-target header {
+    gap: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  .print-target dl {
+    /* summary: label flexes left, value hugs the right edge */
+    margin-top: 10px !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 3px 8px !important;
+  }
+  .print-target footer {
+    margin-top: 14px !important;
+    gap: 10px !important;
   }
 }

@@ -20,6 +20,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatNumber, formatVND, moneyFromInput } from "@/lib/format";
+import { CountUp } from "@/components/ui/count-up";
 import { validateCashCount } from "@/lib/validation";
 import type { CashCount, UserRole } from "@/lib/types";
 import { CashCountWizard, type WizardStep } from "./cash-count-wizard";
@@ -257,7 +258,11 @@ export function CashView({ businessDate, role }: CashViewProps) {
             <div>
               <p className="text-xs uppercase tracking-wide text-muted">Tiền đầu ngày</p>
               <CardTitle>
-                {cashOpening ? formatVND(cashOpening.opening_total) : "Chưa nhập"}
+                {cashOpening ? (
+                  <CountUp value={cashOpening.opening_total} format={formatVND} />
+                ) : (
+                  "Chưa nhập"
+                )}
               </CardTitle>
             </div>
             {canOpenOpeningModal && (

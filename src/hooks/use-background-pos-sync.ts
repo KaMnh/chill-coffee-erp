@@ -7,7 +7,7 @@ import type { UserRole } from "@/lib/types";
 const RESUME_THRESHOLD_MS = 60_000; // 60s hidden → resume triggers a sync
 const BACKGROUND_INTERVAL_MS = 120_000; // 2 min between visible ticks
 
-type SyncVars = { force: boolean; reason: string };
+type SyncVars = { force: boolean; reason: string; applyWindow: boolean };
 type PosSyncMutation = UseMutationResult<unknown, unknown, SyncVars, unknown>;
 
 /**
@@ -58,7 +58,7 @@ export function useBackgroundPosSync(
       if (intervalId !== null) return;
       intervalId = setInterval(() => {
         if (isGated()) return;
-        mutateRef.current({ force: false, reason: "background_interval" });
+        mutateRef.current({ force: false, reason: "background_interval", applyWindow: false });
       }, BACKGROUND_INTERVAL_MS);
     }
 
@@ -82,7 +82,7 @@ export function useBackgroundPosSync(
         Date.now() - hiddenAt >= RESUME_THRESHOLD_MS &&
         !isGated()
       ) {
-        mutateRef.current({ force: false, reason: "visibility_resume" });
+        mutateRef.current({ force: false, reason: "visibility_resume", applyWindow: false });
       }
       startInterval();
     }

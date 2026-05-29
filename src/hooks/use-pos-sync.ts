@@ -26,8 +26,13 @@ export function usePosSync(
   const triedRef = useRef<Set<string>>(new Set());
 
   const mutation = useMutation({
-    mutationFn: (vars: { force: boolean; reason: string }) =>
-      triggerPosSync(supabase!, { businessDate, force: vars.force, reason: vars.reason }),
+    mutationFn: (vars: { force: boolean; reason: string; applyWindow: boolean }) =>
+      triggerPosSync(supabase!, {
+        businessDate,
+        force: vars.force,
+        reason: vars.reason,
+        applyWindow: vars.applyWindow
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
     }
@@ -42,7 +47,7 @@ export function usePosSync(
     const key = `${businessDate}:${latestSync?.id ?? "none"}:${latestSync?.status ?? "none"}`;
     if (triedRef.current.has(key)) return;
     triedRef.current.add(key);
-    mutation.mutate({ force: false, reason: "auto_load" });
+    mutation.mutate({ force: false, reason: "auto_load", applyWindow: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account?.role, businessDate, latestSync?.id, latestSync?.finished_at, latestSync?.status, supabase]);
 

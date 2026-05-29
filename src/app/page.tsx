@@ -171,7 +171,7 @@ export default function HomePage() {
       return;
     }
     try {
-      await posSync.mutateAsync({ force: true, reason: "manual_refresh" });
+      await posSync.mutateAsync({ force: true, reason: "manual_refresh", applyWindow: true });
       toast({ semantic: "success", message: "Đã yêu cầu sync POS từ KiotViet." });
     } catch (err) {
       toast({

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND, formatDateTime } from "@/lib/format";
 import { useListPreferences } from "@/hooks/use-list-preferences";
 import type { SafeTransaction, SafeTransactionType } from "@/lib/types";
@@ -213,14 +214,16 @@ export function SafeHistorySection({
           />
         ) : (
           <>
-            <DataTable
-              columns={columns}
-              data={filteredSorted}
-              rowKey={(row) => row.id}
-              sortKey={prefs.sortColumn}
-              sortDirection={prefs.sortDirection}
-              onSortChange={({ key }) => setSort(key)}
-            />
+            <Reveal onScroll>
+              <DataTable
+                columns={columns}
+                data={filteredSorted}
+                rowKey={(row) => row.id}
+                sortKey={prefs.sortColumn}
+                sortDirection={prefs.sortDirection}
+                onSortChange={({ key }) => setSort(key)}
+              />
+            </Reveal>
             <div className="flex justify-center">
               <Button variant="ghost" onClick={onLoadOlder}>
                 Tải thêm 90 ngày trước

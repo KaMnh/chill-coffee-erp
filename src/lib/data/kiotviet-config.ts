@@ -25,6 +25,8 @@ export interface KvConfigDto {
   is_active: boolean;
   /** Empty string when no webhook is configured. */
   webhook_secret: string;
+  /** Default sync window in days (1..31). */
+  sync_window_days?: number;
 }
 
 async function getJwt(supabase: SupabaseClient): Promise<string> {

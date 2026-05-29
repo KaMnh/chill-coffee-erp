@@ -51,6 +51,14 @@ export async function POST(req: NextRequest) {
     if (typeof body.rate_limit_per_sec === "number" && body.rate_limit_per_sec >= 1 && body.rate_limit_per_sec <= 10) {
       patch.rate_limit_per_sec = body.rate_limit_per_sec;
     }
+    if (
+      typeof body.sync_window_days === "number" &&
+      Number.isInteger(body.sync_window_days) &&
+      body.sync_window_days >= 1 &&
+      body.sync_window_days <= 31
+    ) {
+      patch.sync_window_days = body.sync_window_days;
+    }
     if (typeof body.webhook_secret === "string") {
       // Empty string = clear (revoke webhook); non-empty = update.
       patch.webhook_secret = body.webhook_secret.trim();

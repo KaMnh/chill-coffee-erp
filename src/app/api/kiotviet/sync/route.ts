@@ -57,7 +57,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let body: { fromDate?: string; toDate?: string; force?: boolean; reason?: string };
+  let body: {
+    fromDate?: string;
+    toDate?: string;
+    anchorDate?: string;
+    applyWindow?: boolean;
+    force?: boolean;
+    reason?: string;
+  };
   try {
     body = (await req.json().catch(() => ({}))) as typeof body;
   } catch {
@@ -123,7 +130,9 @@ export async function POST(req: NextRequest) {
   try {
     const result = await runSync(supabase, ingestClientId, ingestClientSecret, {
       fromDate: body.fromDate,
-      toDate: body.toDate
+      toDate: body.toDate,
+      anchorDate: body.anchorDate,
+      applyWindow: body.applyWindow
     });
     return NextResponse.json(result);
   } catch (error) {

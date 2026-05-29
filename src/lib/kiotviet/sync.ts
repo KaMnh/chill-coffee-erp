@@ -15,17 +15,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listInvoices } from "./client";
 import { buildIngestPayload } from "./transform";
+import { computeSyncRange } from "./sync-range";
 import type { KvCredentials, KvInvoice } from "./types";
 import { DEFAULT_KV_CREDENTIALS } from "./types";
 
 export type SyncOptions = {
-  /** Default: today. Format: 'YYYY-MM-DD'. */
+  /** Explicit range (manual backfill). When both set → range mode. Format 'YYYY-MM-DD'. */
   fromDate?: string;
-  /** Default: same as fromDate. */
   toDate?: string;
+  /** Anchor for window/single mode (default: VN today). */
+  anchorDate?: string;
+  /** Apply the configured sync_window_days window around anchorDate. */
+  applyWindow?: boolean;
   /** Default: 100; max page size from KV API. */
   pageSize?: number;
-  /** Hard cap on pages to prevent runaway loops (default: 50 → 5000 invoices). */
+  /** Hard cap on pages. Default: 50 (single/window) or 300 (range backfill). */
   maxPages?: number;
 };
 
@@ -36,6 +40,8 @@ export type SyncResult = {
   ingested: { orders: number; items: number; payments: number } | null;
   run_id?: string;
   pages_scanned: number;
+  /** True if the page cap was hit before all matching invoices were fetched. */
+  truncated: boolean;
 };
 
 export async function loadKvCredentials(supabase: SupabaseClient): Promise<KvCredentials> {
@@ -115,7 +121,8 @@ export async function runSync(
       message: "Tích hợp KiotViet đang tắt (is_active=false). Bật trong Settings.",
       fetched: 0,
       ingested: null,
-      pages_scanned: 0
+      pages_scanned: 0,
+      truncated: false
     };
   }
   if (!creds.client_id || !creds.client_secret || !creds.retailer) {
@@ -124,14 +131,24 @@ export async function runSync(
       message: "Thiếu KiotViet client_id / client_secret / retailer. Cấu hình trong Settings.",
       fetched: 0,
       ingested: null,
-      pages_scanned: 0
+      pages_scanned: 0,
+      truncated: false
     };
   }
 
-  const fromDate = options.fromDate ?? todayIso();
-  const toDate = options.toDate ?? fromDate;
+  const range = computeSyncRange({
+    fromDate: options.fromDate,
+    toDate: options.toDate,
+    anchorDate: options.anchorDate,
+    applyWindow: options.applyWindow,
+    windowDays: creds.sync_window_days,
+    today: todayIso()
+  });
+  const fromDate = range.from;
+  const toDate = range.to;
   const pageSize = options.pageSize ?? 100;
-  const maxPages = options.maxPages ?? 50;
+  // Range backfill is deliberate → allow far more pages than the routine cap.
+  const maxPages = options.maxPages ?? (range.mode === "range" ? 300 : 50);
 
   // Pagination loop — KV uses `currentItem` offset (0-based).
   const allInvoices: KvInvoice[] = [];
@@ -156,13 +173,16 @@ export async function runSync(
     if (allInvoices.length >= total) break;
   }
 
+  const truncated = pagesScanned >= maxPages && allInvoices.length < total;
+
   if (allInvoices.length === 0) {
     return {
       status: "success",
       message: "Không có hóa đơn nào trong khoảng thời gian.",
       fetched: 0,
       ingested: { orders: 0, items: 0, payments: 0 },
-      pages_scanned: pagesScanned
+      pages_scanned: pagesScanned,
+      truncated: false
     };
   }
 
@@ -198,6 +218,7 @@ export async function runSync(
       payments: result.payments ?? 0
     },
     run_id: result.run_id,
-    pages_scanned: pagesScanned
+    pages_scanned: pagesScanned,
+    truncated
   };
 }

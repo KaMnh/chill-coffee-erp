@@ -16,6 +16,10 @@ export type KvCredentials = {
    *  vd: https://chill.your-domain.com/api/kiotviet/webhook/<webhook_secret>
    *  Generate ngẫu nhiên 32+ ký tự. Empty = webhook bị từ chối. */
   webhook_secret: string;
+  /** Default sync window in days (1..31). Applies to manual sync + stale
+   *  auto-load: a windowed sync pulls [anchor-(N-1) … anchor]. Default 1
+   *  (single day = legacy behavior). */
+  sync_window_days: number;
 };
 
 export interface KvTokenResponse {
@@ -128,5 +132,6 @@ export const DEFAULT_KV_CREDENTIALS: KvCredentials = {
   scope: "PublicApi.Access.FNB",
   rate_limit_per_sec: 4,
   is_active: false,
-  webhook_secret: ""
+  webhook_secret: "",
+  sync_window_days: 1
 };

@@ -144,6 +144,9 @@ export function WithdrawSafeModal({ open, onOpenChange, currentBalance }: Withdr
                 !validation.ok && validation.field === "description" ? validation.message : undefined
               }
             />
+            <p className="text-xs text-muted mt-1">
+              Khoản này sẽ được ghi vào sổ chi (chỉ owner xem được).
+            </p>
             <ModalActions>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isBusy}>
                 Hủy

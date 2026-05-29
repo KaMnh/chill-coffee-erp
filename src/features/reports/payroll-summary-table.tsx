@@ -7,6 +7,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { formatVND } from "@/lib/format";
 import type { DateRange } from "./date-range-picker";
 
@@ -65,42 +66,44 @@ export function PayrollSummaryTable({ dateRange }: PayrollSummaryTableProps) {
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-ink">Lương theo nhân viên</h3>
-          <Badge variant="soft" semantic="neutral">
-            {data.length} nhân viên
-          </Badge>
-        </div>
-        <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th scope="col" className="text-left pb-2 font-medium">Nhân viên</th>
-              <th scope="col" className="text-right pb-2 font-medium">Tổng lương</th>
-              <th scope="col" className="text-right pb-2 font-medium">Số ca</th>
-              <th scope="col" className="text-right pb-2 font-medium">Tổng giờ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr key={row.employee_id} className="border-t border-border">
-                <td className="py-2 text-ink">{row.employee_name}</td>
-                <td className="py-2 text-right font-mono tabular-nums text-ink">
-                  {formatVND(row.total_pay)}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-muted">
-                  {row.shift_count.toLocaleString("vi-VN")}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-muted">
-                  {formatHours(row.total_minutes)}
-                </td>
+    <Reveal onScroll>
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-ink">Lương theo nhân viên</h3>
+            <Badge variant="soft" semantic="neutral">
+              {data.length} nhân viên
+            </Badge>
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th scope="col" className="text-left pb-2 font-medium">Nhân viên</th>
+                <th scope="col" className="text-right pb-2 font-medium">Tổng lương</th>
+                <th scope="col" className="text-right pb-2 font-medium">Số ca</th>
+                <th scope="col" className="text-right pb-2 font-medium">Tổng giờ</th>
               </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </CardBody>
-    </Card>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr key={row.employee_id} className="border-t border-border">
+                  <td className="py-2 text-ink">{row.employee_name}</td>
+                  <td className="py-2 text-right font-mono tabular-nums text-ink">
+                    {formatVND(row.total_pay)}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-muted">
+                    {row.shift_count.toLocaleString("vi-VN")}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-muted">
+                    {formatHours(row.total_minutes)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </CardBody>
+      </Card>
+    </Reveal>
   );
 }
 

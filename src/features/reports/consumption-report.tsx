@@ -7,6 +7,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "@/features/inventory/units";
 import type { DateRange } from "./date-range-picker";
 
@@ -64,40 +65,42 @@ export function ConsumptionReport({ dateRange }: ConsumptionReportProps) {
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-ink">
-            Tiêu thụ theo nguyên liệu
-          </h3>
-          <Badge variant="soft" semantic="neutral">
-            {data.length} nguyên liệu
-          </Badge>
-        </div>
-        <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th className="text-left pb-2 font-medium">Nguyên liệu</th>
-              <th className="text-right pb-2 font-medium">Tổng tiêu thụ</th>
-              <th className="text-right pb-2 font-medium">Số đơn</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr key={row.ingredient_id} className="border-t border-border">
-                <td className="py-2 text-ink">{row.ingredient_name}</td>
-                <td className="py-2 text-right font-mono tabular-nums text-ink">
-                  {row.total_consumed.toLocaleString("vi-VN")}{" "}
-                  {formatUnit(row.unit)}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums text-muted">
-                  {row.sale_count}
-                </td>
+    <Reveal onScroll>
+      <Card>
+        <CardBody>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-ink">
+              Tiêu thụ theo nguyên liệu
+            </h3>
+            <Badge variant="soft" semantic="neutral">
+              {data.length} nguyên liệu
+            </Badge>
+          </div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th className="text-left pb-2 font-medium">Nguyên liệu</th>
+                <th className="text-right pb-2 font-medium">Tổng tiêu thụ</th>
+                <th className="text-right pb-2 font-medium">Số đơn</th>
               </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </CardBody>
-    </Card>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr key={row.ingredient_id} className="border-t border-border">
+                  <td className="py-2 text-ink">{row.ingredient_name}</td>
+                  <td className="py-2 text-right font-mono tabular-nums text-ink">
+                    {row.total_consumed.toLocaleString("vi-VN")}{" "}
+                    {formatUnit(row.unit)}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums text-muted">
+                    {row.sale_count}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </CardBody>
+      </Card>
+    </Reveal>
   );
 }

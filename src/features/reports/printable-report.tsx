@@ -1,6 +1,5 @@
 import { formatDateTime, formatVND } from "@/lib/format";
 import type { CashCloseReport } from "@/lib/types";
-import Image from "next/image";
 
 interface PrintableReportProps {
   report: CashCloseReport;
@@ -16,15 +15,11 @@ interface PrintableReportProps {
  * 16cm wide max, generous padding, consistent type scale.
  */
 export function PrintableReport({ report }: PrintableReportProps) {
-  const denominationRows = Object.entries(report.denominations_json ?? {})
-    .map(([d, c]) => ({ denomination: Number(d), count: Number(c) }))
-    .filter((r) => r.denomination > 0)
-    .sort((a, b) => b.denomination - a.denomination);
-
   return (
     <article className="mx-auto w-full max-w-[16cm] rounded-lg border border-border bg-surface p-6 font-sans text-ink">
       <header className="flex items-start gap-4 border-b border-border pb-4">
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element -- print/export artifact: a plain <img> renders reliably in window.print() and html-to-image; next/image's /_next/image optimizer URL does not capture/print dependably */}
+        <img
           src="/chill-logo.png"
           alt="Chill Coffee Garden"
           width={56}
@@ -66,35 +61,7 @@ export function PrintableReport({ report }: PrintableReportProps) {
         <Row label="Nạp sổ quỹ" value={formatVND(report.safe_deposit_amount ?? 0)} />
       </dl>
 
-      <h3 className="mt-6 mb-2 font-display text-base">Mệnh giá</h3>
-      {denominationRows.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted">
-          Chưa có dữ liệu mệnh giá
-        </div>
-      ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="py-2 font-medium">Mệnh giá</th>
-              <th className="py-2 font-medium">Số tờ</th>
-              <th className="py-2 font-medium text-right">Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {denominationRows.map((r) => (
-              <tr key={r.denomination} className="border-b border-border">
-                <td className="py-2">{formatVND(r.denomination)}</td>
-                <td className="py-2">{r.count}</td>
-                <td className="py-2 text-right font-display">
-                  {formatVND(r.denomination * r.count)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <p className="mt-4 text-sm text-muted">
+      <p className="mt-6 text-sm text-muted">
         Ghi chú: {report.note || "Không có"}
       </p>
 

@@ -101,3 +101,45 @@ body {
 .toast-enter {
   animation: toast-slide-in 200ms ease-out;
 }
+
+/* ===== Print — only the cash-close report (.print-target) goes to paper.
+ * The "In" button calls window.print(); without these rules the browser prints
+ * the entire app shell (sidebar, header, report list). Hide everything, reveal
+ * only the report subtree, and pull it to the page origin so invisible siblings
+ * don't push it onto a blank page. ===== */
+@media print {
+  /* Drop the app gradient so the sheet stays white. */
+  body {
+    background: #ffffff !important;
+  }
+  body * {
+    visibility: hidden;
+    /* GSAP/Reveal leaves an identity transform (matrix(1,0,0,1,0,0)) on its
+       wrappers, which creates a containing block — that would anchor the
+       absolutely-positioned report partway down the page instead of the sheet
+       origin. Clearing transforms lets .print-target pin to the top-left. */
+    transform: none !important;
+  }
+  .print-target,
+  .print-target * {
+    visibility: visible;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  /* The report's outer card border/rounding reads as a box on paper — drop it. */
+  .print-target > * {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}

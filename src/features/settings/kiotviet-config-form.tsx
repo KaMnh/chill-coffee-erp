@@ -13,8 +13,10 @@ import { useSupabase } from "@/hooks/use-supabase";
 import {
   loadKiotvietConfig,
   saveKiotvietConfig,
+  triggerPosRangeSync,
   type KvConfigDto,
 } from "@/lib/data";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Owner/manager-only form to configure the KiotViet connection.
@@ -35,6 +37,7 @@ import {
 export function KiotvietConfigForm() {
   const supabase = useSupabase();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [retailer, setRetailer] = useState("");
   const [clientId, setClientId] = useState("");
@@ -54,6 +57,11 @@ export function KiotvietConfigForm() {
   const [rateLimitError, setRateLimitError] = useState<string | undefined>(undefined);
   const [retailerError, setRetailerError] = useState<string | undefined>(undefined);
   const [clientIdError, setClientIdError] = useState<string | undefined>(undefined);
+  const [syncWindowDays, setSyncWindowDays] = useState(1);
+  const [windowError, setWindowError] = useState<string | undefined>(undefined);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [isRangeBusy, setIsRangeBusy] = useState(false);
 
   const applyConfig = useCallback((cfg: KvConfigDto) => {
     setRetailer(cfg.retailer ?? "");
@@ -64,6 +72,7 @@ export function KiotvietConfigForm() {
     setApiBase(cfg.api_base ?? "");
     setScope(cfg.scope ?? "");
     setRateLimit(cfg.rate_limit_per_sec ?? 4);
+    setSyncWindowDays(cfg.sync_window_days ?? 1);
     setIsActive(Boolean(cfg.is_active));
     setWebhookSecret(cfg.webhook_secret ?? "");
     setRevealClientSecret(false);
@@ -71,6 +80,7 @@ export function KiotvietConfigForm() {
     setRateLimitError(undefined);
     setRetailerError(undefined);
     setClientIdError(undefined);
+    setWindowError(undefined);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -119,6 +129,12 @@ export function KiotvietConfigForm() {
     } else {
       setRateLimitError(undefined);
     }
+    if (!Number.isInteger(syncWindowDays) || syncWindowDays < 1 || syncWindowDays > 31) {
+      setWindowError("Phải là số nguyên 1–31.");
+      blocked = true;
+    } else {
+      setWindowError(undefined);
+    }
     if (blocked) return;
 
     const patch: Partial<KvConfigDto> = {
@@ -129,6 +145,7 @@ export function KiotvietConfigForm() {
       scope: scope.trim(),
       rate_limit_per_sec: rateLimit,
       is_active: isActive,
+      sync_window_days: syncWindowDays,
     };
     // Only include client_secret if user actually typed a new value.
     const newSecret = clientSecret.trim();
@@ -147,6 +164,49 @@ export function KiotvietConfigForm() {
       });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // ===== Range-date backfill =====
+
+  async function handleRangeSync() {
+    if (!supabase || isRangeBusy) return;
+    if (!rangeFrom || !rangeTo) {
+      toast({ semantic: "danger", message: "Chọn cả Từ ngày và Đến ngày." });
+      return;
+    }
+    if (rangeFrom > rangeTo) {
+      toast({ semantic: "danger", message: "Từ ngày phải ≤ Đến ngày." });
+      return;
+    }
+    const days = Math.round((Date.parse(rangeTo) - Date.parse(rangeFrom)) / 86_400_000) + 1;
+    if (days > 31 && !confirm(`Khoảng ${days} ngày có thể chậm hoặc timeout. Tiếp tục?`)) {
+      return;
+    }
+    setIsRangeBusy(true);
+    try {
+      const r = await triggerPosRangeSync(supabase, { fromDate: rangeFrom, toDate: rangeTo });
+      if (r.status === "skipped") {
+        toast({ semantic: "info", message: r.message ?? "Đã bỏ qua (kết nối tắt?)." });
+      } else if (r.truncated) {
+        toast({
+          semantic: "warning",
+          message: `Đã lấy ${r.ingested?.orders ?? 0} hóa đơn nhưng bị cắt bớt (chạm trần). Hãy thu hẹp khoảng ngày rồi chạy lại.`,
+        });
+      } else {
+        toast({
+          semantic: "success",
+          message: `Đã đồng bộ ${r.ingested?.orders ?? 0} hóa đơn (${r.fetched} fetched).`,
+        });
+      }
+      void queryClient.invalidateQueries();
+    } catch (err) {
+      toast({
+        semantic: "danger",
+        message: err instanceof Error ? err.message : "Sync khoảng ngày lỗi.",
+      });
+    } finally {
+      setIsRangeBusy(false);
     }
   }
 
@@ -279,6 +339,22 @@ export function KiotvietConfigForm() {
                 label="Bật kết nối (sync sẽ chạy khi bật)"
               />
             </div>
+            <TextField
+              label="Cửa sổ đồng bộ mặc định (số ngày gần nhất)"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={31}
+              step={1}
+              value={String(syncWindowDays)}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setSyncWindowDays(Number.isFinite(n) ? n : 0);
+              }}
+              disabled={isSaving}
+              error={windowError}
+              helper="Áp dụng cho nút Đồng bộ POS và lần tự tải khi dữ liệu cũ. Sync nền 2 phút/lần vẫn chỉ lấy ngày đang xem. Mặc định 1."
+            />
           </section>
 
           {/* ── Webhook ── */}
@@ -351,6 +427,44 @@ export function KiotvietConfigForm() {
                   Thu hồi webhook
                 </Button>
               )}
+            </div>
+          </section>
+
+          {/* ── Đồng bộ theo khoảng ngày (backfill) ── */}
+          <section className="space-y-3 pt-2 border-t border-border">
+            <h3 className="text-sm font-medium text-ink">Đồng bộ theo khoảng ngày</h3>
+            <p className="text-xs text-muted">
+              Kéo lại hóa đơn KiotViet cho một khoảng ngày cụ thể (vd: backfill dữ liệu cũ
+              bị thiếu/lệch). Bỏ qua cooldown. Khoảng dài có thể chậm — nên chia nhỏ.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[140px]">
+                <TextField
+                  label="Từ ngày"
+                  type="date"
+                  value={rangeFrom}
+                  onChange={(e) => setRangeFrom(e.target.value)}
+                  disabled={isRangeBusy}
+                />
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <TextField
+                  label="Đến ngày"
+                  type="date"
+                  value={rangeTo}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                  disabled={isRangeBusy}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleRangeSync}
+                loading={isRangeBusy}
+                disabled={isRangeBusy || !rangeFrom || !rangeTo}
+              >
+                Đồng bộ khoảng này
+              </Button>
             </div>
           </section>
 

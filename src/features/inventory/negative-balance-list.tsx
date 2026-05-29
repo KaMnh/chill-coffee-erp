@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icons";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
 import type { StockBalance } from "@/lib/types";
 
@@ -42,7 +43,7 @@ export function NegativeBalanceList({ balances }: NegativeBalanceListProps) {
         {negative.length === 0 ? (
           <p className="text-sm text-muted">Không có nguyên liệu nào âm ✓</p>
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {negative.map((b) => (
               <div
                 key={b.ingredient_id}
@@ -62,7 +63,7 @@ export function NegativeBalanceList({ balances }: NegativeBalanceListProps) {
                 </div>
               </div>
             ))}
-          </div>
+          </Reveal>
         )}
       </CardBody>
     </Card>

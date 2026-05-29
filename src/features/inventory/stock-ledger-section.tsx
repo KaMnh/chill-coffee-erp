@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Reveal } from "@/components/ui/reveal";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useStockMovementsQuery } from "@/hooks/queries";
 import type {
@@ -181,11 +182,11 @@ export function StockLedgerSection({
         />
       ) : (
         <>
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {visibleMovements.map((m) => (
               <LedgerRow key={m.id} movement={m} />
             ))}
-          </div>
+          </Reveal>
 
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted">

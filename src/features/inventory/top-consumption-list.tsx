@@ -5,6 +5,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icons";
+import { Reveal } from "@/components/ui/reveal";
 import type { StockMovement } from "@/lib/types";
 
 interface TopConsumptionListProps {
@@ -71,7 +72,7 @@ export function TopConsumptionList({
             dashedBorder
           />
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {topConsumption.map((item, idx) => (
               <div
                 key={item.ingredient_id}
@@ -89,7 +90,7 @@ export function TopConsumptionList({
                 </p>
               </div>
             ))}
-          </div>
+          </Reveal>
         )}
       </CardBody>
     </Card>

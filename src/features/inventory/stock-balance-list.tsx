@@ -6,6 +6,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/ui/icons";
+import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
 import type { StockBalance } from "@/lib/types";
 
@@ -66,7 +67,7 @@ export function StockBalanceList({
   }
 
   return (
-    <div className="space-y-2">
+    <Reveal onScroll className="space-y-2">
       {balances.map((b) => {
         const isNegative = b.theoretical_balance < 0;
         const clickable = onSelectIngredient != null;
@@ -133,7 +134,7 @@ export function StockBalanceList({
           </Card>
         );
       })}
-    </div>
+    </Reveal>
   );
 }
 

@@ -7,6 +7,8 @@ import { MenuItemsTab } from "./menu-items-tab";
 import { RecipesTab } from "./recipes-tab";
 import { StockTab } from "./stock-tab";
 import { InventoryDashboardTab } from "./inventory-dashboard-tab";
+import { Reveal } from "@/components/ui/reveal";
+import { DUR } from "@/lib/gsap";
 import type { UserRole } from "@/lib/types";
 
 interface InventoryViewProps {
@@ -50,23 +52,33 @@ export function InventoryView({ role }: InventoryViewProps) {
         </TabsList>
 
         <TabsContent value="stock">
-          <StockTab role={role} />
+          <Reveal duration={DUR.fast}>
+            <StockTab role={role} />
+          </Reveal>
         </TabsContent>
 
         <TabsContent value="ingredients">
-          <IngredientsTab role={role} />
+          <Reveal duration={DUR.fast}>
+            <IngredientsTab role={role} />
+          </Reveal>
         </TabsContent>
 
         <TabsContent value="menu_items">
-          <MenuItemsTab role={role} />
+          <Reveal duration={DUR.fast}>
+            <MenuItemsTab role={role} />
+          </Reveal>
         </TabsContent>
 
         <TabsContent value="recipes">
-          <RecipesTab role={role} />
+          <Reveal duration={DUR.fast}>
+            <RecipesTab role={role} />
+          </Reveal>
         </TabsContent>
 
         <TabsContent value="dashboard">
-          <InventoryDashboardTab />
+          <Reveal duration={DUR.fast}>
+            <InventoryDashboardTab />
+          </Reveal>
         </TabsContent>
       </Tabs>
     </div>

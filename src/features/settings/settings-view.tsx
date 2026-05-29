@@ -3,7 +3,9 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Reveal } from "@/components/ui/reveal";
 import { useSupabase } from "@/hooks/use-supabase";
+import { DUR } from "@/lib/gsap";
 import {
   useAppSettingsQuery,
   useSettingsAccountsQuery,
@@ -89,6 +91,7 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
       </TabsList>
 
       <TabsContent value="general">
+        <Reveal duration={DUR.fast}>
         <div className="space-y-6">
           <AccountsManagerCard
             accounts={accounts}
@@ -106,10 +109,13 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
           <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
           <KiotvietConfigForm />
         </div>
+        </Reveal>
       </TabsContent>
 
       <TabsContent value="backup">
+        <Reveal duration={DUR.fast}>
         <BackupRestoreSection role={role} authHeader={authHeader} />
+        </Reveal>
       </TabsContent>
     </Tabs>
   );

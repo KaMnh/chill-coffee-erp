@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useUpdateHandoverDefaultTasks } from "@/hooks/mutations/use-settings-mutations";
+import { Reveal } from "@/components/ui/reveal";
 import { slugifyTaskKey } from "./task-key";
 
 interface HandoverDefaultTasksEditorProps {
@@ -154,7 +155,7 @@ export function HandoverDefaultTasksEditor({ tasks }: HandoverDefaultTasksEditor
             subtitle="Thêm mục đầu tiên ở dưới."
           />
         ) : (
-          <div className="space-y-2">
+          <Reveal onScroll className="space-y-2">
             {tasks.map((task) => {
               const isEditing = editingKey === task.key;
               const isDeletingThis = deletingKey === task.key;
@@ -242,7 +243,7 @@ export function HandoverDefaultTasksEditor({ tasks }: HandoverDefaultTasksEditor
                 </div>
               );
             })}
-          </div>
+          </Reveal>
         )}
 
         <div className="border-t border-border pt-4">

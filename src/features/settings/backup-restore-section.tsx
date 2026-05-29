@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Modal, ModalContent, ModalTitle } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useQueryClient } from "@tanstack/react-query";
+import { Reveal } from "@/components/ui/reveal";
 
 interface Props {
   role: UserRole;
@@ -253,6 +254,7 @@ function HistoryPanel({ authHeader }: { authHeader: string | null }) {
     <>
       <Card className="p-4">
         <h3 className="text-lg font-semibold mb-2">History (10 gần nhất)</h3>
+        <Reveal onScroll>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -304,6 +306,7 @@ function HistoryPanel({ authHeader }: { authHeader: string | null }) {
             </tbody>
           </table>
         </div>
+        </Reveal>
       </Card>
       {viewLogId && (
         <LogModal

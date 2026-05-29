@@ -17,6 +17,7 @@ import {
 } from "@/features/navigation/navigation";
 import type { ViewKey } from "@/features/navigation/navigation";
 import type { AppSettings, SettingsAccount, UserRole } from "@/lib/types";
+import { Reveal } from "@/components/ui/reveal";
 import { UserSidebarConfigModal } from "./user-sidebar-config-modal";
 
 interface SidebarConfigFormProps {
@@ -165,7 +166,7 @@ export function SidebarConfigForm({
               subtitle="Tài khoản nhân viên hiện ra ở đây sau khi được kích hoạt."
             />
           ) : (
-            <div className="space-y-2">
+            <Reveal onScroll className="space-y-2">
               {accounts.map((account) => {
                 const hasOverride = account.sidebar_config !== null;
                 const overrideCount = account.sidebar_config?.length ?? 0;
@@ -209,7 +210,7 @@ export function SidebarConfigForm({
                   </div>
                 );
               })}
-            </div>
+            </Reveal>
           )}
         </CardBody>
       </Card>

@@ -103,11 +103,23 @@ export function CashFlowChart({
                 axisLine={false}
                 tick={{ fontSize: 11, fill: "var(--color-muted)" }}
               />
+              {/* Left axis: Thu/Chi bars. Right axis: Nạp két line — a large
+                  batch safe-deposit must NOT rescale (squash) the income bars. */}
               <YAxis
+                yAxisId="left"
                 tickFormatter={abbreviateVND}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                width={40}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tickFormatter={abbreviateVND}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "var(--color-warning)" }}
                 width={40}
               />
               <RechartsTooltip
@@ -125,6 +137,7 @@ export function CashFlowChart({
                 }
               />
               <Bar
+                yAxisId="left"
                 dataKey="in"
                 fill="var(--color-success)"
                 radius={[6, 6, 0, 0]}
@@ -132,6 +145,7 @@ export function CashFlowChart({
                 onClick={handleBarClick}
               />
               <Bar
+                yAxisId="left"
                 dataKey="out"
                 fill="var(--color-danger)"
                 radius={[6, 6, 0, 0]}
@@ -139,6 +153,7 @@ export function CashFlowChart({
                 onClick={handleBarClick}
               />
               <Line
+                yAxisId="right"
                 type="monotone"
                 dataKey="safe_deposit"
                 stroke="var(--color-warning)"

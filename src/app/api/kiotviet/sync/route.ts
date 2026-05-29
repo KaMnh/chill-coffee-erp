@@ -2,15 +2,17 @@
  * POST /api/kiotviet/sync — manual trigger: fetch invoices từ KiotViet → ingest vào Supabase.
  *
  * Body (optional JSON):
- *   { fromDate?: 'YYYY-MM-DD', toDate?: 'YYYY-MM-DD' }
- *   Default: today only.
+ *   Windowed/single: { anchorDate?: 'YYYY-MM-DD', applyWindow?: boolean } — the
+ *     server resolves the range from the owner-only sync_window_days setting.
+ *   Range backfill:  { fromDate: 'YYYY-MM-DD', toDate: 'YYYY-MM-DD' }
+ *   Plus: { force?: boolean, reason?: string }. Default (no dates): today only.
  *
  * Auth: owner / manager / staff_operator (giống cooldown rule cũ của edge function).
  *
  * Behavior:
  *   - Per-user rate limit: 6 calls/min (owner: 12) — track in pos_sync_attempts table
  *   - Cooldown: bỏ qua nếu sync trước < 30s (force=true bypass)
- *   - Returns: { status, message, ingested?: {...} }
+ *   - Returns: { status, message, ingested?: {...}, truncated, pages_scanned }
  *
  * Required env:
  *   - SUPABASE_SERVICE_ROLE_KEY: server-side DB access

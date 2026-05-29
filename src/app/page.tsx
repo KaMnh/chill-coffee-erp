@@ -33,6 +33,7 @@ import { InventoryView } from "@/features/inventory/inventory-view";
 import { SettingsView } from "@/features/settings/settings-view";
 import { ShiftsView } from "@/features/shifts/shifts-view";
 import { Card, CardBody } from "@/components/ui/card";
+import { Reveal } from "@/components/ui/reveal";
 import { useToast } from "@/components/ui/toast";
 import type { ViewKey } from "@/features/navigation/navigation";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
@@ -241,7 +242,7 @@ export default function HomePage() {
         />
       }
     >
-      <div className="space-y-6">
+      <Reveal key={view} className="space-y-6">
         {view === "dashboard" && (
           <DashboardView
             businessDate={businessDate}
@@ -270,7 +271,7 @@ export default function HomePage() {
         )}
         {view === "inventory" && <InventoryView role={account.role} />}
         {view === "settings" && <SettingsView role={account.role} authHeader={authHeader} />}
-      </div>
+      </Reveal>
     </AppShell>
   );
 }

@@ -92,7 +92,9 @@ export function CashFlowChart({
           )}
         </div>
         <div className="w-full" style={{ height: 280 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          {/* initialDimension height>0 suppresses Recharts' benign mount-time
+              width(-1)/height(-1) warning before its ResizeObserver measures. */}
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 0, height: 280 }}>
             <ComposedChart
               data={data}
               margin={{ top: 16, right: 8, left: 0, bottom: 8 }}

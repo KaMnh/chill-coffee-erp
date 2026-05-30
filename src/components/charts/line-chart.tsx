@@ -48,7 +48,9 @@ export function LineChart<T extends Record<string, unknown>>({
 }: LineChartProps<T>) {
   return (
     <div className={cn("w-full", className)} style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+      {/* initialDimension height>0 avoids Recharts' benign mount-time
+          width(-1)/height(-1) warning before its ResizeObserver measures. */}
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 0, height }}>
         <RechartsLineChart
           data={data}
           margin={{ top: 24, right: 8, left: 0, bottom: 8 }}

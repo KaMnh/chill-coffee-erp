@@ -45,7 +45,7 @@ export default function HomePage() {
   const { status, account, isLoadingAccount, signOut } = useAuthSession();
   const { businessDate, setBusinessDate } = useBusinessDate();
   const appSettingsQuery = useAppSettingsQuery(supabase, status === "authed");
-  const { visibleNav, defaultView, canSee } = useRoleGate(account, appSettingsQuery.data);
+  const { groupedNav, defaultView, canSee } = useRoleGate(account, appSettingsQuery.data);
   const dashboardQuery = useDashboardQuery(supabase, businessDate, status === "authed");
   const posSync = usePosSync(supabase, businessDate, account, dashboardQuery.data?.latest_sync);
   useBackgroundPosSync(posSync, account?.role);
@@ -188,19 +188,21 @@ export default function HomePage() {
       sidebar={
         <Sidebar>
           <SidebarLogo>Chill Coffee Garden</SidebarLogo>
-          <SidebarSection label="Vận hành">
-            {visibleNav.map((item) => (
-              <NavItem
-                key={item.key}
-                icon={item.icon}
-                label={item.label}
-                active={view === item.key}
-                onClick={() => handleNavClick(item.key)}
-                onPointerEnter={() => handleNavHover(item.key)}
-                onPointerLeave={() => handleNavHoverLeave(item.key)}
-              />
-            ))}
-          </SidebarSection>
+          {groupedNav.map((group) => (
+            <SidebarSection key={group.key} label={group.label}>
+              {group.items.map((item) => (
+                <NavItem
+                  key={item.key}
+                  icon={item.icon}
+                  label={item.label}
+                  active={view === item.key}
+                  onClick={() => handleNavClick(item.key)}
+                  onPointerEnter={() => handleNavHover(item.key)}
+                  onPointerLeave={() => handleNavHoverLeave(item.key)}
+                />
+              ))}
+            </SidebarSection>
+          ))}
         </Sidebar>
       }
       topBar={

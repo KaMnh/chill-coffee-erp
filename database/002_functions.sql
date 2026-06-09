@@ -368,6 +368,7 @@ declare
   v_id uuid;
   v_amount numeric(14,2);
   v_date date;
+  v_template_id uuid;
 begin
   if not public.app_is_staff_or_above() then raise exception 'Bạn không có quyền tạo khoản chi.'; end if;
   if length(coalesce(p_payload->>'description','')) > 500 then
@@ -385,9 +386,19 @@ begin
      or coalesce((p_payload->>'unit_price')::numeric, 0) < 0 then
     raise exception 'quantity/unit_price không được âm.';
   end if;
+  v_template_id := nullif(p_payload->>'template_id','')::uuid;
   insert into public.expenses (business_date, category_id, template_id, description, quantity, unit, unit_price, amount, payment_method, note, created_by)
-  values (v_date, nullif(p_payload->>'category_id','')::uuid, nullif(p_payload->>'template_id','')::uuid, p_payload->>'description', coalesce((p_payload->>'quantity')::numeric, 1), p_payload->>'unit', coalesce((p_payload->>'unit_price')::numeric, 0), v_amount, coalesce(p_payload->>'payment_method','cash'), p_payload->>'note', auth.uid())
+  values (v_date, nullif(p_payload->>'category_id','')::uuid, v_template_id, p_payload->>'description', coalesce((p_payload->>'quantity')::numeric, 1), p_payload->>'unit', coalesce((p_payload->>'unit_price')::numeric, 0), v_amount, coalesce(p_payload->>'payment_method','cash'), p_payload->>'note', auth.uid())
   returning id into v_id;
+
+  -- Đếm lượt dùng mẫu chi: tăng usage_count + last_used_at để rail "Dùng nhiều
+  -- nhất" (sort usage_count desc ở src/lib/data/expenses.ts) phản ánh đúng tần suất.
+  if v_template_id is not null then
+    update public.expense_templates
+    set usage_count = usage_count + 1,
+        last_used_at = now()
+    where id = v_template_id;
+  end if;
 
   if coalesce(p_payload->>'payment_method','cash') = 'cash' and v_amount > 0 then
     insert into public.cash_drawer_events (business_date, occurred_at, event_type, direction, amount, expense_id, created_by, source, note)

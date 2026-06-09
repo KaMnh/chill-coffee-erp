@@ -606,6 +606,18 @@ begin
     raise exception 'Không tìm thấy dòng lương cần sửa.';
   end if;
 
+  -- Chống sửa lương của ngày đã chốt két (final): cash_close_reports giữ
+  -- payroll_cash_total dưới dạng snapshot khi finalize; sửa total_pay sau khi
+  -- chốt sẽ làm lệch báo cáo so với ledger (cash_drawer_events). Flow sửa đúng
+  -- = hủy báo cáo (void_cash_close_report) → sửa lương → finalize lại. Đồng bộ
+  -- với guard sẵn có ở update_cash_count.
+  if exists (
+    select 1 from public.cash_close_reports
+    where business_date = v_record.business_date and report_status = 'final'
+  ) then
+    raise exception 'Ngày % đã chốt két (final). Hủy báo cáo (qua flow void) trước khi sửa lương.', v_record.business_date;
+  end if;
+
   v_in := coalesce((p_payload->>'check_in_at')::timestamptz, v_record.check_in_at);
   v_out := coalesce((p_payload->>'check_out_at')::timestamptz, v_record.check_out_at);
   v_allowance := coalesce((p_payload->>'allowance_amount')::numeric, v_record.allowance_amount, 0);

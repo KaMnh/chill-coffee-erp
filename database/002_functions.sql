@@ -902,7 +902,6 @@ set search_path = public, auth
 as $$
 declare
   v_report public.cash_close_reports%rowtype;
-  v_safe_balance numeric(14,2);
   v_adjustment_id uuid;
 begin
   if not public.app_is_owner_manager() then
@@ -920,13 +919,16 @@ begin
     raise exception 'Báo cáo % đang ở trạng thái %, không thể hủy (chỉ hủy được báo cáo final).', p_report_id, v_report.report_status;
   end if;
 
-  -- Validate safe balance đủ để reverse
-  if v_report.safe_deposit_amount > 0 then
-    v_safe_balance := public.safe_balance_now();
-    if v_safe_balance < v_report.safe_deposit_amount then
-      raise exception 'Sổ quỹ không đủ để hủy báo cáo này. Cần %, hiện có %. Hoàn tác mở két ngày sau (rút từ sổ quỹ) trước khi hủy.',
-        v_report.safe_deposit_amount, v_safe_balance;
-    end if;
+  -- Validate từng quỹ đủ để reverse: cash = safe_deposit_amount; transfer = bank_transfer_confirmed.
+  if v_report.safe_deposit_amount > 0
+     and public.safe_fund_balance_now('cash') < v_report.safe_deposit_amount then
+    raise exception 'Quỹ tiền mặt không đủ để hủy báo cáo này. Cần %, hiện có %. Hoàn tác mở két ngày sau trước khi hủy.',
+      v_report.safe_deposit_amount, public.safe_fund_balance_now('cash');
+  end if;
+  if coalesce(v_report.bank_transfer_confirmed, 0) > 0
+     and public.safe_fund_balance_now('transfer') < v_report.bank_transfer_confirmed then
+    raise exception 'Quỹ chuyển khoản không đủ để hủy báo cáo này. Cần %, hiện có %.',
+      v_report.bank_transfer_confirmed, public.safe_fund_balance_now('transfer');
   end if;
 
   -- Update report status (audit_cash_close trigger sẽ log change vào audit_log)
@@ -937,19 +939,36 @@ begin
       voided_at = now()
   where id = p_report_id;
 
-  -- Reverse safe deposit qua adjustment (KHÔNG xóa deposit_close gốc)
+  -- Reverse deposit theo TỪNG quỹ qua adjustment ngược (KHÔNG xóa deposit_close gốc).
   if v_report.safe_deposit_amount > 0 then
+    perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
     insert into public.safe_transactions (
-      transaction_type, amount, balance_after,
+      transaction_type, amount, balance_after, fund,
       description, cash_close_report_id, created_by
     ) values (
       'adjustment',
       -v_report.safe_deposit_amount,
-      public.safe_balance_now() - v_report.safe_deposit_amount,
-      'Reverse từ chốt két ngày ' || v_report.business_date::text || ' (voided): ' || left(p_reason, 100),
+      public.safe_fund_balance_now('cash') - v_report.safe_deposit_amount,
+      'cash',
+      'Reverse tiền mặt từ chốt két ngày ' || v_report.business_date::text || ' (voided): ' || left(p_reason, 80),
       p_report_id,
       auth.uid()
     ) returning id into v_adjustment_id;
+  end if;
+  if coalesce(v_report.bank_transfer_confirmed, 0) > 0 then
+    perform pg_advisory_xact_lock(hashtext('safe_fund:transfer'));
+    insert into public.safe_transactions (
+      transaction_type, amount, balance_after, fund,
+      description, cash_close_report_id, created_by
+    ) values (
+      'adjustment',
+      -v_report.bank_transfer_confirmed,
+      public.safe_fund_balance_now('transfer') - v_report.bank_transfer_confirmed,
+      'transfer',
+      'Reverse chuyển khoản từ chốt két ngày ' || v_report.business_date::text || ' (voided): ' || left(p_reason, 80),
+      p_report_id,
+      auth.uid()
+    );
   end if;
 
   return jsonb_build_object(
@@ -1013,13 +1032,17 @@ begin
   v_new_deposit := v_report.physical_cash - v_new_leave;
   v_diff := v_new_deposit - v_report.safe_deposit_amount;
 
-  -- Validate balance nếu phải rút bớt khỏi safe (diff < 0)
+  -- Validate balance nếu phải rút bớt khỏi safe (diff < 0).
+  -- Leave-change chỉ ảnh hưởng QUỸ TIỀN MẶT (deposit cash); quỹ CK giữ nguyên.
   if v_diff < 0 then
-    v_safe_balance := public.safe_balance_now();
+    perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
+    v_safe_balance := public.safe_fund_balance_now('cash');
     if v_safe_balance < abs(v_diff) then
-      raise exception 'Sổ quỹ không đủ để giảm khoản nạp. Cần rút %, hiện có %. Hoàn tác mở két ngày sau (rút từ sổ quỹ) trước.',
+      raise exception 'Quỹ tiền mặt không đủ để giảm khoản nạp. Cần rút %, hiện có %. Hoàn tác mở két ngày sau (rút từ sổ quỹ) trước.',
         abs(v_diff), v_safe_balance;
     end if;
+  elsif v_diff > 0 then
+    perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
   end if;
 
   -- Update report
@@ -1030,15 +1053,16 @@ begin
       updated_at = now()
   where id = p_report_id;
 
-  -- Insert adjustment nếu safe_deposit thay đổi
+  -- Insert adjustment nếu safe_deposit thay đổi — chain từ QUỸ TIỀN MẶT.
   if v_diff <> 0 then
     insert into public.safe_transactions (
-      transaction_type, amount, balance_after,
+      transaction_type, amount, balance_after, fund,
       description, cash_close_report_id, created_by
     ) values (
       'adjustment',
       v_diff,
-      public.safe_balance_now() + v_diff,
+      public.safe_fund_balance_now('cash') + v_diff,
+      'cash',
       'Sửa chốt két ngày ' || v_report.business_date::text || ': leave ' ||
         v_report.leave_for_next_day::text || ' → ' || v_new_leave::text,
       p_report_id,
@@ -1899,23 +1923,6 @@ grant execute on function public.get_last_sync_cursor(text) to authenticated;
 -- rồi insert với balance_after = next_balance.
 -- =============================================================================
 
--- Helper: lấy balance hiện tại (= balance_after của transaction gần nhất, hoặc 0).
--- Owner + manager đều xem được (manager cần biết để hiển thị status).
-create or replace function public.safe_balance_now()
-returns numeric
-language sql
-stable
-security definer
-set search_path = public, auth
-as $$
-  select coalesce(
-    (select balance_after from public.safe_transactions order by occurred_at desc, id desc limit 1),
-    0
-  );
-$$;
-
-grant execute on function public.safe_balance_now() to authenticated;
-
 -- Số dư một quỹ (cash|transfer) = balance_after của row GHI gần nhất (created_at
 -- desc, id desc) của quỹ đó. Basis created_at (invariant F4) áp per-fund — để
 -- giao dịch back-date không làm "biến mất" số dư hiện tại.
@@ -1937,6 +1944,22 @@ $$;
 
 grant execute on function public.safe_fund_balance_now(text) to authenticated;
 
+-- ⚠️ Legacy display-only helper. Sổ quỹ 2 quỹ: trả về TỔNG (cash + transfer).
+-- KHÔNG BAO GIỜ dùng để chain balance_after của row mới — mỗi row thuộc đúng 1
+-- quỹ và phải chain từ safe_fund_balance_now(fund) tương ứng.
+-- (Định nghĩa SAU safe_fund_balance_now vì body SQL được validate lúc create.)
+create or replace function public.safe_balance_now()
+returns numeric
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select public.safe_fund_balance_now('cash') + public.safe_fund_balance_now('transfer');
+$$;
+
+grant execute on function public.safe_balance_now() to authenticated;
+
 -- Tổng hợp 3 số cho UI: { cash, transfer, total }.
 create or replace function public.safe_balances_now()
 returns jsonb
@@ -1954,15 +1977,24 @@ $$;
 
 grant execute on function public.safe_balances_now() to authenticated;
 
--- Setup ban đầu: chỉ chạy được 1 lần khi chưa có transaction nào.
--- Owner only.
-create or replace function public.safe_setup_initial(p_amount numeric, p_note text default null)
+-- Setup ban đầu: chỉ chạy được 1 lần khi chưa có transaction nào. Owner only.
+-- Sổ quỹ 2 quỹ: nhập số dư mở đầu cho quỹ tiền mặt + quỹ chuyển khoản.
+-- DROP signature cũ (numeric, text) trước khi tạo chữ ký mới (tránh PostgREST ambiguity).
+drop function if exists public.safe_setup_initial(numeric, text);
+create or replace function public.safe_setup_initial(
+  p_cash numeric,
+  p_transfer numeric default 0,
+  p_note text default null
+)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public, auth
 as $$
-declare v_id uuid;
+declare
+  v_cash_id uuid;
+  v_transfer_id uuid;
+  v_transfer numeric := coalesce(p_transfer, 0);
 begin
   if public.app_role() <> 'owner' then
     raise exception 'Chỉ owner được thiết lập sổ quỹ ban đầu.';
@@ -1970,26 +2002,43 @@ begin
   if exists (select 1 from public.safe_transactions) then
     raise exception 'Sổ quỹ đã có giao dịch. Dùng safe_adjust thay vì safe_setup_initial.';
   end if;
-  if p_amount < 0 or p_amount > 1000000000 then
-    raise exception 'Số dư ban đầu phải 0–1.000.000.000.';
+  if p_cash < 0 or p_cash > 1000000000 or v_transfer < 0 or v_transfer > 1000000000 then
+    raise exception 'Số dư ban đầu mỗi quỹ phải 0–1.000.000.000.';
   end if;
 
+  -- Luôn ghi row quỹ tiền mặt (kể cả 0) để đánh dấu sổ quỹ đã khởi tạo.
   insert into public.safe_transactions (
-    transaction_type, amount, balance_after, description, created_by
+    transaction_type, amount, balance_after, fund, description, created_by
   ) values (
-    'initial_setup', p_amount, p_amount,
-    coalesce(nullif(trim(p_note), ''), 'Khởi tạo sổ quỹ'),
+    'initial_setup', p_cash, p_cash, 'cash',
+    coalesce(nullif(trim(p_note), ''), 'Khởi tạo quỹ tiền mặt'),
     auth.uid()
-  ) returning id into v_id;
+  ) returning id into v_cash_id;
 
-  return jsonb_build_object('id', v_id, 'balance', p_amount);
+  if v_transfer > 0 then
+    insert into public.safe_transactions (
+      transaction_type, amount, balance_after, fund, description, created_by
+    ) values (
+      'initial_setup', v_transfer, v_transfer, 'transfer',
+      coalesce(nullif(trim(p_note), ''), 'Khởi tạo quỹ chuyển khoản'),
+      auth.uid()
+    ) returning id into v_transfer_id;
+  end if;
+
+  return jsonb_build_object(
+    'cash_id', v_cash_id, 'transfer_id', v_transfer_id,
+    'cash', p_cash, 'transfer', v_transfer,
+    'balance', p_cash + v_transfer
+  );
 end;
 $$;
 
-grant execute on function public.safe_setup_initial(numeric, text) to authenticated;
+grant execute on function public.safe_setup_initial(numeric, numeric, text) to authenticated;
 
 -- Rút sổ quỹ cho mục đích khác (tiền điện, thuê, mua nguyên liệu, ...).
 -- p_category: 'utilities' | 'rent' | 'inventory' | 'maintenance' | 'other'
+-- v2 (2026-05-28): auto-insert expense row link về safe_transaction.
+-- v3 (2026-06-10): fund-aware — rút từ QUỸ TIỀN MẶT (Sổ quỹ 2 quỹ).
 create or replace function public.safe_withdraw_other(
   p_amount numeric,
   p_category text,
@@ -2004,6 +2053,7 @@ declare
   v_balance numeric;
   v_next numeric;
   v_id uuid;
+  v_expense_id uuid;
 begin
   if public.app_role() <> 'owner' then
     raise exception 'Chỉ owner được rút sổ quỹ.';
@@ -2018,28 +2068,48 @@ begin
     raise exception 'Mô tả vượt 500 ký tự.';
   end if;
 
-  -- Lock row gần nhất để chống race condition
-  select balance_after into v_balance
-  from public.safe_transactions
-  order by occurred_at desc, id desc
-  limit 1
-  for update;
-
-  v_balance := coalesce(v_balance, 0);
+  -- Serialize per-fund chống race (advisory lock thay row-lock cross-fund cũ).
+  perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
+  v_balance := public.safe_fund_balance_now('cash');
   v_next := v_balance - p_amount;
   if v_next < 0 then
-    raise exception 'Sổ quỹ không đủ. Số dư hiện tại %, rút %.', v_balance, p_amount;
+    raise exception 'Quỹ tiền mặt không đủ. Số dư hiện tại %, rút %.', v_balance, p_amount;
   end if;
 
   insert into public.safe_transactions (
-    transaction_type, amount, balance_after,
+    transaction_type, amount, balance_after, fund,
     reason_category, description, created_by
   ) values (
-    'withdraw_other', -p_amount, v_next,
+    'withdraw_other', -p_amount, v_next, 'cash',
     p_category, p_description, auth.uid()
   ) returning id into v_id;
 
-  return jsonb_build_object('id', v_id, 'balance_after', v_next);
+  -- Auto-create expense row linked to this safe withdrawal.
+  -- payment_method='other' → no cash_drawer_events side effect.
+  -- category_id=NULL → row appears as "(chưa phân loại)" in cashflow breakdown.
+  insert into public.expenses (
+    business_date,
+    description,
+    amount,
+    payment_method,
+    category_id,
+    safe_transaction_id,
+    created_by
+  ) values (
+    current_date,
+    coalesce(nullif(trim(p_description), ''), 'Rút quỹ — ' || p_category),
+    p_amount,
+    'other',
+    null,
+    v_id,
+    auth.uid()
+  ) returning id into v_expense_id;
+
+  return jsonb_build_object(
+    'id', v_id,
+    'balance_after', v_next,
+    'expense_id', v_expense_id
+  );
 end;
 $$;
 
@@ -2071,22 +2141,18 @@ begin
     raise exception 'Lý do vượt 500 ký tự.';
   end if;
 
-  select balance_after into v_balance
-  from public.safe_transactions
-  order by occurred_at desc, id desc
-  limit 1
-  for update;
-
-  v_balance := coalesce(v_balance, 0);
+  -- Fund-aware (Sổ quỹ 2 quỹ): điều chỉnh QUỸ TIỀN MẶT (P3 sẽ thêm chọn quỹ).
+  perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
+  v_balance := public.safe_fund_balance_now('cash');
   v_diff := p_new_balance - v_balance;
   if v_diff = 0 then
     raise exception 'Số dư mới giống số dư hiện tại — không cần điều chỉnh.';
   end if;
 
   insert into public.safe_transactions (
-    transaction_type, amount, balance_after, description, created_by
+    transaction_type, amount, balance_after, fund, description, created_by
   ) values (
-    'adjustment', v_diff, p_new_balance, p_note, auth.uid()
+    'adjustment', v_diff, p_new_balance, 'cash', p_note, auth.uid()
   ) returning id into v_id;
 
   return jsonb_build_object('id', v_id, 'balance_after', p_new_balance, 'difference', v_diff);
@@ -2129,7 +2195,8 @@ begin
   into v_total
   from jsonb_each_text(coalesce(p_denominations_json, '{}'::jsonb));
 
-  v_balance := public.safe_balance_now();
+  -- Đếm tay = tiền mặt vật lý → so với QUỸ TIỀN MẶT (CK không đếm tay được).
+  v_balance := public.safe_fund_balance_now('cash');
   v_diff := v_total - v_balance;
 
   insert into public.safe_counts (
@@ -2342,9 +2409,10 @@ begin
     if v_role <> 'owner' then
       raise exception 'Chỉ owner được rút từ sổ quỹ. Manager chỉ carry-over.';
     end if;
-    v_safe_balance := public.safe_balance_now();
+    perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
+    v_safe_balance := public.safe_fund_balance_now('cash');
     if v_safe_balance < v_safe_withdrawal then
-      raise exception 'Sổ quỹ không đủ. Số dư %, rút %.', v_safe_balance, v_safe_withdrawal;
+      raise exception 'Quỹ tiền mặt không đủ. Số dư %, rút %.', v_safe_balance, v_safe_withdrawal;
     end if;
   end if;
   v_carried_amount := v_total - v_safe_withdrawal;
@@ -2418,15 +2486,16 @@ begin
     );
   end if;
 
-  -- Insert safe_transaction nếu rút từ sổ quỹ
+  -- Insert safe_transaction nếu rút từ sổ quỹ — rút từ QUỸ TIỀN MẶT (mở két = tiền mặt).
   if v_safe_withdrawal > 0 then
     insert into public.safe_transactions (
-      transaction_type, amount, balance_after,
+      transaction_type, amount, balance_after, fund,
       description, cash_day_opening_id, created_by
     ) values (
       'withdraw_open',
       -v_safe_withdrawal,
-      public.safe_balance_now() - v_safe_withdrawal,
+      public.safe_fund_balance_now('cash') - v_safe_withdrawal,
+      'cash',
       'Rút mở két ngày ' || v_date::text,
       v_row.id,
       auth.uid()
@@ -2566,19 +2635,41 @@ begin
     note = excluded.note,
     safe_deposit_amount = excluded.safe_deposit_amount,
     leave_for_next_day = excluded.leave_for_next_day,
-    report_status = 'final'
+    report_status = 'final',
+    void_reason = null,
+    voided_by = null,
+    voided_at = null
   returning id into v_report_id;
 
-  -- Auto-deposit dư vào sổ quỹ (nếu safe_deposit > 0)
+  -- Auto-deposit vào sổ quỹ, TÁCH theo quỹ (Sổ quỹ 2 quỹ):
+  --   tiền mặt (physical − leave) → quỹ cash; chuyển khoản đã nhận → quỹ transfer.
+  -- Chỉ ghi row khi phần đó > 0. Advisory lock per-fund chống race read-then-write.
   if v_safe_deposit > 0 then
+    perform pg_advisory_xact_lock(hashtext('safe_fund:cash'));
     insert into public.safe_transactions (
-      transaction_type, amount, balance_after,
+      transaction_type, amount, balance_after, fund,
       description, cash_close_report_id, created_by
     ) values (
       'deposit_close',
       v_safe_deposit,
-      public.safe_balance_now() + v_safe_deposit,
-      'Nạp từ chốt két ngày ' || v_count.business_date::text,
+      public.safe_fund_balance_now('cash') + v_safe_deposit,
+      'cash',
+      'Nạp tiền mặt từ chốt két ngày ' || v_count.business_date::text,
+      v_report_id,
+      auth.uid()
+    );
+  end if;
+  if v_bank_transfer > 0 then
+    perform pg_advisory_xact_lock(hashtext('safe_fund:transfer'));
+    insert into public.safe_transactions (
+      transaction_type, amount, balance_after, fund,
+      description, cash_close_report_id, created_by
+    ) values (
+      'deposit_close',
+      v_bank_transfer,
+      public.safe_fund_balance_now('transfer') + v_bank_transfer,
+      'transfer',
+      'Nạp chuyển khoản từ chốt két ngày ' || v_count.business_date::text,
       v_report_id,
       auth.uid()
     );

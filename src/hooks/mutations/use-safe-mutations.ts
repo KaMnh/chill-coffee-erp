@@ -29,7 +29,8 @@ import { queryKeys } from "@/hooks/queries/keys";
  */
 
 export interface SetupSafeInitialInput {
-  amount: number;
+  cash: number;
+  transfer: number;
   note?: string;
 }
 
@@ -38,7 +39,7 @@ export function useSetupSafeInitial(supabase: SupabaseClient | null) {
   return useMutation({
     mutationFn: async (input: SetupSafeInitialInput) => {
       if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
-      return setupSafeInitial(supabase, input.amount, input.note);
+      return setupSafeInitial(supabase, input.cash, input.transfer, input.note);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });

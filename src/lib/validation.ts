@@ -132,13 +132,18 @@ export function validateHandoverNote(note: string): ValidationResult {
 
 // ---- Safe ledger ----
 export type SafeSetupInput = {
-  amount: number;
+  cash: number;
+  transfer: number;
   note?: string;
 };
 
 export function validateSafeSetup(input: SafeSetupInput): ValidationResult {
-  if (!inRange(input.amount, { min: 1, max: limits.amount.max }))
-    return fail("amount", `Số tiền phải từ 1 đến ${limits.amount.max}.`);
+  if (!inRange(input.cash, { min: 0, max: limits.amount.max }))
+    return fail("cash", `Quỹ tiền mặt phải từ 0 đến ${limits.amount.max}.`);
+  if (!inRange(input.transfer, { min: 0, max: limits.amount.max }))
+    return fail("transfer", `Quỹ chuyển khoản phải từ 0 đến ${limits.amount.max}.`);
+  if (input.cash + input.transfer <= 0)
+    return fail("cash", "Tổng số dư mở đầu phải lớn hơn 0.");
   if ((input.note?.length ?? 0) > limits.note)
     return fail("note", `Ghi chú tối đa ${limits.note} ký tự.`);
   return ok();

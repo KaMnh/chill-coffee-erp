@@ -20,17 +20,8 @@ export const SAFE_ATTACHMENT_ALLOWED_MIME = [
 ] as const;
 
 /**
- * Số dư sổ quỹ hiện tại. Owner + manager xem được (manager để hiển thị status,
- * KHÔNG có quyền thao tác).
- */
-export async function loadSafeBalance(supabase: SupabaseClient): Promise<number> {
-  const { data, error } = await supabase.rpc("safe_balance_now");
-  if (error) throw toAppError(error, "Không tải được số dư sổ quỹ.");
-  return Number(data ?? 0);
-}
-
-/**
- * 3 số dư sổ quỹ: quỹ tiền mặt, quỹ chuyển khoản, và tổng. Owner + manager xem.
+ * 3 số dư sổ quỹ: quỹ tiền mặt, quỹ chuyển khoản, và tổng. Owner + manager xem
+ * được (manager để hiển thị status, KHÔNG có quyền thao tác).
  */
 export async function loadSafeBalances(supabase: SupabaseClient): Promise<SafeBalances> {
   const { data, error } = await supabase.rpc("safe_balances_now");
@@ -67,15 +58,23 @@ export async function loadSafeTransactions(
 /** Tạo row initial_setup. Chỉ chạy được 1 lần khi safe chưa có transaction. */
 export async function setupSafeInitial(
   supabase: SupabaseClient,
-  amount: number,
+  cash: number,
+  transfer: number,
   note?: string
 ) {
   const { data, error } = await supabase.rpc("safe_setup_initial", {
-    p_amount: amount,
+    p_cash: cash,
+    p_transfer: transfer,
     p_note: note ?? null
   });
   if (error) throw toAppError(error, "Không thiết lập được sổ quỹ.");
-  return data as { id: string; balance: number };
+  return data as {
+    cash_id: string | null;
+    transfer_id: string | null;
+    cash: number;
+    transfer: number;
+    balance: number;
+  };
 }
 
 /** Rút sổ quỹ cho mục đích khác. */

@@ -30,18 +30,22 @@ export function SetupSafeModal({ open, onOpenChange }: SetupSafeModalProps) {
   const { toast } = useToast();
   const setupM = useSetupSafeInitial(supabase);
 
-  const [amountStr, setAmountStr] = useState("");
+  const [cashStr, setCashStr] = useState("");
+  const [transferStr, setTransferStr] = useState("");
   const [note, setNote] = useState("");
 
   useEffect(() => {
     if (open) {
-      setAmountStr("");
+      setCashStr("");
+      setTransferStr("");
       setNote("");
     }
   }, [open]);
 
-  const amount = moneyFromInput(amountStr);
-  const validation = validateSafeSetup({ amount, note: note || undefined });
+  const cash = moneyFromInput(cashStr);
+  const transfer = moneyFromInput(transferStr);
+  const total = cash + transfer;
+  const validation = validateSafeSetup({ cash, transfer, note: note || undefined });
   const isBusy = setupM.isPending;
   const hasError = !validation.ok;
 
@@ -49,10 +53,10 @@ export function SetupSafeModal({ open, onOpenChange }: SetupSafeModalProps) {
     event.preventDefault();
     if (hasError || isBusy) return;
     try {
-      await setupM.mutateAsync({ amount, note: note || undefined });
+      await setupM.mutateAsync({ cash, transfer, note: note || undefined });
       toast({
         semantic: "success",
-        message: `Đã thiết lập sổ quỹ với ${formatVND(amount)}.`
+        message: `Đã thiết lập sổ quỹ: tiền mặt ${formatVND(cash)}, chuyển khoản ${formatVND(transfer)}.`
       });
       onOpenChange(false);
     } catch (err) {
@@ -77,19 +81,33 @@ export function SetupSafeModal({ open, onOpenChange }: SetupSafeModalProps) {
             mọi thay đổi đều qua transaction (Rút khác / Điều chỉnh).
           </AlertBanner>
           <TextField
-            label="Số dư ban đầu"
-            value={amountStr}
-            onChange={(e) => setAmountStr(e.target.value)}
+            label="Quỹ tiền mặt ban đầu"
+            value={cashStr}
+            onChange={(e) => setCashStr(e.target.value)}
             inputMode="numeric"
             placeholder="0"
             disabled={isBusy}
-            helper={amount > 0 ? formatVND(amount) : "Nhập số tiền (VND)"}
+            helper={cash > 0 ? formatVND(cash) : "Tiền mặt trong két (VND)"}
             error={
-              amountStr.length > 0 && !validation.ok && validation.field === "amount"
+              cashStr.length > 0 && !validation.ok && validation.field === "cash"
                 ? validation.message
                 : undefined
             }
             autoFocus
+          />
+          <TextField
+            label="Quỹ chuyển khoản ban đầu"
+            value={transferStr}
+            onChange={(e) => setTransferStr(e.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+            disabled={isBusy}
+            helper={transfer > 0 ? formatVND(transfer) : "Số dư tài khoản ngân hàng (VND)"}
+            error={
+              transferStr.length > 0 && !validation.ok && validation.field === "transfer"
+                ? validation.message
+                : undefined
+            }
           />
           <Textarea
             label="Ghi chú"
@@ -108,7 +126,7 @@ export function SetupSafeModal({ open, onOpenChange }: SetupSafeModalProps) {
               Đóng
             </Button>
             <Button type="submit" variant="primary" loading={isBusy} disabled={hasError}>
-              Thiết lập {amount > 0 ? formatVND(amount) : ""}
+              Thiết lập {total > 0 ? formatVND(total) : ""}
             </Button>
           </ModalActions>
         </form>

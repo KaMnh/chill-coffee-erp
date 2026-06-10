@@ -63,7 +63,7 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
     role === "owner"
   );
 
-  const balance = balanceQuery.data ?? 0;
+  const balances = balanceQuery.data ?? { cash: 0, transfer: 0, total: 0 };
   const transactions = useMemo(() => txnsQuery.data ?? [], [txnsQuery.data]);
 
   if (role !== "owner") {
@@ -100,7 +100,9 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
   return (
     <div className="space-y-4">
       <SafeBalanceCard
-        balance={balance}
+        cash={balances.cash}
+        transfer={balances.transfer}
+        total={balances.total}
         txnCount={transactions.length}
         isLoading={balanceQuery.isLoading}
         onSetup={() => setSetupOpen(true)}
@@ -125,11 +127,11 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
       />
 
       <SetupSafeModal open={isSetupOpen} onOpenChange={setSetupOpen} />
-      <WithdrawSafeModal open={isWithdrawOpen} onOpenChange={setWithdrawOpen} currentBalance={balance} />
+      <WithdrawSafeModal open={isWithdrawOpen} onOpenChange={setWithdrawOpen} balances={balances} />
       <AdjustSafeModal
         open={isAdjustOpen}
         onOpenChange={handleAdjustClose}
-        currentBalance={balance}
+        balances={balances}
         initialNewBalance={pendingAdjust?.newBalance ?? null}
       />
       <CountSafeModal

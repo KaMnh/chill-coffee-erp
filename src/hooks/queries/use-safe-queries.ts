@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  loadSafeBalance,
+  loadSafeBalances,
   loadSafeCounts,
   loadSafeTransactions
 } from "@/lib/data";
@@ -14,7 +14,7 @@ import { queryKeys } from "./keys";
 export function useSafeBalanceQuery(supabase: SupabaseClient | null, enabled = true) {
   return useQuery({
     queryKey: queryKeys.safeBalance(),
-    queryFn: () => loadSafeBalance(supabase!),
+    queryFn: () => loadSafeBalances(supabase!),
     enabled: enabled && !!supabase,
     staleTime: 30_000
   });

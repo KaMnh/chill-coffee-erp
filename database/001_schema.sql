@@ -440,6 +440,7 @@ create table if not exists public.safe_transactions (
   )),
   amount numeric(14,2) not null,
   balance_after numeric(14,2) not null,
+  fund text not null default 'cash' check (fund in ('cash','transfer')),
   reason_category text,
   description text,
   cash_close_report_id uuid references public.cash_close_reports(id) on delete set null,
@@ -449,6 +450,7 @@ create table if not exists public.safe_transactions (
 );
 create index if not exists safe_transactions_time_idx on public.safe_transactions(occurred_at desc);
 create index if not exists safe_transactions_type_idx on public.safe_transactions(transaction_type, occurred_at desc);
+create index if not exists safe_transactions_fund_created_idx on public.safe_transactions(fund, created_at desc, id desc) include (balance_after);
 
 -- Snapshot mệnh giá khi owner đếm thực tế (Hybrid model — total tracked tự động,
 -- denomination chỉ snapshot khi cần). KHÔNG tự adjust balance — owner phải gọi

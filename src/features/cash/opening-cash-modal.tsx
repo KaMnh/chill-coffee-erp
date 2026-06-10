@@ -77,7 +77,7 @@ export function OpeningCashModal({
   } | null>(null);
 
   const safeBalanceQuery = useSafeBalanceQuery(supabase, open && isOwner && !readOnly);
-  const safeBalance = safeBalanceQuery.data ?? 0;
+  const safeBalance = safeBalanceQuery.data?.cash ?? 0;
 
   // Reset state on open + load previous-day-leave hint.
   useEffect(() => {

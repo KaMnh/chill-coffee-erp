@@ -16,6 +16,7 @@ interface SafeBalanceCardProps {
   isLoading: boolean;
   onSetup(): void;
   onWithdraw(): void;
+  onPurchase(): void;
   onAdjust(): void;
   onCount(): void;
 }
@@ -33,6 +34,7 @@ export function SafeBalanceCard({
   isLoading,
   onSetup,
   onWithdraw,
+  onPurchase,
   onAdjust,
   onCount
 }: SafeBalanceCardProps) {
@@ -96,6 +98,13 @@ export function SafeBalanceCard({
             leadingIcon={<Icon name="arrowDownRight" size={16} />}
           >
             Rút khác
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={onPurchase}
+            leadingIcon={<Icon name="package" size={16} />}
+          >
+            Nhập nguyên liệu
           </Button>
           <Button
             variant="secondary"

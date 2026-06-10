@@ -650,6 +650,8 @@ create table if not exists public.ingredients (
   name                  text not null unique,
   unit                  text not null,
   low_stock_threshold   numeric(18, 4),
+  -- Đơn giá lần mua gần nhất (VND/đơn vị) — auto-fill form nhập NL, ghi đè mỗi lần mua.
+  last_unit_price       numeric(14,2) not null default 0,
   is_active             boolean not null default true,
   notes                 text,
   created_at            timestamptz not null default now(),

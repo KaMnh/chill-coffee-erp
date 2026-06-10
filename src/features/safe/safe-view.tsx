@@ -10,6 +10,7 @@ import { SafeBalanceCard } from "./safe-balance-card";
 import { SafeHistorySection } from "./safe-history-section";
 import { SetupSafeModal } from "./setup-safe-modal";
 import { WithdrawSafeModal } from "./withdraw-safe-modal";
+import { PurchaseInventoryModal } from "./purchase-inventory-modal";
 import { AdjustSafeModal } from "./adjust-safe-modal";
 import { CountSafeModal } from "./count-safe-modal";
 import { SafeTransactionDetailModal } from "./safe-transaction-detail-modal";
@@ -47,6 +48,7 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
 
   const [isSetupOpen, setSetupOpen] = useState(false);
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
+  const [isPurchaseOpen, setPurchaseOpen] = useState(false);
   const [isAdjustOpen, setAdjustOpen] = useState(false);
   const [isCountOpen, setCountOpen] = useState(false);
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
@@ -107,6 +109,7 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
         isLoading={balanceQuery.isLoading}
         onSetup={() => setSetupOpen(true)}
         onWithdraw={() => setWithdrawOpen(true)}
+        onPurchase={() => setPurchaseOpen(true)}
         onAdjust={() => setAdjustOpen(true)}
         onCount={() => setCountOpen(true)}
       />
@@ -128,6 +131,7 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
 
       <SetupSafeModal open={isSetupOpen} onOpenChange={setSetupOpen} />
       <WithdrawSafeModal open={isWithdrawOpen} onOpenChange={setWithdrawOpen} balances={balances} />
+      <PurchaseInventoryModal open={isPurchaseOpen} onOpenChange={setPurchaseOpen} balances={balances} />
       <AdjustSafeModal
         open={isAdjustOpen}
         onOpenChange={handleAdjustClose}

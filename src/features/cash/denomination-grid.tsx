@@ -94,7 +94,8 @@ export function DenominationGrid({
                 ref={(node) => {
                   inputRefs.current[denomination] = node;
                 }}
-                value={count}
+                value={count === 0 ? "" : count}
+                onFocus={(e) => e.currentTarget.select()}
                 readOnly={readOnly}
                 disabled={disabled}
                 aria-label={`${formatVND(denomination)} số tờ`}

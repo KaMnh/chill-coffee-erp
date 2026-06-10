@@ -10,7 +10,7 @@ import {
   uploadSafeAttachment,
   deleteSafeAttachment
 } from "@/lib/data";
-import type { SafeWithdrawCategory } from "@/lib/types";
+import type { SafeFund, SafeWithdrawCategory } from "@/lib/types";
 import { queryKeys } from "@/hooks/queries/keys";
 
 /**
@@ -49,9 +49,12 @@ export function useSetupSafeInitial(supabase: SupabaseClient | null) {
 }
 
 export interface WithdrawSafeOtherInput {
-  amount: number;
+  cashAmount: number;
+  transferAmount: number;
   category: SafeWithdrawCategory;
   description?: string;
+  /** ISO timestamp — nhãn ngày F4 (số dư vẫn giảm ngay). */
+  occurredAt?: string;
 }
 
 export function useWithdrawSafeOther(supabase: SupabaseClient | null) {
@@ -69,6 +72,7 @@ export function useWithdrawSafeOther(supabase: SupabaseClient | null) {
 }
 
 export interface AdjustSafeInput {
+  fund: SafeFund;
   newBalance: number;
   note: string;
 }

@@ -85,6 +85,15 @@ export function SafeHistorySection({
       )
     },
     {
+      key: "fund",
+      header: "Quỹ",
+      render: (row) => (
+        <Badge variant="soft" semantic={row.fund === "transfer" ? "success" : "neutral"}>
+          {row.fund === "transfer" ? "Chuyển khoản" : "Tiền mặt"}
+        </Badge>
+      )
+    },
+    {
       key: "amount",
       header: "Số tiền",
       sortable: true,

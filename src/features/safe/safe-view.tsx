@@ -127,11 +127,11 @@ export function SafeView({ businessDate: _businessDate, role }: SafeViewProps) {
       />
 
       <SetupSafeModal open={isSetupOpen} onOpenChange={setSetupOpen} />
-      <WithdrawSafeModal open={isWithdrawOpen} onOpenChange={setWithdrawOpen} currentBalance={balances.total} />
+      <WithdrawSafeModal open={isWithdrawOpen} onOpenChange={setWithdrawOpen} balances={balances} />
       <AdjustSafeModal
         open={isAdjustOpen}
         onOpenChange={handleAdjustClose}
-        currentBalance={balances.total}
+        balances={balances}
         initialNewBalance={pendingAdjust?.newBalance ?? null}
       />
       <CountSafeModal

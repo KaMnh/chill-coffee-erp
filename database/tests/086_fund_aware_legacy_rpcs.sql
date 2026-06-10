@@ -31,29 +31,29 @@ UPDATE public.safe_transactions SET created_at = now() - interval '210 minutes' 
 
 -- Test 1: rút 2M cash — quỹ cash chỉ 1M (dù transfer 5M là row mới nhất) → PHẢI chặn.
 SELECT throws_ok(
-  $$SELECT public.safe_withdraw_other(2000000, 'other', 'quá quỹ cash')$$,
+  $$SELECT public.safe_withdraw_other(2000000, 0, 'other', 'quá quỹ cash')$$,
   NULL, NULL,
   'rút 2M bị chặn: validate theo QUỸ CASH (1M), không phải row transfer mới nhất (5M)');
 
 -- Test 2+3+4: rút 400k → row fund=cash, chain từ quỹ cash (1M − 400k = 600k), có expense link.
 CREATE TEMP TABLE _wd AS
-SELECT public.safe_withdraw_other(400000, 'utilities', 'tiền điện 086') AS r;
+SELECT public.safe_withdraw_other(400000, 0, 'utilities', 'tiền điện 086') AS r;
 
 SELECT is(
-  (SELECT fund FROM public.safe_transactions WHERE id = (SELECT (r->>'id')::uuid FROM _wd)),
+  (SELECT fund FROM public.safe_transactions WHERE id = (SELECT (r->>'cash_id')::uuid FROM _wd)),
   'cash', 'row rút thuộc quỹ cash');
 SELECT is(
-  (SELECT balance_after FROM public.safe_transactions WHERE id = (SELECT (r->>'id')::uuid FROM _wd)),
+  (SELECT balance_after FROM public.safe_transactions WHERE id = (SELECT (r->>'cash_id')::uuid FROM _wd)),
   600000::numeric, 'balance_after chain từ quỹ cash: 1M − 400k = 600k (không phải 5M − 400k)');
 SELECT is(
-  (SELECT count(*)::int FROM public.expenses WHERE safe_transaction_id = (SELECT (r->>'id')::uuid FROM _wd)),
+  (SELECT count(*)::int FROM public.expenses WHERE safe_transaction_id = (SELECT (r->>'cash_id')::uuid FROM _wd)),
   1, 'expense link v2 vẫn được tạo');
 UPDATE public.safe_transactions SET created_at = now() - interval '3 hours'
-  WHERE id = (SELECT (r->>'id')::uuid FROM _wd);
+  WHERE id = (SELECT (r->>'cash_id')::uuid FROM _wd);
 
 -- Test 5+6: điều chỉnh quỹ cash về 1.5M → diff +900k, row fund=cash.
 CREATE TEMP TABLE _adj AS
-SELECT public.safe_adjust(1500000, 'điều chỉnh 086 lên 1.5M') AS r;
+SELECT public.safe_adjust('cash', 1500000, 'điều chỉnh 086 lên 1.5M') AS r;
 
 SELECT is((SELECT (r->>'difference')::numeric FROM _adj), 900000::numeric,
   'safe_adjust diff = 1.5M − 600k = +900k (so quỹ cash, không phải transfer)');

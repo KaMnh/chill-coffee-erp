@@ -106,8 +106,14 @@ export function SafeTransactionDetailModal({
                   {tx.amount > 0 ? "+" : ""}{formatVND(tx.amount)}
                 </strong>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">Quỹ:</span>
+                <Badge variant="soft" semantic={tx.fund === "transfer" ? "success" : "neutral"}>
+                  {tx.fund === "transfer" ? "Chuyển khoản" : "Tiền mặt"}
+                </Badge>
+              </div>
               <div className="flex justify-between">
-                <span className="text-muted">Số dư sau:</span>
+                <span className="text-muted">Số dư sau (quỹ):</span>
                 <strong>{formatVND(tx.balance_after)}</strong>
               </div>
               {tx.reason_category && (

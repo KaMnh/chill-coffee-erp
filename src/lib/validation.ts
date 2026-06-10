@@ -150,7 +150,10 @@ export function validateSafeSetup(input: SafeSetupInput): ValidationResult {
 }
 
 export type SafeWithdrawInput = {
-  amount: number;
+  /** Phần trả từ quỹ tiền mặt (≥ 0). */
+  cashAmount: number;
+  /** Phần trả từ quỹ chuyển khoản (≥ 0). */
+  transferAmount: number;
   category: string;
   description?: string;
 };
@@ -159,12 +162,18 @@ const SAFE_WITHDRAW_CATEGORIES = ["utilities", "rent", "inventory", "maintenance
 
 export function validateSafeWithdraw(
   input: SafeWithdrawInput,
-  currentBalance: number
+  cashBalance: number,
+  transferBalance: number
 ): ValidationResult {
-  if (!inRange(input.amount, { min: 1, max: limits.amount.max }))
-    return fail("amount", `Số tiền phải từ 1 đến ${limits.amount.max}.`);
-  if (input.amount > currentBalance)
-    return fail("amount", `Sổ quỹ không đủ. Số dư hiện tại: ${currentBalance}.`);
+  if (input.cashAmount < 0 || input.transferAmount < 0)
+    return fail("amount", "Số tiền mỗi quỹ không được âm.");
+  const total = input.cashAmount + input.transferAmount;
+  if (!inRange(total, { min: 1, max: limits.amount.max }))
+    return fail("amount", `Tổng tiền rút phải từ 1 đến ${limits.amount.max}.`);
+  if (input.cashAmount > cashBalance)
+    return fail("cash", `Quỹ tiền mặt không đủ (hiện có ${cashBalance}).`);
+  if (input.transferAmount > transferBalance)
+    return fail("transfer", `Quỹ chuyển khoản không đủ (hiện có ${transferBalance}).`);
   if (!SAFE_WITHDRAW_CATEGORIES.includes(input.category as (typeof SAFE_WITHDRAW_CATEGORIES)[number]))
     return fail("category", "Hạng mục không hợp lệ.");
   if ((input.description?.length ?? 0) > limits.note)

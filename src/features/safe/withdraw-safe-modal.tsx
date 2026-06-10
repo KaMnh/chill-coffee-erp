@@ -13,14 +13,16 @@ import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useWithdrawSafeOther } from "@/hooks/mutations/use-safe-mutations";
 import { formatVND, moneyFromInput } from "@/lib/format";
+import { todayInVN } from "@/lib/datetime";
 import { validateSafeWithdraw } from "@/lib/validation";
-import type { SafeWithdrawCategory } from "@/lib/types";
+import type { SafeBalances, SafeWithdrawCategory } from "@/lib/types";
+import { defaultFundSplit } from "./fund-split";
 import { SafeAttachmentUpload } from "./safe-attachment-upload";
 
 interface WithdrawSafeModalProps {
   open: boolean;
   onOpenChange(open: boolean): void;
-  currentBalance: number;
+  balances: SafeBalances;
 }
 
 const CATEGORY_LABELS: Record<SafeWithdrawCategory, string> = {
@@ -35,17 +37,23 @@ const CATEGORIES: SafeWithdrawCategory[] = ["utilities", "rent", "inventory", "m
 
 /**
  * Withdraw safe funds for non-cash-close reasons (utilities, rent, etc.).
+ * Sổ quỹ 2 quỹ: khoản chi TÁCH giữa quỹ chuyển khoản + quỹ tiền mặt (mặc định
+ * CK trước, tiền mặt bù; cả 2 ô sửa được — sửa ô này tự bù ô kia để tổng khớp).
+ * F4: ô chọn ngày (nhãn lịch sử; số dư vẫn giảm ngay).
  * Two-phase modal:
- *   Phase A: form (amount + category + description) → "Rút" button
- *   Phase B: RPC succeeded, modal stays open with SafeAttachmentUpload mounted
- *            for the new transaction. User attaches 0-5 receipts then closes.
+ *   Phase A: form (tổng + tách quỹ + ngày + category + description) → "Rút"
+ *   Phase B: RPC succeeded, SafeAttachmentUpload mounted for the new transaction.
  */
-export function WithdrawSafeModal({ open, onOpenChange, currentBalance }: WithdrawSafeModalProps) {
+export function WithdrawSafeModal({ open, onOpenChange, balances }: WithdrawSafeModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
   const withdrawM = useWithdrawSafeOther(supabase);
+  const today = todayInVN();
 
   const [amountStr, setAmountStr] = useState("");
+  const [cashStr, setCashStr] = useState("");
+  const [transferStr, setTransferStr] = useState("");
+  const [occurredDate, setOccurredDate] = useState(today);
   const [category, setCategory] = useState<SafeWithdrawCategory>("other");
   const [description, setDescription] = useState("");
   const [createdTxId, setCreatedTxId] = useState<string | null>(null);
@@ -53,34 +61,67 @@ export function WithdrawSafeModal({ open, onOpenChange, currentBalance }: Withdr
   useEffect(() => {
     if (open) {
       setAmountStr("");
+      setCashStr("");
+      setTransferStr("");
+      setOccurredDate(todayInVN());
       setCategory("other");
       setDescription("");
       setCreatedTxId(null);
     }
   }, [open]);
 
-  const amount = moneyFromInput(amountStr);
+  const total = moneyFromInput(amountStr);
+  const cashAmount = moneyFromInput(cashStr);
+  const transferAmount = moneyFromInput(transferStr);
+
+  /** Đổi Tổng → áp lại split mặc định (CK trước, tiền mặt bù). */
+  function handleTotalChange(raw: string) {
+    setAmountStr(raw);
+    const split = defaultFundSplit(moneyFromInput(raw), balances.transfer);
+    setCashStr(split.cash > 0 ? String(split.cash) : "");
+    setTransferStr(split.transfer > 0 ? String(split.transfer) : "");
+  }
+
+  /** Sửa 1 ô split → ô kia tự bù để tổng luôn khớp. */
+  function handleTransferChange(raw: string) {
+    setTransferStr(raw);
+    setCashStr(String(Math.max(0, total - moneyFromInput(raw))));
+  }
+  function handleCashChange(raw: string) {
+    setCashStr(raw);
+    setTransferStr(String(Math.max(0, total - moneyFromInput(raw))));
+  }
+
   const validation = validateSafeWithdraw(
-    { amount, category, description: description || undefined },
-    currentBalance
+    { cashAmount, transferAmount, category, description: description || undefined },
+    balances.cash,
+    balances.transfer
   );
+  const splitMatchesTotal = cashAmount + transferAmount === total;
+  const isFutureDate = occurredDate > today;
   const isBusy = withdrawM.isPending;
-  const hasError = !validation.ok;
-  const balanceAfter = currentBalance - amount;
+  const hasError = !validation.ok || !splitMatchesTotal || isFutureDate || total <= 0;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (hasError || isBusy || createdTxId) return;
     try {
+      // Ngày chọn + giờ hiện tại (tránh lệch ngày khi cast timestamptz theo TZ VN).
+      const occurredAt =
+        occurredDate === today
+          ? undefined
+          : new Date(`${occurredDate}T${new Date().toTimeString().slice(0, 8)}`).toISOString();
       const result = await withdrawM.mutateAsync({
-        amount,
+        cashAmount,
+        transferAmount,
         category,
-        description: description || undefined
+        description: description || undefined,
+        occurredAt
       });
-      setCreatedTxId(result.id);
+      setCreatedTxId(result.cash_id ?? result.transfer_id);
       toast({
         semantic: "success",
-        message: `Đã rút ${formatVND(amount)}. Số dư còn ${formatVND(result.balance_after)}.`
+        message: `Đã rút ${formatVND(total)} (CK ${formatVND(transferAmount)} · tiền mặt ${formatVND(cashAmount)}).`
       });
     } catch (err) {
       toast({
@@ -97,25 +138,67 @@ export function WithdrawSafeModal({ open, onOpenChange, currentBalance }: Withdr
           {createdTxId ? "Đã rút — upload hóa đơn (tùy chọn)" : "Rút sổ quỹ (mục đích khác)"}
         </ModalTitle>
         <ModalDescription>
-          Số dư hiện tại: <strong>{formatVND(currentBalance)}</strong>
+          Quỹ tiền mặt: <strong>{formatVND(balances.cash)}</strong> · Quỹ chuyển khoản:{" "}
+          <strong>{formatVND(balances.transfer)}</strong>
         </ModalDescription>
 
         {!createdTxId ? (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <TextField
-              label="Số tiền rút"
+              label="Tổng tiền rút"
               value={amountStr}
-              onChange={(e) => setAmountStr(e.target.value)}
+              onChange={(e) => handleTotalChange(e.target.value)}
               inputMode="numeric"
               placeholder="0"
               disabled={isBusy}
-              helper={amount > 0 ? `Số dư còn: ${formatVND(balanceAfter)}` : "Nhập số tiền (VND)"}
+              helper={total > 0 ? formatVND(total) : "Nhập tổng số tiền (VND)"}
               error={
                 amountStr.length > 0 && !validation.ok && validation.field === "amount"
                   ? validation.message
                   : undefined
               }
               autoFocus
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <TextField
+                label="Trả từ chuyển khoản"
+                value={transferStr}
+                onChange={(e) => handleTransferChange(e.target.value)}
+                inputMode="numeric"
+                placeholder="0"
+                disabled={isBusy || total <= 0}
+                helper={`Còn ${formatVND(balances.transfer)}`}
+                error={
+                  !validation.ok && validation.field === "transfer" ? validation.message : undefined
+                }
+              />
+              <TextField
+                label="Trả từ tiền mặt"
+                value={cashStr}
+                onChange={(e) => handleCashChange(e.target.value)}
+                inputMode="numeric"
+                placeholder="0"
+                disabled={isBusy || total <= 0}
+                helper={`Còn ${formatVND(balances.cash)}`}
+                error={
+                  !validation.ok && validation.field === "cash" ? validation.message : undefined
+                }
+              />
+            </div>
+            {total > 0 && !splitMatchesTotal && (
+              <AlertBanner variant="danger">
+                Tách quỹ ({formatVND(cashAmount + transferAmount)}) chưa khớp tổng ({formatVND(total)}).
+              </AlertBanner>
+            )}
+            <TextField
+              label="Ngày chi"
+              type="date"
+              value={occurredDate}
+              onChange={(e) => setOccurredDate(e.target.value)}
+              disabled={isBusy}
+              max={today}
+              helper="Ghi muộn khoản đã chi: chọn ngày quá khứ — số dư vẫn trừ ngay."
+              error={isFutureDate ? "Không được chọn ngày tương lai." : undefined}
             />
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-ink-2">Hạng mục</label>
@@ -152,7 +235,7 @@ export function WithdrawSafeModal({ open, onOpenChange, currentBalance }: Withdr
                 Hủy
               </Button>
               <Button type="submit" variant="primary" loading={isBusy} disabled={hasError}>
-                Rút {amount > 0 ? formatVND(amount) : ""}
+                Rút {total > 0 ? formatVND(total) : ""}
               </Button>
             </ModalActions>
           </form>

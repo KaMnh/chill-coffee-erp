@@ -3,6 +3,7 @@ import type {
   SafeAttachment,
   SafeBalances,
   SafeCount,
+  SafeFund,
   SafeTransaction,
   SafeTransactionType,
   SafeWithdrawCategory
@@ -77,35 +78,50 @@ export async function setupSafeInitial(
   };
 }
 
-/** Rút sổ quỹ cho mục đích khác. */
+/**
+ * Rút sổ quỹ cho mục đích khác — tách 2 quỹ (CK + tiền mặt) + chỉnh được ngày.
+ * occurredAt (ISO) là nhãn ngày; số dư giảm ngay (cơ sở created_at).
+ */
 export async function withdrawSafeOther(
   supabase: SupabaseClient,
   payload: {
-    amount: number;
+    cashAmount: number;
+    transferAmount: number;
     category: SafeWithdrawCategory;
     description?: string;
+    occurredAt?: string;
   }
 ) {
   const { data, error } = await supabase.rpc("safe_withdraw_other", {
-    p_amount: payload.amount,
+    p_cash_amount: payload.cashAmount,
+    p_transfer_amount: payload.transferAmount,
     p_category: payload.category,
-    p_description: payload.description ?? null
+    p_description: payload.description ?? null,
+    p_occurred_at: payload.occurredAt ?? null
   });
   if (error) throw toAppError(error, "Không rút được sổ quỹ.");
-  return data as { id: string; balance_after: number };
+  return data as {
+    cash_id: string | null;
+    transfer_id: string | null;
+    cash_balance_after: number | null;
+    transfer_balance_after: number | null;
+    total: number;
+    expense_id: string;
+  };
 }
 
-/** Adjust balance khi count lệch. Note bắt buộc >= 5 ký tự. */
+/** Adjust số dư MỘT quỹ (cash | transfer) khi lệch. Note bắt buộc >= 5 ký tự. */
 export async function adjustSafe(
   supabase: SupabaseClient,
-  payload: { newBalance: number; note: string }
+  payload: { fund: SafeFund; newBalance: number; note: string }
 ) {
   const { data, error } = await supabase.rpc("safe_adjust", {
+    p_fund: payload.fund,
     p_new_balance: payload.newBalance,
     p_note: payload.note
   });
   if (error) throw toAppError(error, "Không điều chỉnh được sổ quỹ.");
-  return data as { id: string; balance_after: number; difference: number };
+  return data as { id: string; fund: SafeFund; balance_after: number; difference: number };
 }
 
 /** Snapshot mệnh giá (KHÔNG auto adjust balance). */

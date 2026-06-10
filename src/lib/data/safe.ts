@@ -253,3 +253,40 @@ export async function getSafeAttachmentSignedUrl(
   if (error || !data) throw toAppError(error, "Không tạo được URL xem ảnh.");
   return data.signedUrl;
 }
+
+// =============================================================================
+// Nhập nguyên liệu từ sổ quỹ (F1+F2)
+// =============================================================================
+
+/**
+ * MỘT giao dịch atomic: trừ sổ quỹ (tách CK + tiền mặt) + đẩy tồn kho + cập
+ * nhật last_unit_price. Tổng được server tính lại từ lines (không tin client);
+ * cashAmount + transferAmount phải khớp tổng đó.
+ */
+export async function safePurchaseInventory(
+  supabase: SupabaseClient,
+  payload: {
+    cashAmount: number;
+    transferAmount: number;
+    lines: ReadonlyArray<{ ingredient_id: string; quantity: number; unit_price: number }>;
+    description?: string;
+    occurredAt?: string;
+  }
+) {
+  const { data, error } = await supabase.rpc("safe_purchase_inventory", {
+    p_cash_amount: payload.cashAmount,
+    p_transfer_amount: payload.transferAmount,
+    p_lines: payload.lines,
+    p_description: payload.description ?? null,
+    p_occurred_at: payload.occurredAt ?? null
+  });
+  if (error) throw toAppError(error, "Không nhập được nguyên liệu từ sổ quỹ.");
+  return data as {
+    cash_id: string | null;
+    transfer_id: string | null;
+    cash_balance_after: number | null;
+    transfer_balance_after: number | null;
+    total: number;
+    movement_ids: string[];
+  };
+}

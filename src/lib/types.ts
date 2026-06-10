@@ -320,6 +320,8 @@ export interface Ingredient {
   name: string;
   unit: string;
   low_stock_threshold: number | null;
+  /** Đơn giá lần mua gần nhất (VND/đơn vị) — auto-fill form nhập NL. */
+  last_unit_price: number;
   is_active: boolean;
   notes: string | null;
   created_at: string;

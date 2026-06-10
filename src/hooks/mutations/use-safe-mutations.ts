@@ -7,6 +7,7 @@ import {
   withdrawSafeOther,
   adjustSafe,
   countSafe,
+  safePurchaseInventory,
   uploadSafeAttachment,
   deleteSafeAttachment
 } from "@/lib/data";
@@ -87,6 +88,33 @@ export function useAdjustSafe(supabase: SupabaseClient | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
       queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
+    }
+  });
+}
+
+export interface SafePurchaseInventoryInput {
+  cashAmount: number;
+  transferAmount: number;
+  lines: ReadonlyArray<{ ingredient_id: string; quantity: number; unit_price: number }>;
+  description?: string;
+  /** ISO timestamp — nhãn ngày (số dư vẫn trừ ngay). */
+  occurredAt?: string;
+}
+
+/** Nhập nguyên liệu từ sổ quỹ: trừ quỹ tách fund + đẩy kho + nhớ đơn giá. */
+export function useSafePurchaseInventory(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SafePurchaseInventoryInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return safePurchaseInventory(supabase, input);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
+      queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.ingredients() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stockBalances() });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock_movements"] });
     }
   });
 }

@@ -450,6 +450,20 @@ create table if not exists public.safe_transactions (
 );
 create index if not exists safe_transactions_time_idx on public.safe_transactions(occurred_at desc);
 create index if not exists safe_transactions_type_idx on public.safe_transactions(transaction_type, occurred_at desc);
+-- Retrofit cột fund (Sổ quỹ 2 quỹ, 2026-06-10) cho DB có sẵn: create table if
+-- not exists bị SKIP khi bảng đã tồn tại → cột mới phải ALTER riêng TRƯỚC khi
+-- index/function tham chiếu nó (tiền lệ: cash_close_reports retrofit bên dưới).
+-- db-init áp 001/002 TRƯỚC migrations nên không thể dựa vào migration để thêm cột.
+alter table public.safe_transactions
+  add column if not exists fund text not null default 'cash';
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'safe_transactions_fund_check'
+  ) then
+    alter table public.safe_transactions
+      add constraint safe_transactions_fund_check check (fund in ('cash','transfer'));
+  end if;
+end $$;
 create index if not exists safe_transactions_fund_created_idx on public.safe_transactions(fund, created_at desc, id desc) include (balance_after);
 
 -- Snapshot mệnh giá khi owner đếm thực tế (Hybrid model — total tracked tự động,
@@ -665,6 +679,12 @@ create table if not exists public.ingredients (
 
 create index if not exists idx_ingredients_active
   on public.ingredients(is_active) where is_active = true;
+
+-- Retrofit cột last_unit_price (F1 nhập NL, 2026-06-10) cho DB có sẵn — hàm SQL
+-- list_ingredients trong 002 tham chiếu cột này và được validate ngay lúc create
+-- (002 áp TRƯỚC migrations nên không thể dựa vào migration để thêm cột).
+alter table public.ingredients
+  add column if not exists last_unit_price numeric(14,2) not null default 0;
 
 create table if not exists public.menu_items (
   id                      uuid primary key default gen_random_uuid(),

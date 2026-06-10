@@ -173,6 +173,20 @@ export function CashCountWizard({
                   lại bước 1 để đếm lại.
                 </AlertBanner>
               )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted">
+                  Copy số tờ đã đếm cuối ngày rồi bớt phần nạp sổ quỹ để chừa lại một phần.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => onNextDayChange({ ...todayDenominations })}
+                  disabled={disabled || todayTotal === 0}
+                  leadingIcon={<Icon name="clipboardList" size={16} />}
+                >
+                  Copy từ đếm thực
+                </Button>
+              </div>
               <DenominationGrid
                 value={nextDayDenominations}
                 onChange={onNextDayChange}

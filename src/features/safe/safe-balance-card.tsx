@@ -9,7 +9,9 @@ import { CountUp } from "@/components/ui/count-up";
 import { formatVND } from "@/lib/format";
 
 interface SafeBalanceCardProps {
-  balance: number;
+  cash: number;
+  transfer: number;
+  total: number;
   txnCount: number;
   isLoading: boolean;
   onSetup(): void;
@@ -24,7 +26,9 @@ interface SafeBalanceCardProps {
  * After setup: Setup hidden; Withdraw/Adjust/Count visible.
  */
 export function SafeBalanceCard({
-  balance,
+  cash,
+  transfer,
+  total,
   txnCount,
   isLoading,
   onSetup,
@@ -32,7 +36,7 @@ export function SafeBalanceCard({
   onAdjust,
   onCount
 }: SafeBalanceCardProps) {
-  const isFirstTime = txnCount === 0 && balance === 0;
+  const isFirstTime = txnCount === 0 && total === 0;
 
   if (isLoading) {
     return (
@@ -68,12 +72,22 @@ export function SafeBalanceCard({
       <CardBody className="space-y-4">
         <div className="flex items-baseline justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted">Số dư sổ quỹ</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Tổng quỹ hiện tại</p>
             <p className="font-display text-4xl font-bold text-ink tabular-nums mt-1">
-              <CountUp value={balance} format={formatVND} />
+              <CountUp value={total} format={formatVND} />
             </p>
           </div>
           <p className="text-xs text-muted">{txnCount} giao dịch</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-border bg-surface-muted p-3">
+            <p className="text-xs uppercase tracking-wide text-muted">Quỹ tiền mặt</p>
+            <p className="font-display text-lg text-ink tabular-nums mt-1">{formatVND(cash)}</p>
+          </div>
+          <div className="rounded-md border border-border bg-surface-muted p-3">
+            <p className="text-xs uppercase tracking-wide text-muted">Quỹ chuyển khoản</p>
+            <p className="font-display text-lg text-ink tabular-nums mt-1">{formatVND(transfer)}</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

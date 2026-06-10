@@ -165,10 +165,17 @@ export type SafeWithdrawCategory =
   | "maintenance"
   | "other";
 
+export type SafeFund = "cash" | "transfer";
+
+/** 3 số dư sổ quỹ cho UI: quỹ tiền mặt, quỹ chuyển khoản, tổng. */
+export type SafeBalances = { cash: number; transfer: number; total: number };
+
 export type SafeTransaction = {
   id: string;
   occurred_at: string;
   transaction_type: SafeTransactionType;
+  /** Quỹ chịu tác động (Sổ quỹ 2 quỹ). Mọi row cũ = 'cash'. */
+  fund: SafeFund;
   amount: number;
   balance_after: number;
   reason_category: SafeWithdrawCategory | null;

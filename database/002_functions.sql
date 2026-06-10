@@ -1916,6 +1916,44 @@ $$;
 
 grant execute on function public.safe_balance_now() to authenticated;
 
+-- Số dư một quỹ (cash|transfer) = balance_after của row GHI gần nhất (created_at
+-- desc, id desc) của quỹ đó. Basis created_at (invariant F4) áp per-fund — để
+-- giao dịch back-date không làm "biến mất" số dư hiện tại.
+create or replace function public.safe_fund_balance_now(p_fund text)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select coalesce(
+    (select balance_after from public.safe_transactions
+     where fund = p_fund
+     order by created_at desc, id desc
+     limit 1),
+    0
+  );
+$$;
+
+grant execute on function public.safe_fund_balance_now(text) to authenticated;
+
+-- Tổng hợp 3 số cho UI: { cash, transfer, total }.
+create or replace function public.safe_balances_now()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select jsonb_build_object(
+    'cash', public.safe_fund_balance_now('cash'),
+    'transfer', public.safe_fund_balance_now('transfer'),
+    'total', public.safe_fund_balance_now('cash') + public.safe_fund_balance_now('transfer')
+  );
+$$;
+
+grant execute on function public.safe_balances_now() to authenticated;
+
 -- Setup ban đầu: chỉ chạy được 1 lần khi chưa có transaction nào.
 -- Owner only.
 create or replace function public.safe_setup_initial(p_amount numeric, p_note text default null)

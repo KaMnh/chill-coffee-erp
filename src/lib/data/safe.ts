@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   SafeAttachment,
+  SafeBalances,
   SafeCount,
   SafeTransaction,
   SafeTransactionType,
@@ -26,6 +27,20 @@ export async function loadSafeBalance(supabase: SupabaseClient): Promise<number>
   const { data, error } = await supabase.rpc("safe_balance_now");
   if (error) throw toAppError(error, "Không tải được số dư sổ quỹ.");
   return Number(data ?? 0);
+}
+
+/**
+ * 3 số dư sổ quỹ: quỹ tiền mặt, quỹ chuyển khoản, và tổng. Owner + manager xem.
+ */
+export async function loadSafeBalances(supabase: SupabaseClient): Promise<SafeBalances> {
+  const { data, error } = await supabase.rpc("safe_balances_now");
+  if (error) throw toAppError(error, "Không tải được số dư sổ quỹ.");
+  const o = (data ?? {}) as Partial<SafeBalances>;
+  return {
+    cash: Number(o.cash ?? 0),
+    transfer: Number(o.transfer ?? 0),
+    total: Number(o.total ?? 0)
+  };
 }
 
 /**

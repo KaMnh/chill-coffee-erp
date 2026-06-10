@@ -48,11 +48,11 @@ insert into public.safe_transactions (
   null, 'pgTAP test init', '33333333-3333-3333-3333-333333333333'
 );
 
--- Owner withdraws 200000 with reason
+-- Owner withdraws 200000 with reason (v4 signature: cash 200k + transfer 0)
 select pg_temp.act_as('33333333-3333-3333-3333-333333333333');
 set local role authenticated;
 
-select public.safe_withdraw_other(200000, 'rent', 'pgTAP test withdrawal');
+select public.safe_withdraw_other(200000, 0, 'rent', 'pgTAP test withdrawal');
 
 reset role;
 

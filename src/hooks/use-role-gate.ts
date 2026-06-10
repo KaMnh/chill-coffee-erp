@@ -4,14 +4,18 @@ import { useMemo } from "react";
 import type { Account, AppSettings } from "@/lib/types";
 import {
   getVisibleNav,
+  getGroupedNav,
   canSee as canSeeFn,
   type NavItem,
+  type NavGroupWithItems,
   type ViewKey,
 } from "@/features/navigation/navigation";
 
 export interface UseRoleGateResult {
   /** Nav items visible to this account, ordered per sidebar_config (fallback DEFAULT_SIDEBAR_BY_ROLE). */
   visibleNav: ReadonlyArray<NavItem>;
+  /** Visible nav partitioned into fixed functional groups (NAV_GROUPS order, empty groups dropped). */
+  groupedNav: ReadonlyArray<NavGroupWithItems>;
   /** First visible view, used as fallback when current view is hidden by role change. */
   defaultView: ViewKey;
   /** Whether this account can see a given view (with current app settings). */
@@ -41,6 +45,11 @@ export function useRoleGate(
     [account, effectiveSettings]
   );
 
+  const groupedNav = useMemo(
+    () => getGroupedNav(account, effectiveSettings),
+    [account, effectiveSettings]
+  );
+
   const defaultView: ViewKey = visibleNav[0]?.key ?? "dashboard";
 
   const canSee = useMemo(
@@ -48,5 +57,5 @@ export function useRoleGate(
     [account, effectiveSettings]
   );
 
-  return { visibleNav, defaultView, canSee };
+  return { visibleNav, groupedNav, defaultView, canSee };
 }

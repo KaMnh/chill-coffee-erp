@@ -41,10 +41,13 @@ describe("getGroupedNav", () => {
     expect(groups[0].items.map((i) => i.key)).toEqual(["dashboard"]);
   });
 
-  it("thứ tự trong nhóm theo NAV_ITEMS, KHÔNG theo thứ tự sidebar_config", () => {
-    // config liệt kê safe trước cash — kết quả vẫn theo NAV_ITEMS (expenses, cash, safe)
-    const acc = makeAccount("owner", ["dashboard", "safe", "cash", "expenses"]);
+  it("thứ tự trong nhóm theo NAV_ITEMS + lọc theo sidebar_config", () => {
+    // config: đảo safe trước cash VÀ bỏ expenses → chứng minh cả (a) thứ tự theo
+    // NAV_ITEMS (cash trước safe dù config liệt kê safe trước) lẫn (b) filter
+    // (expenses không có trong config nên bị loại khỏi nhóm). Một impl bỏ qua
+    // sidebar_config (trả default owner) sẽ ra [expenses, cash, safe] → fail.
+    const acc = makeAccount("owner", ["dashboard", "safe", "cash"]);
     const cashflow = getGroupedNav(acc, SETTINGS).find((g) => g.key === "cashflow")!;
-    expect(cashflow.items.map((i) => i.key)).toEqual(["expenses", "cash", "safe"]);
+    expect(cashflow.items.map((i) => i.key)).toEqual(["cash", "safe"]);
   });
 });

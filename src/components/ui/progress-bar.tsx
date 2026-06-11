@@ -7,14 +7,17 @@ interface ProgressBarProps {
   value?: number; // 0-100; undefined = indeterminate
   showLabel?: boolean;
   className?: string;
+  /** Tên cho screen reader (axe: aria-progressbar-name). */
+  "aria-label"?: string;
 }
 
-export function ProgressBar({ value, showLabel, className }: ProgressBarProps) {
+export function ProgressBar({ value, showLabel, className, "aria-label": ariaLabel }: ProgressBarProps) {
   const indeterminate = value == null;
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <RadixProgress.Root
         value={indeterminate ? undefined : value}
+        aria-label={ariaLabel ?? "Tiến độ"}
         className="relative w-full h-2 rounded-full bg-border overflow-hidden"
       >
         {indeterminate ? (

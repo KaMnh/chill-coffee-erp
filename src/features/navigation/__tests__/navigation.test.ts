@@ -13,6 +13,10 @@ function makeAccount(role: UserRole, sidebar_config: string[] | null = null): Ac
   return { id: "a1", auth_user_id: "u1", employee_id: null, role, status: "active", sidebar_config };
 }
 
+function withMobileTabs(account: Account, mobile_tabs: string[] | null): Account {
+  return { ...account, dashboard_preferences: { mobile_tabs } };
+}
+
 describe("getGroupedNav", () => {
   it("owner mặc định → đủ 6 nhóm, đúng thứ tự NAV_GROUPS", () => {
     const groups = getGroupedNav(makeAccount("owner"), SETTINGS);
@@ -83,6 +87,45 @@ describe("getMobileTabs (bottom tab bar — spec 2026-06-11-mobile-uiux-design)"
       const tabs = getMobileTabs(makeAccount(role), SETTINGS);
       expect(tabs.map((t) => t.key)).not.toContain("handover");
     }
+  });
+
+  it("mobile_tabs tuỳ chỉnh → đúng thứ tự user chọn, thay preference mặc định", () => {
+    const acc = withMobileTabs(makeAccount("owner"), ["cash", "inventory", "shifts", "dashboard"]);
+    const tabs = getMobileTabs(acc, SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["cash", "inventory", "shifts", "dashboard"]);
+  });
+
+  it("mobile_tabs chứa key rác / view không được thấy → lọc bỏ, giữ phần hợp lệ", () => {
+    // staff_operator không thấy safe/settings; "bogus" không tồn tại.
+    const acc = withMobileTabs(makeAccount("staff_operator"), ["safe", "cash", "bogus", "inventory", "settings"]);
+    const tabs = getMobileTabs(acc, SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["cash", "inventory"]);
+  });
+
+  it("mobile_tabs quá 4 → cắt còn 4; trùng lặp → dedupe", () => {
+    const acc = withMobileTabs(makeAccount("owner"), ["cash", "cash", "safe", "reports", "shifts", "inventory"]);
+    const tabs = getMobileTabs(acc, SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["cash", "safe", "reports", "shifts"]);
+  });
+
+  it("mobile_tabs toàn key không hợp lệ / rỗng / null → fallback preference role", () => {
+    const fallback = ["dashboard", "safe", "reports", "cash"];
+    for (const bad of [["bogus", "nope"], [], null] as Array<string[] | null>) {
+      const acc = withMobileTabs(makeAccount("owner"), bad);
+      expect(getMobileTabs(acc, SETTINGS).map((t) => t.key)).toEqual(fallback);
+    }
+  });
+
+  it("drawer loại trừ đúng các tab tuỳ chỉnh (không trùng, gộp đủ visible)", () => {
+    const acc = withMobileTabs(makeAccount("owner"), ["cash", "inventory", "shifts", "dashboard"]);
+    const tabKeys = getMobileTabs(acc, SETTINGS).map((t) => t.key);
+    const drawerKeys = getMobileDrawerGroups(acc, SETTINGS).flatMap((g) => g.items.map((i) => i.key));
+    expect(tabKeys.filter((k) => drawerKeys.includes(k))).toEqual([]);
+    expect(drawerKeys).toContain("safe");
+    expect(drawerKeys).toContain("reports");
+    expect([...tabKeys, ...drawerKeys].sort()).toEqual(
+      ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
+    );
   });
 
   it("sidebar_config ẩn view ưu tiên → backfill tab kế tiếp theo preference", () => {

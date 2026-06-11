@@ -20,7 +20,9 @@ import { NavItem } from "@/components/layout/nav-item";
 import { TopBar } from "@/components/layout/top-bar";
 import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
 import { MobileMoreDrawer } from "@/components/layout/mobile-more-drawer";
+import { CustomizeTabsSheet } from "@/components/layout/customize-tabs-sheet";
 import { AccountMenu } from "@/components/layout/account-menu";
+import { useUpdateUserDashboardPreferences } from "@/hooks/mutations/use-profile-mutations";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
@@ -47,7 +49,7 @@ export default function HomePage() {
   const { status, account, isLoadingAccount, signOut } = useAuthSession();
   const { businessDate, setBusinessDate } = useBusinessDate();
   const appSettingsQuery = useAppSettingsQuery(supabase, status === "authed");
-  const { groupedNav, mobileTabs, mobileDrawerGroups, defaultView, canSee } =
+  const { groupedNav, visibleNav, mobileTabs, mobileDrawerGroups, defaultView, canSee } =
     useRoleGate(account, appSettingsQuery.data);
   const dashboardQuery = useDashboardQuery(supabase, businessDate, status === "authed");
   const posSync = usePosSync(supabase, businessDate, account, dashboardQuery.data?.latest_sync);
@@ -97,7 +99,9 @@ export default function HomePage() {
 
   const [view, setView] = useState<ViewKey>("dashboard");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [customizeTabsOpen, setCustomizeTabsOpen] = useState(false);
   const [authHeader, setAuthHeader] = useState<string | null>(null);
+  const prefsMutation = useUpdateUserDashboardPreferences(supabase);
 
   // Keep authHeader in sync with Supabase session for BackupRestoreSection.
   useEffect(() => {
@@ -167,6 +171,28 @@ export default function HomePage() {
 
   function handleNavClick(next: ViewKey) {
     setView(next);
+  }
+
+  // Lưu tab bottom bar tuỳ chỉnh vào profiles.dashboard_preferences.mobile_tabs
+  // (per-user; RPC merge-patch). null = khôi phục mặc định theo role.
+  async function handleSaveMobileTabs(keys: ViewKey[] | null) {
+    if (!account) return;
+    try {
+      await prefsMutation.mutateAsync({
+        profileId: account.auth_user_id,
+        patch: { mobile_tabs: keys },
+      });
+      setCustomizeTabsOpen(false);
+      toast({
+        semantic: "success",
+        message: keys ? "Đã lưu tab tuỳ chỉnh." : "Đã khôi phục tab mặc định.",
+      });
+    } catch (err) {
+      toast({
+        semantic: "danger",
+        message: err instanceof Error ? err.message : "Không lưu được tuỳ chỉnh tab.",
+      });
+    }
   }
 
   async function handlePosSync() {
@@ -268,6 +294,16 @@ export default function HomePage() {
             accountName={employeeName}
             roleLabel={ROLE_LABELS[account.role]}
             onSignOut={signOut}
+            onCustomize={() => setCustomizeTabsOpen(true)}
+          />
+          <CustomizeTabsSheet
+            open={customizeTabsOpen}
+            onOpenChange={setCustomizeTabsOpen}
+            items={visibleNav}
+            current={mobileTabs.map((t) => t.key)}
+            saving={prefsMutation.isPending}
+            onSave={(keys) => handleSaveMobileTabs(keys)}
+            onReset={() => handleSaveMobileTabs(null)}
           />
         </>
       }

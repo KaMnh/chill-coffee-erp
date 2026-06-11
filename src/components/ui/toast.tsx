@@ -72,7 +72,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </div>
           </RadixToast.Root>
         ))}
-        <RadixToast.Viewport className="fixed bottom-4 right-4 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)] z-50 outline-none" />
+        {/* Mobile (<md): nâng toast lên trên bottom tab bar (h-14 + safe-area)
+            để không che thanh điều hướng. ≥md giữ bottom-4 như cũ. */}
+        <RadixToast.Viewport className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-4 right-4 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)] z-50 outline-none" />
       </RadixToast.Provider>
     </ToastContext.Provider>
   );

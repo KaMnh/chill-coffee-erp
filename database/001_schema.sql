@@ -466,6 +466,18 @@ do $$ begin
 end $$;
 create index if not exists safe_transactions_fund_created_idx on public.safe_transactions(fund, created_at desc, id desc) include (balance_after);
 
+-- Retrofit: expenses.safe_transaction_id (gốc: migration 2026-05-28-b — expense
+-- mirror của rút quỹ). Phải có trong 001 vì 002 (analytics.daily_pnl) tham
+-- chiếu cột này TRƯỚC khi migrations chạy trên DB mới — cùng bài học retrofit
+-- fund/last_unit_price ở trên. Đặt sau create table safe_transactions vì có FK.
+alter table public.expenses
+  add column if not exists safe_transaction_id uuid null
+    references public.safe_transactions(id) on delete restrict;
+
+create index if not exists expenses_safe_transaction_id_idx
+  on public.expenses(safe_transaction_id)
+  where safe_transaction_id is not null;
+
 -- Snapshot mệnh giá khi owner đếm thực tế (Hybrid model — total tracked tự động,
 -- denomination chỉ snapshot khi cần). KHÔNG tự adjust balance — owner phải gọi
 -- explicit safe_adjust nếu muốn fix discrepancy.

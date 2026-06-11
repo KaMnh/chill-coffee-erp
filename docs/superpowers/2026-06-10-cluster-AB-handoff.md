@@ -1,4 +1,4 @@
-# Handoff — Cụm A (Két) + Cụm B (Sổ quỹ → kho)
+# Handoff — Cụm A (Két) + B (Sổ quỹ → kho) + D (Phân tích n8n)
 
 **Date:** 2026-06-10
 **Branch:** `claude/magical-lalande-d19b85`
@@ -15,6 +15,7 @@ file/dòng/RPC thật của project. Cụm C (OCR) đã bỏ.
 | 2 | [Sổ quỹ 2 phần (tiền mặt + chuyển khoản)](specs/2026-06-10-safe-two-funds-cash-transfer-design.md) | Có (RPC + schema) | — | **Redesign lõi sổ quỹ. Lớn nhất — code phân pha.** Gộp luôn F4 + nền cho F1 |
 | 3 | [F4 — Rút quỹ chỉnh được ngày](specs/2026-06-10-safe-withdraw-adjustable-date-design.md) | Có (RPC) | gộp vào #2 | Ô ngày — triển khai chung đợt sửa `safe_withdraw_other` của #2 |
 | 4 | [F1+F2 — Nhập nguyên liệu → kho](specs/2026-06-10-purchase-inventory-from-safe-design.md) | Có (RPC + schema) | **#2** | Modal nhiều dòng; thanh toán tách quỹ (addendum) |
+| 5 | [Phân tích cho n8n (P&L + dòng tiền)](specs/2026-06-10-analytics-data-surface-n8n-design.md) | Có (view DB) | **#2** (+ #4 cho COGS sau) | Thuần DB: schema `analytics` + 4 view; n8n PULL service_role |
 | — | [F7 — Tổng quỹ cuối ngày (reporting-only)](specs/2026-06-10-end-of-day-fund-bank-transfer-design.md) | — | — | ⛔ **SUPERSEDED bởi #2** — KHÔNG triển khai |
 
 **Luồng:** #1 độc lập (làm bất cứ lúc nào). #2 là nền sổ quỹ → làm trước #3/#4. #3 (ngày)
@@ -34,6 +35,10 @@ gộp vào đợt sửa `safe_withdraw_other` của #2. #4 dựa trên nền 2 q
 - **F1+F2:** modal riêng từ Sổ quỹ, nhiều dòng `{NL, SL, đơn giá, thành tiền}`, quy đổi 2 chiều;
   1 RPC atomic = trừ quỹ (tách) + đẩy kho + cập nhật `last_unit_price`; tạo NL mới inline (reuse
   `IngredientFormModal`); KHÔNG upload hóa đơn.
+- **Phân tích n8n (#5):** thuần DB — schema `analytics` + 4 view (`daily_pnl` cash-basis,
+  `daily_cashflow`, `cash_position`, `cash_variance`), grant `service_role`; n8n PULL. **Lợi nhuận
+  = cash basis** (không COGS). **COGS/`product_margin` HOÃN** — DB đã sẵn (last_unit_price F1),
+  thêm sau là view thuần, không sửa DB.
 
 ## Lưu ý chung khi code
 

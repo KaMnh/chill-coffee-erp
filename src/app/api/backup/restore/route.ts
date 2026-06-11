@@ -73,6 +73,11 @@ alter default privileges in schema public
   grant all on tables to service_role;
 alter default privileges in schema public
   grant execute on functions to authenticated, anon, service_role;
+create schema if not exists analytics;
+grant usage on schema analytics to service_role;
+grant select on all tables in schema analytics to service_role;
+alter default privileges in schema analytics
+  grant select on tables to service_role;
 notify pgrst, 'reload schema';
 `;
 // Fallback inside the container's writable /tmp if PRE_RESTORE_DIR is not

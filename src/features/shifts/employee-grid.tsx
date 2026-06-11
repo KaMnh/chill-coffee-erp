@@ -60,7 +60,10 @@ export function EmployeeGrid({
       <article
         key={employee.id}
         className={cn(
-          "flex items-center justify-between gap-3 rounded-md border border-border bg-surface p-3 transition-colors",
+          // flex-wrap: ở màn hẹp cụm badge + nút rớt xuống hàng riêng thay vì
+          // ép min-width ~400px làm cả trang bị kéo ngang (375px). Desktop đủ
+          // chỗ nên không wrap — giao diện không đổi.
+          "flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface p-3 transition-colors",
           "hover:border-border-strong"
         )}
       >
@@ -73,7 +76,7 @@ export function EmployeeGrid({
             {formatVND(employee.hourly_rate)}/giờ
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {statusBadge(shift?.status)}
           {canManage && (
             <Button

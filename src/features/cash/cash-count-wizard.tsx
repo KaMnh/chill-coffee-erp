@@ -63,7 +63,9 @@ export function CashCountWizard({
 
   return (
     <Card>
-      <CardBody className="space-y-3 p-3">
+      {/* Mobile: bỏ padding kép (Card p-5 đã đủ) — padding lồng nhau làm
+          min-content của step vượt 375px → cả trang bị kéo ngang. */}
+      <CardBody className="space-y-3 md:p-3">
         {/* === Step 1: Đếm cuối ngày === */}
         <section
           className={cn(
@@ -75,7 +77,7 @@ export function CashCountWizard({
             type="button"
             onClick={() => onActiveStepChange(1)}
             disabled={disabled || isStep1Active}
-            className="flex w-full items-center justify-between gap-3 p-3 text-left"
+            className="flex w-full flex-wrap items-center justify-between gap-3 p-3 text-left"
             aria-expanded={isStep1Active}
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -137,7 +139,7 @@ export function CashCountWizard({
             type="button"
             onClick={() => onActiveStepChange(2)}
             disabled={disabled || isStep2Active}
-            className="flex w-full items-center justify-between gap-3 p-3 text-left"
+            className="flex w-full flex-wrap items-center justify-between gap-3 p-3 text-left"
             aria-expanded={isStep2Active}
           >
             <div className="flex items-center gap-3 min-w-0">

@@ -107,3 +107,14 @@ kỳ, để cấu hình n8n. (Có thể đặt `docs/integrations/n8n-analytics-
 - Materialized view / cache (volume nhỏ, view thường đủ).
 - Đối soát sao kê ngân hàng; nhiều tài khoản.
 - OCR hóa đơn (đã có đường riêng `safe_attachments`).
+
+## Addendum 2026-06-11 — hiệu chỉnh sau validation + adversarial review
+
+1. Cột thật: `safe_transactions.transaction_type` / `reason_category` (spec viết tắt `type`/`category`).
+2. **Chống đếm đôi:** `safe_withdraw_other` tự tạo 1 dòng `expenses` mirror (`safe_transaction_id` not null) → `expenses_total`/`expense_out` phải lọc `safe_transaction_id is null` (tiền lệ `2026-05-28-e-rpcs-hide-safe-expenses.sql`).
+3. `daily_cashflow` tính từ bảng nghiệp vụ gốc (`sales_payments`, `expenses`, `shift_payroll_records`, `safe_transactions`) — KHÔNG dùng `cash_drawer_events` (live data không ghi outflow events). `deposit_close`/`withdraw_open`/`adjustment`/`initial_setup` loại khỏi cashflow (luân chuyển nội bộ / vốn / bù trừ void).
+4. REST: thêm `analytics` vào `PGRST_DB_SCHEMAS` (supabase/.env, supabase/.env.example, deploy/dockge/.env.example + prod .env thủ công). Đổi env phải **restart container `rest`** — `notify pgrst` không đủ. n8n gọi với header `Accept-Profile: analytics`.
+5. **Ngữ nghĩa ngày cố ý lệch:** `daily_pnl`/`daily_cashflow` bucket theo `occurred_at` (nhãn ngày user, back-date được); `cash_position` cắt theo `created_at` (chuỗi số dư as-recorded) → cột tên `safe_cash_recorded`/`safe_transfer_recorded`. Rút back-date sẽ vào P&L của ngày nhãn nhưng KHÔNG đổi position lịch sử.
+6. `cash_variance`: một ngày có thể nhiều lần đếm cùng loại → Σ difference + count per `count_type`; sum để NULL khi không có lần đếm (0 ≠ không đếm).
+7. Doanh thu = Σ `net_amount` không lọc status (khớp `cash_flow_overview`).
+8. View `security_invoker=true`; grant chỉ `service_role`, lặp tường minh trong migration. Sau restore backup cần chạy lại migrator nếu dump không chứa schema analytics.

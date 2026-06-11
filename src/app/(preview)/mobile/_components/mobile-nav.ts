@@ -23,7 +23,7 @@ const ITEM: Record<ViewKey, MobileNavItem> = {
   cash:      { key: "cash",      label: "Chốt két",      short: "Chốt két",  icon: "banknote" },
   expenses:  { key: "expenses",  label: "Chi phí",       short: "Chi phí",   icon: "wallet" },
   handover:  { key: "handover",  label: "Bàn giao",      short: "Bàn giao",  icon: "clipboardList" },
-  shifts:    { key: "shifts",    label: "Ca & lương",    short: "Ca",        icon: "users" },
+  shifts:    { key: "shifts",    label: "Ca & lương",    short: "Ca & lương", icon: "users" },
   safe:      { key: "safe",      label: "Sổ quỹ",        short: "Sổ quỹ",    icon: "piggyBank" },
   inventory: { key: "inventory", label: "Kho",           short: "Kho",       icon: "package" },
   reports:   { key: "reports",   label: "Báo cáo chốt két", short: "Báo cáo", icon: "fileText" },
@@ -32,8 +32,10 @@ const ITEM: Record<ViewKey, MobileNavItem> = {
   settings:  { key: "settings",  label: "Thiết lập",     short: "Thiết lập", icon: "settings" },
 };
 
+// Feedback owner 2026-06-11: Bàn giao ít dùng nhất → KHÔNG đặt ở bottom bar,
+// chuyển vào drawer; thay bằng Ca & lương (ra/vào ca là thao tác hằng ngày).
 export const TABS_BY_ROLE: Record<PreviewRole, MobileNavItem[]> = {
-  staff: [ITEM.dashboard, ITEM.cash, ITEM.expenses, ITEM.handover],
+  staff: [ITEM.dashboard, ITEM.cash, ITEM.expenses, ITEM.shifts],
   owner: [ITEM.dashboard, ITEM.safe, ITEM.reports, ITEM.cash],
 };
 
@@ -44,7 +46,7 @@ export interface DrawerGroup {
 
 export const DRAWER_BY_ROLE: Record<PreviewRole, DrawerGroup[]> = {
   staff: [
-    { label: "Nhân sự & Ca", items: [ITEM.shifts] },
+    { label: "Nhân sự & Ca", items: [ITEM.handover] },
     { label: "Kho hàng", items: [ITEM.inventory] },
     { label: "Báo cáo", items: [ITEM.reports] },
   ],

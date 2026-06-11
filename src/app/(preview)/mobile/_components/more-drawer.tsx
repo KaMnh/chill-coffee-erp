@@ -16,13 +16,15 @@ interface MoreDrawerProps {
   active: ViewKey;
   onSelect(view: ViewKey): void;
   onLogout(): void;
+  /** View đang có cảnh báo → chấm đỏ cạnh label. */
+  alertOn?: ViewKey | null;
 }
 
 /**
  * Drawer "Thêm" — bottom sheet chứa các đích ngoài 4 tab chính,
  * nhóm theo NAV_GROUPS của desktop sidebar. Hàng 48px, chevron phải.
  */
-export function MoreDrawer({ open, onClose, role, active, onSelect, onLogout }: MoreDrawerProps) {
+export function MoreDrawer({ open, onClose, role, active, onSelect, onLogout, alertOn }: MoreDrawerProps) {
   const groups = DRAWER_BY_ROLE[role];
   const account = ACCOUNT_BY_ROLE[role];
 
@@ -53,7 +55,12 @@ export function MoreDrawer({ open, onClose, role, active, onSelect, onLogout }: 
                     )}
                   >
                     <Icon name={item.icon} size={20} className={isActive ? "text-white" : "text-muted"} />
-                    <span className="flex-1 font-medium">{item.label}</span>
+                    <span className="flex-1 font-medium inline-flex items-center gap-2">
+                      {item.label}
+                      {alertOn === item.key && (
+                        <span className="w-2 h-2 rounded-full bg-danger" aria-label="Có cảnh báo" />
+                      )}
+                    </span>
                     <Icon name="chevronRight" size={16} className={isActive ? "text-white/60" : "text-muted/50"} />
                   </button>
                 );

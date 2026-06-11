@@ -14,9 +14,14 @@
 
 | Role | 4 tab chính | Drawer "Thêm" (theo nhóm) |
 |---|---|---|
-| **Nhân viên vận hành** | Trang chủ · Chốt két · Chi phí · Bàn giao | Nhân sự & Ca: Ca & lương · Kho hàng: Kho · Báo cáo: Báo cáo |
+| **Nhân viên vận hành** | Trang chủ · Chốt két · Chi phí · Ca & lương | Nhân sự & Ca: Bàn giao · Kho hàng: Kho · Báo cáo: Báo cáo |
 | **Chủ quán** | Trang chủ · Sổ quỹ · Báo cáo · Chốt két | Tổng quan: Dòng tiền · Thu–Chi–Quỹ: Chi phí · Nhân sự & Ca: Bàn giao, Ca & lương · Kho hàng: Kho · Báo cáo: Pivot · Hệ thống: Thiết lập |
 | Manager (wiring sau) | như owner nhưng bỏ Sổ quỹ → thay bằng Chi phí | phần còn lại theo role matrix |
+
+> **Quyết định 2026-06-11 (feedback owner):** Bàn giao là phần ít dùng nhất →
+> KHÔNG chiếm chỗ bottom bar; thay bằng Ca & lương (ra/vào ca là thao tác
+> hằng ngày). Cảnh báo của view nằm trong drawer (vd Bàn giao còn việc) hiển
+> thị chấm đỏ trên tab "Thêm" + cạnh label trong drawer.
 
 - Tab active = **dark pill** (đúng convention nav active của design system).
 - Tab "Thêm" active khi view hiện tại nằm ngoài 4 tab. Chấm đỏ cảnh báo trên tab

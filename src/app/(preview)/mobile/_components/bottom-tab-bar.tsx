@@ -28,6 +28,8 @@ export function BottomTabBar({ role, active, onSelect, onMore, moreOpen, alertOn
   const tabs = TABS_BY_ROLE[role];
   const rootRef = useRef<HTMLElement>(null);
   const inTabs = tabs.some((t) => t.key === active);
+  // View có cảnh báo nằm trong drawer → chấm đỏ dồn lên tab "Thêm".
+  const alertOnMore = alertOn != null && !tabs.some((t) => t.key === alertOn);
 
   // Pop nhẹ pill active khi đổi tab.
   useGSAP(
@@ -98,6 +100,9 @@ export function BottomTabBar({ role, active, onSelect, onMore, moreOpen, alertOn
           <span className={cn("text-[10px] leading-none", moreOpen || !inTabs ? "font-semibold text-ink" : "text-muted")}>
             Thêm
           </span>
+          {alertOnMore && (
+            <span className="absolute top-1.5 right-[calc(50%-1.4rem)] w-2 h-2 rounded-full bg-danger" aria-hidden />
+          )}
         </button>
       </div>
     </nav>

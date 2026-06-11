@@ -6,7 +6,7 @@ import type { ViewKey } from "@/features/navigation/navigation";
 import { MobileTopBar } from "./mobile-top-bar";
 import { BottomTabBar } from "./bottom-tab-bar";
 import { MoreDrawer } from "./more-drawer";
-import { VIEW_TITLES, TABS_BY_ROLE, visibleViews } from "./mobile-nav";
+import { VIEW_TITLES, visibleViews } from "./mobile-nav";
 import { usePreview } from "./bits";
 import { MobileLoginView } from "./views/login-view";
 import { MobileHomeView } from "./views/home-view";
@@ -60,7 +60,8 @@ export function MobileApp() {
     return <MobileLoginView onLogin={() => { setScreen("app"); setView("dashboard"); }} />;
   }
 
-  const warnHandover = scenario === "warn" && TABS_BY_ROLE[role].some((t) => t.key === "handover");
+  // Kịch bản cảnh báo: Bàn giao còn việc — tab bar/drawer tự quyết vị trí chấm đỏ.
+  const alertOn = scenario === "warn" ? ("handover" as ViewKey) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -89,7 +90,7 @@ export function MobileApp() {
         onSelect={go}
         onMore={() => setMoreOpen(true)}
         moreOpen={moreOpen}
-        alertOn={warnHandover ? "handover" : null}
+        alertOn={alertOn}
       />
 
       <MoreDrawer
@@ -99,6 +100,7 @@ export function MobileApp() {
         active={view}
         onSelect={go}
         onLogout={() => setScreen("login")}
+        alertOn={alertOn}
       />
     </div>
   );

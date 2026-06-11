@@ -13,5 +13,6 @@ export * from "./pos-sync";
 export * from "./kiotviet-config";
 export * from "./safe";
 export * from "./inventory";
+export * from "./ingredient-prices";
 export * from "./signup-requests";
 export * from "./cash-flow";

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   loadIngredients,
+  loadIngredientReferencePrices,
   loadMenuItems,
   loadRecipes,
   loadStockBalancesAll,
@@ -67,5 +68,21 @@ export function useStockBalancesQuery(
     // Predictive refresh: when the user re-focuses the window, re-fetch
     // current stock balances. staleTime gates rapid focus toggles.
     refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Đơn giá tham chiếu tồn kho — bảng owner-only (RLS). Gọi với
+ * `enabled = role === "owner"` để khỏi query thừa cho role khác.
+ */
+export function useIngredientPricesQuery(
+  supabase: SupabaseClient | null,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.ingredientPrices(),
+    queryFn: () => loadIngredientReferencePrices(supabase!),
+    enabled: !!supabase && enabled,
+    staleTime: 60_000,
   });
 }

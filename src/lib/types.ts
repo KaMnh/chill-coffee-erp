@@ -389,6 +389,13 @@ export interface StockBalance {
   last_movement_at: string | null;
 }
 
+export interface IngredientReferencePrice {
+  ingredient_id: string;
+  /** VND/đơn vị của ingredient — owner đặt tay (spec 2026-06-12). */
+  unit_price: number;
+  updated_at: string;
+}
+
 // =====================================================================
 // User management — signup_requests (Phase 6+ user mgmt UI)
 // =====================================================================

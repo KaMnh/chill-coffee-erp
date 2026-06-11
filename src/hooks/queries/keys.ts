@@ -28,6 +28,7 @@ export const queryKeys = {
   menuItems: () => ["inventory", "menu_items"] as const,
   recipes: () => ["inventory", "recipes"] as const,
   stockBalances: () => ["inventory", "stock_balances"] as const,
+  ingredientPrices: () => ["inventory", "ingredient_prices"] as const,
   stockMovements: (filter?: {
     ingredient_id?: string;
     from?: string;

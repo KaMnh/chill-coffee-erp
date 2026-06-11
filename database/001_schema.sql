@@ -698,6 +698,15 @@ create index if not exists idx_ingredients_active
 alter table public.ingredients
   add column if not exists last_unit_price numeric(14,2) not null default 0;
 
+-- Đơn giá tham chiếu tồn kho — owner đặt tay, CHỈ owner đọc/ghi (RLS ở 003).
+-- Spec: docs/superpowers/specs/2026-06-12-inventory-reference-price-design.md
+create table if not exists public.ingredient_reference_prices (
+  ingredient_id uuid primary key
+    references public.ingredients(id) on delete cascade,
+  unit_price bigint not null check (unit_price >= 0),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.menu_items (
   id                      uuid primary key default gen_random_uuid(),
   name                    text not null unique,

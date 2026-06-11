@@ -7,8 +7,9 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/cn";
-import { formatNumber } from "@/lib/format";
-import type { StockBalance } from "@/lib/types";
+import { formatNumber, formatVND } from "@/lib/format";
+import { rowValue } from "@/features/inventory/stock-value";
+import type { StockBalance, IngredientReferencePrice } from "@/lib/types";
 
 export type StockSortColumn = "name" | "balance" | "low_stock";
 export type StockSortDir = "asc" | "desc";
@@ -25,6 +26,11 @@ interface DashboardStockListProps {
   onSortChange: (next: StockSortState) => void;
   isLocked: boolean;
   onToggleLock: () => void;
+  /**
+   * Owner-only (spec 2026-06-12): map đơn giá tham chiếu — có mặt thì thêm
+   * cột "Giá trị" (không sortable). Không truyền = bảng 3 cột như cũ.
+   */
+  prices?: ReadonlyMap<string, IngredientReferencePrice>;
 }
 
 const HEADERS: Array<{ column: StockSortColumn; label: string; align: "left" | "right" }> = [
@@ -50,6 +56,7 @@ export function DashboardStockList({
   onSortChange,
   isLocked,
   onToggleLock,
+  prices,
 }: DashboardStockListProps) {
   const sorted = useMemo(() => {
     const arr = [...balances];
@@ -170,6 +177,9 @@ export function DashboardStockList({
                 </th>
               );
             })}
+            {prices && (
+              <th className="py-2 px-3 font-medium text-right">Giá trị</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -200,6 +210,22 @@ export function DashboardStockList({
                     <span className="text-xs text-muted">—</span>
                   )}
                 </td>
+                {prices && (
+                  <td className="py-2 px-3 text-right tabular-nums">
+                    {(() => {
+                      const v = rowValue(
+                        b.theoretical_balance,
+                        prices.get(b.ingredient_id)?.unit_price
+                      );
+                      if (v == null) return <span className="text-muted/60">—</span>;
+                      return (
+                        <span className={v < 0 ? "text-danger" : "text-ink"}>
+                          {formatVND(v)}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                )}
               </tr>
             );
           })}

@@ -16,6 +16,8 @@ interface MobileMoreDrawerProps {
   accountName: string;
   roleLabel: string;
   onSignOut(): void;
+  /** Mở sheet "Tuỳ chỉnh tab" (đổi 4 đích bottom bar). */
+  onCustomize?(): void;
 }
 
 /**
@@ -34,6 +36,7 @@ export function MobileMoreDrawer({
   accountName,
   roleLabel,
   onSignOut,
+  onCustomize,
 }: MobileMoreDrawerProps) {
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -101,6 +104,22 @@ export function MobileMoreDrawer({
                 </div>
               </div>
             ))}
+
+            {/* Tuỳ chỉnh tab bottom bar */}
+            {onCustomize && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  onCustomize();
+                }}
+                className="w-full h-12 px-3 rounded-lg border border-dashed border-border flex items-center gap-3 text-left text-sm text-ink-2 hover:bg-surface-muted"
+              >
+                <Icon name="pencil" size={20} className="text-muted" />
+                <span className="flex-1 font-medium">Tuỳ chỉnh tab thanh dưới</span>
+                <Icon name="chevronRight" size={16} className="text-muted/50" />
+              </button>
+            )}
 
             {/* Tài khoản + đăng xuất */}
             <div className="rounded-lg border border-border overflow-hidden">

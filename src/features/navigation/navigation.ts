@@ -137,7 +137,12 @@ const MOBILE_TAB_PREFERENCE: Record<UserRole, ReadonlyArray<ViewKey>> = {
 
 export const MOBILE_TAB_COUNT = 4;
 
-/** 4 tab bottom bar theo preference của role, lọc theo nav thực sự visible. */
+/**
+ * 4 tab bottom bar. Ưu tiên tuỳ chỉnh per-user
+ * (profiles.dashboard_preferences.mobile_tabs — user tự chọn qua drawer
+ * "Thêm" → "Tuỳ chỉnh tab"); key rác / view không được thấy bị lọc bỏ,
+ * dedupe, cắt còn 4. Không có (hoặc lọc xong rỗng) → preference theo role.
+ */
 export function getMobileTabs(
   account: Account | null,
   settings: AppSettings
@@ -145,6 +150,16 @@ export function getMobileTabs(
   if (!account) return [];
   const visible = getVisibleNav(account, settings);
   const byKey = new Map(visible.map((item) => [item.key, item]));
+
+  const custom = account.dashboard_preferences?.mobile_tabs;
+  if (Array.isArray(custom) && custom.length > 0) {
+    const customTabs = [...new Set(custom)]
+      .map((key) => byKey.get(key as ViewKey))
+      .filter((item): item is NavItem => Boolean(item))
+      .slice(0, MOBILE_TAB_COUNT);
+    if (customTabs.length > 0) return customTabs;
+  }
+
   return MOBILE_TAB_PREFERENCE[account.role]
     .map((key) => byKey.get(key))
     .filter((item): item is NavItem => Boolean(item))

@@ -2,6 +2,8 @@
 
 export type DashboardPreferences = {
   stock_sort?: string | null;
+  /** Tab bottom bar mobile tuỳ chỉnh (ViewKey[], ≤4). null/absent = mặc định theo role. */
+  mobile_tabs?: string[] | null;
 };
 
 export type Account = {

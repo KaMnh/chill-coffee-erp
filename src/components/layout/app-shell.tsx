@@ -9,6 +9,8 @@ interface AppShellProps {
   sidebar: React.ReactNode;
   topBar: React.ReactNode;
   children: React.ReactNode;
+  /** Bottom tab bar mobile (<md) — fixed đáy viewport, main tự chừa chỗ. */
+  bottomNav?: React.ReactNode;
   className?: string;
 }
 
@@ -16,8 +18,10 @@ interface AppShellProps {
  * Responsive app shell.
  *
  * Desktop (≥1024px): sidebar docked left, topbar + main on the right.
- * Mobile/tablet (<1024px): sidebar moves into a Radix Dialog drawer that
+ * Tablet (768–1024px): sidebar moves into a Radix Dialog drawer that
  * slides in from the left, triggered by a hamburger button in the topbar.
+ * Mobile (<768px): hamburger ẩn — điều hướng bằng `bottomNav` (bottom tab
+ * bar + drawer "Thêm", spec 2026-06-11-mobile-uiux-design).
  * The drawer auto-closes when a NavItem (any <button> or <a> inside it)
  * is tapped — implemented via event delegation so NavItem doesn't need
  * to know about the drawer.
@@ -25,7 +29,7 @@ interface AppShellProps {
  * The `sidebar` ReactNode renders into either mount point depending on
  * viewport; HomePage's prop API is unchanged.
  */
-export function AppShell({ sidebar, topBar, children, className }: AppShellProps) {
+export function AppShell({ sidebar, topBar, children, bottomNav, className }: AppShellProps) {
   const [open, setOpen] = useState(false);
 
   // Auto-close drawer when a nav button/link inside it is activated.
@@ -52,7 +56,7 @@ export function AppShell({ sidebar, topBar, children, className }: AppShellProps
                     variant="ghost"
                     size={40}
                     aria-label="Mở menu"
-                    className="lg:hidden ml-2 shrink-0"
+                    className="hidden md:inline-flex lg:hidden ml-2 shrink-0"
                   />
                 </RadixDialog.Trigger>
                 <RadixDialog.Portal>
@@ -73,10 +77,17 @@ export function AppShell({ sidebar, topBar, children, className }: AppShellProps
               </RadixDialog.Root>
               <div className="flex-1 min-w-0">{topBar}</div>
             </div>
-            <main className="flex-1 p-4 lg:p-6 overflow-auto">{children}</main>
+            {/* <md: pb chừa bottom tab bar fixed (h-14 + safe-area). */}
+            <main className="flex-1 p-4 lg:p-6 overflow-auto pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4 lg:pb-6">
+              {children}
+            </main>
           </div>
         </div>
       </div>
+
+      {bottomNav && (
+        <div className="md:hidden fixed inset-x-0 bottom-0 z-40">{bottomNav}</div>
+      )}
     </div>
   );
 }

@@ -72,19 +72,25 @@ export function DenominationGrid({
         const count = value[String(denomination)] ?? 0;
         const rowTotal = denomination * count;
         return (
+          /* Mobile (<md): hàng 2 tầng — nhãn + tổng dòng trên, stepper 44px +
+             ô số + chip wrap dưới (grid 4 cột cũ ép min-width ~412px → cả
+             trang bị kéo ngang ở 375px). Desktop (md:) giữ nguyên grid cũ. */
           <article
             key={denomination}
-            className="grid grid-cols-[100px_auto_1fr_auto] gap-3 items-center rounded-md border border-border bg-surface p-2"
+            className="rounded-md border border-border bg-surface p-2 md:grid md:grid-cols-[100px_auto_1fr_auto] md:gap-3 md:items-center"
           >
-            <strong className="font-display text-sm text-ink">{formatVND(denomination)}</strong>
-            <div className="flex items-center gap-1">
+            <div className="flex items-baseline justify-between md:contents">
+              <strong className="font-display text-sm text-ink md:order-1">{formatVND(denomination)}</strong>
+              <span className="text-sm text-muted md:hidden">{formatNumber(rowTotal)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 md:order-2 md:mt-0 md:flex-nowrap md:gap-1">
               <button
                 type="button"
                 disabled={!isInteractive}
                 onClick={() => updateCount(denomination, -1)}
                 aria-label={`Giảm 1 tờ ${formatVND(denomination)}`}
                 className={cn(
-                  "w-7 h-7 rounded-full border border-border flex items-center justify-center transition-colors",
+                  "w-11 h-11 md:w-7 md:h-7 shrink-0 rounded-full border border-border flex items-center justify-center transition-colors",
                   isInteractive ? "hover:bg-surface-muted" : "opacity-40 cursor-not-allowed"
                 )}
               >
@@ -109,7 +115,8 @@ export function DenominationGrid({
                 }
                 inputMode="numeric"
                 className={cn(
-                  "w-14 h-7 rounded-sm border border-border bg-surface text-center text-sm text-ink",
+                  // text-base ở mobile: ≥16px để iOS không auto-zoom khi focus.
+                  "w-16 h-11 text-base md:w-14 md:h-7 md:text-sm rounded-sm border border-border bg-surface text-center text-ink",
                   "focus-visible:outline-none focus-visible:border-2 focus-visible:border-border-strong",
                   (readOnly || disabled) && "bg-surface-muted text-muted cursor-not-allowed"
                 )}
@@ -120,15 +127,36 @@ export function DenominationGrid({
                 onClick={() => updateCount(denomination, +1)}
                 aria-label={`Tăng 1 tờ ${formatVND(denomination)}`}
                 className={cn(
-                  "w-7 h-7 rounded-full border border-border flex items-center justify-center transition-colors",
+                  "w-11 h-11 md:w-7 md:h-7 shrink-0 rounded-full border border-border flex items-center justify-center transition-colors",
                   isInteractive ? "hover:bg-surface-muted" : "opacity-40 cursor-not-allowed"
                 )}
               >
                 <Icon name="plus" size={16} />
               </button>
+              {/* min-w trên cụm chip: không đủ chỗ cạnh stepper thì rớt nguyên
+                  hàng xuống dưới (1 hàng ngang gọn) thay vì bị bóp thành cột dọc. */}
+              {showQuickAdd && (
+                <div className="flex flex-1 min-w-[150px] items-center justify-end gap-1.5 flex-wrap md:hidden" aria-label="Cộng nhanh">
+                  {[5, 10, 20].map((delta) => (
+                    <button
+                      key={delta}
+                      type="button"
+                      disabled={!isInteractive}
+                      onClick={() => updateCount(denomination, delta)}
+                      aria-label={`Cộng ${delta} tờ ${formatVND(denomination)}`}
+                      className={cn(
+                        "h-11 min-w-11 px-2.5 rounded-full border border-border bg-surface-muted text-xs text-ink transition-colors",
+                        isInteractive ? "active:border-border-strong" : "opacity-40 cursor-not-allowed"
+                      )}
+                    >
+                      +{delta}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            {showQuickAdd && (
-              <div className="flex items-center gap-1 flex-wrap" aria-label="Cộng nhanh">
+            {showQuickAdd ? (
+              <div className="hidden md:flex items-center gap-1 flex-wrap md:order-3" aria-label="Cộng nhanh">
                 {[1, 5, 10, 20].map((delta) => (
                   <button
                     key={delta}
@@ -145,9 +173,10 @@ export function DenominationGrid({
                   </button>
                 ))}
               </div>
+            ) : (
+              <span className="hidden md:block md:order-3" />
             )}
-            {!showQuickAdd && <span />}
-            <span className="text-sm text-muted shrink-0">{formatNumber(rowTotal)}</span>
+            <span className="hidden md:block text-sm text-muted shrink-0 md:order-4">{formatNumber(rowTotal)}</span>
           </article>
         );
       })}

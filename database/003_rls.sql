@@ -304,3 +304,13 @@ alter table public.backup_runs enable row level security;
 drop policy if exists backup_runs_owner_read on public.backup_runs;
 create policy backup_runs_owner_read on public.backup_runs for select
   using (public.app_role() = 'owner');
+
+-- ============================================================== ANALYTICS-GRANTS-BEGIN
+-- Schema analytics: CHỈ service_role (n8n). KHÔNG grant anon/authenticated.
+-- Mirror trong src/app/api/backup/restore/route.ts POST_RESTORE_GRANTS_SQL.
+-- Khối này được trích nguyên văn vào migration 2026-06-11-analytics-views.sql.
+grant usage on schema analytics to service_role;
+grant select on all tables in schema analytics to service_role;
+alter default privileges in schema analytics
+  grant select on tables to service_role;
+-- ============================================================== ANALYTICS-GRANTS-END

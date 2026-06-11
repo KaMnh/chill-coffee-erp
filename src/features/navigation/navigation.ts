@@ -120,3 +120,47 @@ export function getGroupedNav(
     }))
     .filter((group) => group.items.length > 0);
 }
+
+/* ===== Mobile bottom tab bar (spec 2026-06-11-mobile-uiux-design §1) =====
+ * 4 tab trong tầm ngón cái + tab "Thêm" mở drawer. Role-aware: nhân viên
+ * thấy nhóm vận hành lên trước; chủ thấy Sổ quỹ / Báo cáo nổi hơn.
+ * Bàn giao KHÔNG vào tab mặc định (feedback owner 2026-06-11 — ít dùng nhất).
+ * Danh sách là PREFERENCE đầy đủ: khi sidebar_config ẩn một view ưu tiên,
+ * tab backfill ứng viên kế tiếp để vẫn đủ 4 tab.
+ */
+const MOBILE_TAB_PREFERENCE: Record<UserRole, ReadonlyArray<ViewKey>> = {
+  owner:           ["dashboard", "safe", "reports", "cash", "cashflow", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
+  manager:         ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover"],
+  staff_operator:  ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover"],
+  employee_viewer: ["dashboard"],
+};
+
+export const MOBILE_TAB_COUNT = 4;
+
+/** 4 tab bottom bar theo preference của role, lọc theo nav thực sự visible. */
+export function getMobileTabs(
+  account: Account | null,
+  settings: AppSettings
+): ReadonlyArray<NavItem> {
+  if (!account) return [];
+  const visible = getVisibleNav(account, settings);
+  const byKey = new Map(visible.map((item) => [item.key, item]));
+  return MOBILE_TAB_PREFERENCE[account.role]
+    .map((key) => byKey.get(key))
+    .filter((item): item is NavItem => Boolean(item))
+    .slice(0, MOBILE_TAB_COUNT);
+}
+
+/** Drawer "Thêm": phần visible còn lại ngoài tabs, nhóm theo NAV_GROUPS. */
+export function getMobileDrawerGroups(
+  account: Account | null,
+  settings: AppSettings
+): ReadonlyArray<NavGroupWithItems> {
+  const tabKeys = new Set(getMobileTabs(account, settings).map((t) => t.key));
+  return getGroupedNav(account, settings)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !tabKeys.has(item.key)),
+    }))
+    .filter((group) => group.items.length > 0);
+}

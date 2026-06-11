@@ -5,6 +5,8 @@ import type { Account, AppSettings } from "@/lib/types";
 import {
   getVisibleNav,
   getGroupedNav,
+  getMobileTabs,
+  getMobileDrawerGroups,
   canSee as canSeeFn,
   type NavItem,
   type NavGroupWithItems,
@@ -16,6 +18,10 @@ export interface UseRoleGateResult {
   visibleNav: ReadonlyArray<NavItem>;
   /** Visible nav partitioned into fixed functional groups (NAV_GROUPS order, empty groups dropped). */
   groupedNav: ReadonlyArray<NavGroupWithItems>;
+  /** Bottom tab bar mobile: ≤4 tab role-aware (spec 2026-06-11-mobile-uiux-design). */
+  mobileTabs: ReadonlyArray<NavItem>;
+  /** Drawer "Thêm" mobile: phần visible còn lại ngoài tabs, nhóm theo NAV_GROUPS. */
+  mobileDrawerGroups: ReadonlyArray<NavGroupWithItems>;
   /** First visible view, used as fallback when current view is hidden by role change. */
   defaultView: ViewKey;
   /** Whether this account can see a given view (with current app settings). */
@@ -50,6 +56,16 @@ export function useRoleGate(
     [account, effectiveSettings]
   );
 
+  const mobileTabs = useMemo(
+    () => getMobileTabs(account, effectiveSettings),
+    [account, effectiveSettings]
+  );
+
+  const mobileDrawerGroups = useMemo(
+    () => getMobileDrawerGroups(account, effectiveSettings),
+    [account, effectiveSettings]
+  );
+
   const defaultView: ViewKey = visibleNav[0]?.key ?? "dashboard";
 
   const canSee = useMemo(
@@ -57,5 +73,5 @@ export function useRoleGate(
     [account, effectiveSettings]
   );
 
-  return { visibleNav, groupedNav, defaultView, canSee };
+  return { visibleNav, groupedNav, mobileTabs, mobileDrawerGroups, defaultView, canSee };
 }

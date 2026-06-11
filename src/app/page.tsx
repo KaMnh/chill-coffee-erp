@@ -18,8 +18,10 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Sidebar, SidebarSection, SidebarLogo } from "@/components/layout/sidebar";
 import { NavItem } from "@/components/layout/nav-item";
 import { TopBar } from "@/components/layout/top-bar";
+import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
+import { MobileMoreDrawer } from "@/components/layout/mobile-more-drawer";
+import { AccountMenu } from "@/components/layout/account-menu";
 import { IconButton } from "@/components/ui/icon-button";
-import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
 import { ExpensesView } from "@/features/expenses/expenses-view";
@@ -45,7 +47,8 @@ export default function HomePage() {
   const { status, account, isLoadingAccount, signOut } = useAuthSession();
   const { businessDate, setBusinessDate } = useBusinessDate();
   const appSettingsQuery = useAppSettingsQuery(supabase, status === "authed");
-  const { groupedNav, defaultView, canSee } = useRoleGate(account, appSettingsQuery.data);
+  const { groupedNav, mobileTabs, mobileDrawerGroups, defaultView, canSee } =
+    useRoleGate(account, appSettingsQuery.data);
   const dashboardQuery = useDashboardQuery(supabase, businessDate, status === "authed");
   const posSync = usePosSync(supabase, businessDate, account, dashboardQuery.data?.latest_sync);
   useBackgroundPosSync(posSync, account?.role);
@@ -93,6 +96,7 @@ export default function HomePage() {
   }, []);
 
   const [view, setView] = useState<ViewKey>("dashboard");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [authHeader, setAuthHeader] = useState<string | null>(null);
 
   // Keep authHeader in sync with Supabase session for BackupRestoreSection.
@@ -182,6 +186,9 @@ export default function HomePage() {
   }
 
   const employeeName = account.employee?.name ?? "Người dùng";
+  // Tiêu đề ngữ cảnh cho top bar mobile (<md) — label của view đang mở.
+  const visibleNavLabel =
+    groupedNav.flatMap((g) => g.items).find((i) => i.key === view)?.label ?? "Chill Coffee";
 
   return (
     <AppShell
@@ -207,6 +214,7 @@ export default function HomePage() {
       }
       topBar={
         <TopBar
+          title={visibleNavLabel}
           actions={
             <>
               <input
@@ -223,25 +231,45 @@ export default function HomePage() {
                 aria-label={posSync.isPending ? "Đang sync POS" : "Đồng bộ POS"}
                 onClick={handlePosSync}
                 disabled={posSync.isPending}
-                className="hidden sm:inline-flex"
               />
-              <span className="hidden sm:inline-flex">
-                <Avatar
-                  size="md"
-                  initials={employeeName.slice(0, 2).toUpperCase()}
-                  alt={`${employeeName} (${ROLE_LABELS[account.role]})`}
-                />
-              </span>
+              <AccountMenu
+                name={employeeName}
+                roleLabel={ROLE_LABELS[account.role]}
+                onSignOut={signOut}
+              />
+              {/* Mobile: logout nằm trong menu avatar + drawer "Thêm". */}
               <IconButton
                 icon="logOut"
                 size={40}
                 variant="ghost"
                 aria-label="Đăng xuất"
                 onClick={signOut}
+                className="hidden md:inline-flex"
               />
             </>
           }
         />
+      }
+      bottomNav={
+        <>
+          <BottomTabBar
+            tabs={mobileTabs}
+            active={view}
+            onSelect={handleNavClick}
+            onMore={() => setMoreOpen(true)}
+            moreOpen={moreOpen}
+          />
+          <MobileMoreDrawer
+            open={moreOpen}
+            onOpenChange={setMoreOpen}
+            groups={mobileDrawerGroups}
+            active={view}
+            onSelect={handleNavClick}
+            accountName={employeeName}
+            roleLabel={ROLE_LABELS[account.role]}
+            onSignOut={signOut}
+          />
+        </>
       }
     >
       <Reveal key={view} className="space-y-6">

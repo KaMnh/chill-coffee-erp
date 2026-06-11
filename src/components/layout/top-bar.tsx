@@ -6,14 +6,23 @@ import { Icon } from "@/components/ui/icons";
 interface TopBarProps {
   search?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Tiêu đề ngữ cảnh của view — hiện thay search ở mobile (<md). */
+  title?: React.ReactNode;
   className?: string;
 }
 
-export function TopBar({ search, actions, className }: TopBarProps) {
+export function TopBar({ search, actions, title, className }: TopBarProps) {
   return (
     <div className={cn("flex items-center gap-2 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4", className)}>
-      <div className="hidden sm:block flex-1">{search ?? <SearchBar />}</div>
-      <div className="flex items-center gap-3 ml-auto">{actions}</div>
+      {title != null && (
+        <h1 className="md:hidden flex-1 min-w-0 font-display text-lg font-bold text-ink truncate">
+          {title}
+        </h1>
+      )}
+      <div className={cn("flex-1", title != null ? "hidden md:block" : "hidden sm:block")}>
+        {search ?? <SearchBar />}
+      </div>
+      <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">{actions}</div>
     </div>
   );
 }

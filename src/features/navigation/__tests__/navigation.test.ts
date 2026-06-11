@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { Account, AppSettings, UserRole } from "@/lib/types";
-import { getGroupedNav, NAV_GROUPS } from "../navigation";
+import {
+  getGroupedNav,
+  getMobileTabs,
+  getMobileDrawerGroups,
+  NAV_GROUPS,
+} from "../navigation";
 
 const SETTINGS: AppSettings = { sidebar_defaults: {}, handover_default_tasks: [] };
 
@@ -49,5 +54,80 @@ describe("getGroupedNav", () => {
     const acc = makeAccount("owner", ["dashboard", "safe", "cash"]);
     const cashflow = getGroupedNav(acc, SETTINGS).find((g) => g.key === "cashflow")!;
     expect(cashflow.items.map((i) => i.key)).toEqual(["cash", "safe"]);
+  });
+});
+
+describe("getMobileTabs (bottom tab bar — spec 2026-06-11-mobile-uiux-design)", () => {
+  it("owner mặc định → Trang chủ · Sổ quỹ · Báo cáo · Chốt két", () => {
+    const tabs = getMobileTabs(makeAccount("owner"), SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["dashboard", "safe", "reports", "cash"]);
+  });
+
+  it("staff_operator mặc định → Trang chủ · Chốt két · Chi phí · Ca & lương", () => {
+    const tabs = getMobileTabs(makeAccount("staff_operator"), SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["dashboard", "cash", "expenses", "shifts"]);
+  });
+
+  it("manager mặc định → như owner nhưng Sổ quỹ thay bằng Chi phí", () => {
+    const tabs = getMobileTabs(makeAccount("manager"), SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["dashboard", "expenses", "reports", "cash"]);
+  });
+
+  it("employee_viewer → chỉ 1 tab dashboard", () => {
+    const tabs = getMobileTabs(makeAccount("employee_viewer"), SETTINGS);
+    expect(tabs.map((t) => t.key)).toEqual(["dashboard"]);
+  });
+
+  it("Bàn giao KHÔNG bao giờ vào tab mặc định (feedback owner 2026-06-11)", () => {
+    for (const role of ["owner", "manager", "staff_operator"] as const) {
+      const tabs = getMobileTabs(makeAccount(role), SETTINGS);
+      expect(tabs.map((t) => t.key)).not.toContain("handover");
+    }
+  });
+
+  it("sidebar_config ẩn view ưu tiên → backfill tab kế tiếp theo preference", () => {
+    // Owner ẩn safe → tab thứ 2 nhảy sang ứng viên kế (reports), đủ 4 tab.
+    const acc = makeAccount("owner", [
+      "dashboard", "expenses", "shifts", "cash", "handover",
+      "inventory", "reports", "pivot", "cashflow", "settings",
+    ]);
+    const tabs = getMobileTabs(acc, SETTINGS);
+    expect(tabs).toHaveLength(4);
+    expect(tabs.map((t) => t.key)).not.toContain("safe");
+    expect(tabs.map((t) => t.key)).toEqual(["dashboard", "reports", "cash", "cashflow"]);
+  });
+});
+
+describe("getMobileDrawerGroups (drawer 'Thêm')", () => {
+  it("owner mặc định: phần còn lại ngoài tabs, nhóm theo NAV_GROUPS, đúng thứ tự", () => {
+    const groups = getMobileDrawerGroups(makeAccount("owner"), SETTINGS);
+    const byKey = Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.key)]));
+    expect(groups.map((g) => g.key)).toEqual(["overview", "cashflow", "staff", "inventory", "reports", "system"]);
+    expect(byKey.overview).toEqual(["cashflow"]);
+    expect(byKey.cashflow).toEqual(["expenses"]);
+    expect(byKey.staff).toEqual(["shifts", "handover"]);
+    expect(byKey.inventory).toEqual(["inventory"]);
+    expect(byKey.reports).toEqual(["pivot"]);
+    expect(byKey.system).toEqual(["settings"]);
+  });
+
+  it("staff_operator mặc định: Bàn giao + Kho + Báo cáo", () => {
+    const groups = getMobileDrawerGroups(makeAccount("staff_operator"), SETTINGS);
+    const flat = groups.flatMap((g) => g.items.map((i) => i.key));
+    expect(flat).toEqual(["handover", "inventory", "reports"]);
+  });
+
+  it("tabs và drawer không trùng nhau, gộp lại = đúng visible nav", () => {
+    const acc = makeAccount("owner");
+    const tabKeys = getMobileTabs(acc, SETTINGS).map((t) => t.key);
+    const drawerKeys = getMobileDrawerGroups(acc, SETTINGS).flatMap((g) => g.items.map((i) => i.key));
+    expect(tabKeys.filter((k) => drawerKeys.includes(k))).toEqual([]);
+    expect([...tabKeys, ...drawerKeys].sort()).toEqual(
+      ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
+    );
+  });
+
+  it("employee_viewer → drawer rỗng (dashboard đã ở tab)", () => {
+    expect(getMobileDrawerGroups(makeAccount("employee_viewer"), SETTINGS)).toEqual([]);
   });
 });

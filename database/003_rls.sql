@@ -234,6 +234,21 @@ drop policy if exists safe_attachments_no_direct_write on public.safe_attachment
 create policy safe_attachments_no_direct_write on public.safe_attachments
   for insert to authenticated with check (false);
 
+-- Đơn giá tham chiếu tồn kho — owner only cả đọc lẫn ghi (ghi trực tiếp qua
+-- RLS, không cần RPC vì upsert single-row đơn giản).
+-- Spec: docs/superpowers/specs/2026-06-12-inventory-reference-price-design.md
+alter table public.ingredient_reference_prices enable row level security;
+
+drop policy if exists ingredient_ref_prices_owner_all on public.ingredient_reference_prices;
+create policy ingredient_ref_prices_owner_all on public.ingredient_reference_prices
+  for all to authenticated
+  using (public.app_role() = 'owner')
+  with check (public.app_role() = 'owner');
+
+grant select, insert, update, delete
+  on public.ingredient_reference_prices to authenticated;
+grant all on public.ingredient_reference_prices to service_role;
+
 
 alter table public.handover_sessions enable row level security;
 alter table public.handover_tasks enable row level security;

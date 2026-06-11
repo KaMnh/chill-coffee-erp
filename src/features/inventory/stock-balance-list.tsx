@@ -6,9 +6,12 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/ui/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
-import type { StockBalance } from "@/lib/types";
+import { rowValue } from "./stock-value";
+import { formatVND } from "@/lib/format";
+import type { StockBalance, IngredientReferencePrice } from "@/lib/types";
 
 interface StockBalanceListProps {
   balances: StockBalance[];
@@ -21,6 +24,13 @@ interface StockBalanceListProps {
    * pre-selected.
    */
   onSelectIngredient?(ingredientId: string): void;
+  /**
+   * Owner-only (spec 2026-06-12): map đơn giá tham chiếu — có mặt thì hiện
+   * dòng `đơn giá × tồn = giá trị`. Không truyền = UI cũ y nguyên.
+   */
+  prices?: ReadonlyMap<string, IngredientReferencePrice>;
+  /** Owner-only: mở modal sửa nhanh đơn giá cho 1 nguyên liệu. */
+  onEditPrice?(ingredientId: string): void;
 }
 
 /**
@@ -40,6 +50,8 @@ export function StockBalanceList({
   isLoading,
   isError,
   onSelectIngredient,
+  prices,
+  onEditPrice,
 }: StockBalanceListProps) {
   if (isLoading) {
     return (
@@ -106,9 +118,38 @@ export function StockBalanceList({
                         Lần cuối: {formatRelative(b.last_movement_at)}
                       </p>
                     )}
+                    {prices && (
+                      <p className="text-xs mt-0.5 tabular-nums">
+                        {(() => {
+                          const p = prices.get(b.ingredient_id)?.unit_price;
+                          const v = rowValue(b.theoretical_balance, p);
+                          if (v == null) {
+                            return <span className="text-muted/60">Chưa có giá</span>;
+                          }
+                          return (
+                            <span className={v < 0 ? "text-danger" : "text-ink-2"}>
+                              {formatVND(p!)} × {b.theoretical_balance} ={" "}
+                              <strong>{formatVND(v)}</strong>
+                            </span>
+                          );
+                        })()}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {onEditPrice && (
+                    <IconButton
+                      icon="pencil"
+                      size={40}
+                      variant="ghost"
+                      aria-label={`Sửa đơn giá ${b.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditPrice(b.ingredient_id);
+                      }}
+                    />
+                  )}
                   <p
                     className={
                       "text-base font-mono tabular-nums " +

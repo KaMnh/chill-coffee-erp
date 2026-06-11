@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useDashboardQuery, useHandoverQuery } from "@/hooks/queries";
-import { useStockBalancesQuery } from "@/hooks/queries/use-inventory-queries";
+import {
+  useStockBalancesQuery,
+  useIngredientPricesQuery,
+} from "@/hooks/queries/use-inventory-queries";
+import { stockTotals } from "@/features/inventory/stock-value";
+import { formatVND } from "@/lib/format";
 import { useUpdateUserDashboardPreferences } from "@/hooks/mutations/use-profile-mutations";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -65,6 +70,9 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
   const dashboardQuery = useDashboardQuery(supabase, businessDate, true);
   const handoverQuery = useHandoverQuery(supabase, businessDate, true);
   const stockQuery = useStockBalancesQuery(supabase, true);
+  // Đơn giá tham chiếu (spec 2026-06-12) — owner-only.
+  const isOwner = account.role === "owner";
+  const pricesQuery = useIngredientPricesQuery(supabase, isOwner);
   const updatePrefsM = useUpdateUserDashboardPreferences(supabase);
 
   // Saved sort from profile.dashboard_preferences.stock_sort
@@ -161,6 +169,14 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
                 lưu làm mặc định riêng cho bạn.
               </p>
             </div>
+            {isOwner && pricesQuery.data && (
+              <p className="text-sm text-ink-2 tabular-nums shrink-0">
+                Giá trị:{" "}
+                <strong className="font-display text-ink">
+                  {formatVND(stockTotals(stockQuery.data ?? [], pricesQuery.data).total)}
+                </strong>
+              </p>
+            )}
           </CardHeader>
           <CardBody>
             <DashboardStockList
@@ -171,6 +187,7 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
               onSortChange={setSort}
               isLocked={isLocked}
               onToggleLock={handleToggleLock}
+              prices={isOwner ? pricesQuery.data : undefined}
             />
           </CardBody>
         </Card>

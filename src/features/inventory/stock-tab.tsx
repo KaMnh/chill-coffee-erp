@@ -7,7 +7,13 @@ import { useSupabase } from "@/hooks/use-supabase";
 import {
   useStockBalancesQuery,
   useIngredientsQuery,
+  useIngredientPricesQuery,
 } from "@/hooks/queries";
+import { useSetIngredientPrice } from "@/hooks/mutations/use-ingredient-price-mutations";
+import { useToast } from "@/components/ui/toast";
+import { formatVND } from "@/lib/format";
+import { stockTotals } from "./stock-value";
+import { IngredientPriceModal } from "./ingredient-price-modal";
 import { StockBalanceList } from "./stock-balance-list";
 import { StockEntryModal } from "./stock-entry-modal";
 import {
@@ -55,6 +61,14 @@ export function StockTab({ role }: StockTabProps) {
   const ingredientsQuery = useIngredientsQuery(supabase, true);
 
   const canWrite = role !== "employee_viewer";
+  const isOwner = role === "owner";
+
+  // Đơn giá tham chiếu (spec 2026-06-12) — owner-only, RLS chặn role khác.
+  const pricesQuery = useIngredientPricesQuery(supabase, isOwner);
+  const prices = pricesQuery.data;
+  const setPrice = useSetIngredientPrice(supabase);
+  const { toast } = useToast();
+  const [priceModalId, setPriceModalId] = useState<string | null>(null);
 
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [initialIngredientId, setInitialIngredientId] = useState<string | null>(null);
@@ -113,6 +127,13 @@ export function StockTab({ role }: StockTabProps) {
     setSortExplicit(col, dir);
   }
 
+  // Tổng giá trị kho theo danh sách đang hiển thị (sau search/sort).
+  const totals = useMemo(
+    () => (isOwner && prices ? stockTotals(filteredSortedBalances, prices) : null),
+    [isOwner, prices, filteredSortedBalances]
+  );
+  const priceIngredient = ingredients.find((i) => i.id === priceModalId) ?? null;
+
   function openEntryFromToolbar() {
     setInitialIngredientId(null);
     setEntryModalOpen(true);
@@ -141,7 +162,18 @@ export function StockTab({ role }: StockTabProps) {
       </div>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-medium text-ink">Tồn hiện tại</h3>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-medium text-ink">Tồn hiện tại</h3>
+          {totals && (
+            <p className="text-sm text-ink-2 tabular-nums">
+              Giá trị kho:{" "}
+              <strong className="font-display text-ink">{formatVND(totals.total)}</strong>
+              {totals.missingCount > 0 && (
+                <span className="text-xs text-muted"> ({totals.missingCount} NL chưa có giá)</span>
+              )}
+            </p>
+          )}
+        </div>
         <ListToolbar
           search={prefs.search}
           onSearchChange={setSearch}
@@ -168,6 +200,8 @@ export function StockTab({ role }: StockTabProps) {
             isLoading={balancesQuery.isLoading}
             isError={balancesQuery.isError}
             onSelectIngredient={canWrite ? openEntryFromRow : undefined}
+            prices={isOwner ? prices : undefined}
+            onEditPrice={isOwner ? setPriceModalId : undefined}
           />
         )}
       </section>
@@ -188,6 +222,43 @@ export function StockTab({ role }: StockTabProps) {
           initialIngredientId={initialIngredientId}
           ingredients={activeIngredients}
           balances={balances}
+        />
+      )}
+
+      {priceIngredient && (
+        <IngredientPriceModal
+          open={priceModalId !== null}
+          onOpenChange={(o) => {
+            if (!o) setPriceModalId(null);
+          }}
+          ingredientName={priceIngredient.name}
+          currentPrice={prices?.get(priceIngredient.id)?.unit_price ?? null}
+          lastUnitPrice={priceIngredient.last_unit_price}
+          saving={setPrice.isPending}
+          onSave={async (p) => {
+            try {
+              await setPrice.mutateAsync({ ingredientId: priceIngredient.id, unitPrice: p });
+              setPriceModalId(null);
+              toast({ semantic: "success", message: "Đã lưu đơn giá." });
+            } catch (err) {
+              toast({
+                semantic: "danger",
+                message: err instanceof Error ? err.message : "Không lưu được đơn giá.",
+              });
+            }
+          }}
+          onClear={async () => {
+            try {
+              await setPrice.mutateAsync({ ingredientId: priceIngredient.id, unitPrice: null });
+              setPriceModalId(null);
+              toast({ semantic: "success", message: "Đã xóa đơn giá." });
+            } catch (err) {
+              toast({
+                semantic: "danger",
+                message: err instanceof Error ? err.message : "Không xóa được đơn giá.",
+              });
+            }
+          }}
         />
       )}
     </div>

@@ -19,3 +19,7 @@ export * from "./use-sales-reports-query";
 export * from "./use-expense-payroll-reports-query";
 export * from "./use-hourly-reports-query";
 export { useCashFlowOverviewQuery } from "./use-cash-flow-overview-query";
+export {
+  usePeriodClosePreviewQuery,
+  usePeriodClosesQuery
+} from "./use-period-close-queries";

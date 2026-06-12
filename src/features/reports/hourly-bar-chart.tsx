@@ -56,6 +56,8 @@ export function HourlyBarChart({ data }: HourlyBarChartProps) {
           highlightKey="is_peak"
           formatY={formatVND}
           height={280}
+          // 24 nhãn HH:00 chèn nhau ở màn hẹp → hiện mỗi 3 giờ (00,03,06…).
+          xTickInterval={2}
         />
       </CardBody>
     </Card>

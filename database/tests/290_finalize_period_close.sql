@@ -42,8 +42,14 @@ insert into public.employee_accounts (auth_user_id, role, status) values
 select pg_temp.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
 -- Quỹ: đặt số dư TUYỆT ĐỐI → deterministic trên mọi DB.
+-- ⚠️ Trong 1 transaction pgTAP, mọi row đều có created_at = now() (frozen) →
+-- safe_fund_balance_now tie-break bằng id desc = uuid NGẪU NHIÊN. Phải đóng
+-- dấu created_at tăng dần sau MỖI call đổi số dư (production không bị —
+-- mỗi RPC một transaction riêng).
 select public.safe_adjust('cash', 5000000, 'fixture PC 290');
+update public.safe_transactions set created_at = now() + interval '1 second' where created_at = now();
 select public.safe_adjust('transfer', 2000000, 'fixture PC 290');
+update public.safe_transactions set created_at = now() + interval '2 seconds' where created_at = now();
 
 -- 1. anchor
 select ok(
@@ -70,6 +76,7 @@ insert into _pc_emp select id from e;
 insert into public.shift_payroll_records (employee_id, business_date, total_minutes, hourly_rate, base_pay, total_pay)
   values ((select id from _pc_emp), (now() at time zone 'Asia/Ho_Chi_Minh')::date, 60, 100000, 50, 50);
 select public.safe_withdraw_other(20, 0, 'utilities', 'PC mirror 290');
+update public.safe_transactions set created_at = now() + interval '3 seconds' where created_at = now();
 
 -- 2. DELTA: expenses_total tăng đúng 50 (30 + mirror 20) — chốt brainstorm
 select ok(

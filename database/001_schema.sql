@@ -436,7 +436,8 @@ create table if not exists public.safe_transactions (
     'deposit_close',
     'withdraw_open',
     'withdraw_other',
-    'adjustment'
+    'adjustment',
+    'owner_draw'
   )),
   amount numeric(14,2) not null,
   balance_after numeric(14,2) not null,
@@ -531,9 +532,32 @@ drop trigger if exists safe_attachments_max5_trigger on public.safe_attachments;
 create trigger safe_attachments_max5_trigger before insert on public.safe_attachments
   for each row execute function public.safe_attachments_count_check();
 
--- CHECK constraints cho safe_transactions amount sign
+-- CHECK constraints cho safe_transactions amount sign.
+-- owner_draw (2026-06-12): CASE có `else false` nên DB cũ PHẢI drop/re-add cả
+-- transaction_type check lẫn sign check — nếu không mọi insert owner_draw fail.
+-- Idempotent: chỉ drop khi definition hiện tại CHƯA chứa 'owner_draw'.
 do $$
+declare v_def text;
 begin
+  select pg_get_constraintdef(c.oid) into v_def from pg_constraint c
+   where c.conname = 'safe_transactions_transaction_type_check'
+     and c.conrelid = 'public.safe_transactions'::regclass;
+  if v_def is not null and position('owner_draw' in v_def) = 0 then
+    alter table public.safe_transactions drop constraint safe_transactions_transaction_type_check;
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conname = 'safe_transactions_transaction_type_check'
+                    and conrelid = 'public.safe_transactions'::regclass) then
+    alter table public.safe_transactions add constraint safe_transactions_transaction_type_check
+      check (transaction_type in ('initial_setup','deposit_close','withdraw_open','withdraw_other','adjustment','owner_draw'));
+  end if;
+
+  select pg_get_constraintdef(c.oid) into v_def from pg_constraint c
+   where c.conname = 'safe_transactions_amount_sign_check'
+     and c.conrelid = 'public.safe_transactions'::regclass;
+  if v_def is not null and position('owner_draw' in v_def) = 0 then
+    alter table public.safe_transactions drop constraint safe_transactions_amount_sign_check;
+  end if;
   if not exists (select 1 from pg_constraint where conname = 'safe_transactions_amount_sign_check') then
     alter table public.safe_transactions add constraint safe_transactions_amount_sign_check check (
       case transaction_type
@@ -541,6 +565,7 @@ begin
         when 'deposit_close'  then amount >= 0
         when 'withdraw_open'  then amount <= 0
         when 'withdraw_other' then amount <= 0
+        when 'owner_draw'     then amount <= 0
         when 'adjustment'     then true
         else false
       end
@@ -551,6 +576,51 @@ begin
       check (balance_after >= 0);
   end if;
 end $$;
+
+-- -----------------------------------------------------------------------------
+-- Kết toán kỳ (period close) — snapshot mỗi lần chủ kết sổ + rút lợi nhuận.
+-- expenses_total = TOÀN BỘ expenses trong kỳ theo góc nhìn owner (gồm cả
+-- expense-mirror của rút quỹ vận hành) — khớp cash_flow_overview owner.
+-- owner_draw KHÔNG có mirror nên không bao giờ lọt vào đây.
+-- Ghi qua RPC security-definer (002); RLS owner-read trong 003.
+-- Spec: docs/superpowers/specs/2026-06-12-period-close-settlement-design.md
+-- -----------------------------------------------------------------------------
+create table if not exists public.period_closes (
+  id              uuid primary key default gen_random_uuid(),
+  close_date      date not null,
+  period_start    date not null,
+  period_end      date not null,
+  revenue         numeric(14,2) not null default 0,
+  expenses_total  numeric(14,2) not null default 0,
+  payroll_total   numeric(14,2) not null default 0,
+  profit          numeric(14,2) not null default 0,
+  opening_total       numeric(14,2) not null default 0,
+  balance_before_cash     numeric(14,2) not null default 0,
+  balance_before_transfer numeric(14,2) not null default 0,
+  draw_cash       numeric(14,2) not null default 0,
+  draw_transfer   numeric(14,2) not null default 0,
+  draw_total      numeric(14,2) not null default 0,
+  closing_cash     numeric(14,2) not null default 0,
+  closing_transfer numeric(14,2) not null default 0,
+  closing_total    numeric(14,2) not null default 0,
+  note            text,
+  status          text not null default 'final' check (status in ('final','voided')),
+  void_reason     text,
+  voided_by       uuid references auth.users(id),
+  voided_at       timestamptz,
+  created_by      uuid references auth.users(id),
+  created_at      timestamptz not null default now(),
+  constraint period_closes_range_check check (period_start <= period_end)
+);
+create index if not exists period_closes_date_idx on public.period_closes(close_date desc);
+
+-- Link owner_draw / adjustment-refund → kỳ kết (mẫu cash_close_report_id).
+alter table public.safe_transactions
+  add column if not exists period_close_id uuid null
+    references public.period_closes(id) on delete set null;
+create index if not exists safe_transactions_period_close_id_idx
+  on public.safe_transactions(period_close_id)
+  where period_close_id is not null;
 
 -- Thêm cột tracking trên cash_close_reports + cash_day_openings để link với
 -- safe_transactions (cash close → deposit_close, cash open → withdraw_open).

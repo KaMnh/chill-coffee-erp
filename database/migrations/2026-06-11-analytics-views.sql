@@ -86,7 +86,7 @@ with days as (
   select business_date from public.shift_payroll_records
   union
   select (occurred_at at time zone 'Asia/Ho_Chi_Minh')::date
-    from public.safe_transactions where transaction_type = 'withdraw_other'
+    from public.safe_transactions where transaction_type in ('withdraw_other', 'owner_draw')
 ),
 pay as (
   select so.business_date,
@@ -106,10 +106,11 @@ pr as (
 ),
 saf as (
   select (occurred_at at time zone 'Asia/Ho_Chi_Minh')::date as business_date,
-         -sum(amount) filter (where reason_category = 'inventory')                as safe_withdraw_inventory,
-         -sum(amount) filter (where reason_category is distinct from 'inventory') as safe_withdraw_other_ops
+         -sum(amount) filter (where transaction_type = 'withdraw_other' and reason_category = 'inventory')                 as safe_withdraw_inventory,
+         -sum(amount) filter (where transaction_type = 'withdraw_other' and reason_category is distinct from 'inventory') as safe_withdraw_other_ops,
+         -sum(amount) filter (where transaction_type = 'owner_draw')                                                      as safe_draw_owner
   from public.safe_transactions
-  where transaction_type = 'withdraw_other'
+  where transaction_type in ('withdraw_other', 'owner_draw')
   group by 1
 )
 select d.business_date,
@@ -119,12 +120,15 @@ select d.business_date,
        coalesce(pr.payroll_out, 0)               as payroll_out,
        coalesce(saf.safe_withdraw_inventory, 0)  as safe_withdraw_inventory,
        coalesce(saf.safe_withdraw_other_ops, 0)  as safe_withdraw_other_ops,
+       coalesce(saf.safe_draw_owner, 0)          as safe_draw_owner,
        coalesce(pay.cash_in_pos, 0) + coalesce(pay.transfer_in, 0) as total_in,
        coalesce(exp.expense_out, 0) + coalesce(pr.payroll_out, 0)
-         + coalesce(saf.safe_withdraw_inventory, 0) + coalesce(saf.safe_withdraw_other_ops, 0) as total_out,
+         + coalesce(saf.safe_withdraw_inventory, 0) + coalesce(saf.safe_withdraw_other_ops, 0)
+         + coalesce(saf.safe_draw_owner, 0) as total_out,
        coalesce(pay.cash_in_pos, 0) + coalesce(pay.transfer_in, 0)
          - (coalesce(exp.expense_out, 0) + coalesce(pr.payroll_out, 0)
-            + coalesce(saf.safe_withdraw_inventory, 0) + coalesce(saf.safe_withdraw_other_ops, 0)) as net_cashflow
+            + coalesce(saf.safe_withdraw_inventory, 0) + coalesce(saf.safe_withdraw_other_ops, 0)
+            + coalesce(saf.safe_draw_owner, 0)) as net_cashflow
 from days d
 left join pay using (business_date)
 left join exp using (business_date)
@@ -134,7 +138,8 @@ left join saf using (business_date);
 comment on view analytics.daily_cashflow is
   'Dòng tiền vào/ra theo ngày từ bảng nghiệp vụ gốc. Loại deposit_close/withdraw_open/'
   'adjustment/initial_setup (luân chuyển nội bộ, vốn, bù trừ void). Expense mirror của '
-  'rút quỹ đã loại. Bucket safe theo occurred_at.';
+  'rút quỹ đã loại. safe_draw_owner = rút lợi nhuận (owner_draw) — TÍNH vào total_out '
+  '(tiền rời doanh nghiệp) nhưng KHÔNG phải chi phí P&L. Bucket safe theo occurred_at.';
 
 drop view if exists analytics.cash_position cascade;
 create view analytics.cash_position

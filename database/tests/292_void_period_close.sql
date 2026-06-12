@@ -25,8 +25,12 @@ insert into public.employee_accounts (auth_user_id, role, status) values
   ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'owner', 'active');
 select pg_temp.act_as('dddddddd-dddd-dddd-dddd-dddddddddddd');
 
+-- ⚠️ created_at frozen trong 1 transaction → đóng dấu tăng dần sau mỗi call
+-- đổi số dư (xem 290 — safe_fund_balance_now tie-break id desc = uuid random).
 select public.safe_adjust('cash', 4000000, 'fixture void 292');
+update public.safe_transactions set created_at = now() + interval '1 second' where created_at = now();
 select public.safe_adjust('transfer', 1000000, 'fixture void 292');
+update public.safe_transactions set created_at = now() + interval '2 seconds' where created_at = now();
 -- Neo hoạt động TRƯỚC ngày kết kỳ 1 — trên CI DB sạch anchor sẽ là ngày này
 -- (nếu không, anchor = hôm nay (safe_adjust) > close_date hôm kia → finalize raise).
 insert into public.sales_orders (kiotviet_invoice_id, purchase_at, business_date, net_amount)
@@ -39,6 +43,7 @@ create temp table _bal_before_k2 as select
   public.safe_fund_balance_now('cash') as c, public.safe_fund_balance_now('transfer') as t;
 create temp table _k2 as select public.finalize_period_close(
   (now() at time zone 'Asia/Ho_Chi_Minh')::date, 1000000, 200000, 'ky 2') as r;
+update public.safe_transactions set created_at = now() + interval '3 seconds' where created_at = now();
 
 select throws_like(
   $q$ select public.void_period_close((((select r from _k2) ->> 'id')::uuid), 'abc') $q$,
@@ -48,6 +53,7 @@ select throws_like(
   '%gần nhất%', '2. chi huy duoc lan ket gan nhat');
 
 select public.void_period_close((((select r from _k2) ->> 'id')::uuid), 'huy ky 2 de ket lai');
+update public.safe_transactions set created_at = now() + interval '4 seconds' where created_at = now();
 
 select ok(
   (select status = 'voided' and void_reason is not null and voided_by is not null and voided_at is not null

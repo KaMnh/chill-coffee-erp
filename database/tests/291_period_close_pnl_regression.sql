@@ -26,7 +26,10 @@ insert into public.employee_accounts (auth_user_id, role, status) values
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'owner', 'active');
 select pg_temp.act_as('cccccccc-cccc-cccc-cccc-cccccccccccc');
 
+-- ⚠️ created_at frozen trong 1 transaction → đóng dấu tăng dần sau mỗi call
+-- đổi số dư (xem 290 — safe_fund_balance_now tie-break id desc = uuid random).
 select public.safe_adjust('cash', 3000000, 'fixture reg 291');
+update public.safe_transactions set created_at = now() + interval '1 second' where created_at = now();
 insert into public.sales_orders (kiotviet_invoice_id, purchase_at, business_date, net_amount)
   values ('REG-INV-291', now(), (now() at time zone 'Asia/Ho_Chi_Minh')::date, 500000);
 
@@ -44,6 +47,7 @@ create temp table _before as select
   public.safe_fund_balance_now('cash') as bal;
 
 select public.finalize_period_close((now() at time zone 'Asia/Ho_Chi_Minh')::date, 2000000, 0, 'reg test 291');
+update public.safe_transactions set created_at = now() + interval '2 seconds' where created_at = now();
 
 select is((select i from _before),
   (public.cash_flow_overview((now() at time zone 'Asia/Ho_Chi_Minh')::date, (now() at time zone 'Asia/Ho_Chi_Minh')::date) ->> 'in')::numeric,

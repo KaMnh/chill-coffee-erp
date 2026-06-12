@@ -231,6 +231,7 @@ export function SafeHistorySection({
                 sortKey={prefs.sortColumn}
                 sortDirection={prefs.sortDirection}
                 onSortChange={({ key }) => setSort(key)}
+                mobileCards
               />
             </Reveal>
             <div className="flex justify-center">

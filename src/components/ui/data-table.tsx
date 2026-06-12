@@ -32,6 +32,12 @@ interface DataTableProps<T> {
   sortKey?: string | null;
   sortDirection?: "asc" | "desc";
   onSortChange?(next: DataTableSortState): void;
+  /**
+   * Mobile (<md): render mỗi row thành card (cột đầu = tiêu đề, cột còn lại
+   * = label/value) thay vì bảng — spec 2026-06-11-mobile-uiux-design §5.
+   * Không bật = bảng cuộn ngang ở mọi breakpoint (như cũ).
+   */
+  mobileCards?: boolean;
 }
 
 export function DataTable<T>({
@@ -43,6 +49,7 @@ export function DataTable<T>({
   sortKey: controlledSortKey,
   sortDirection: controlledSortDirection,
   onSortChange,
+  mobileCards = false,
 }: DataTableProps<T>) {
   const [internalSortKey, setInternalSortKey] = useState<string | null>(null);
   const [internalSortDir, setInternalSortDir] = useState<"asc" | "desc">("asc");
@@ -81,8 +88,54 @@ export function DataTable<T>({
     }
   }
 
+  function renderCell(col: DataTableColumn<T>, row: T): React.ReactNode {
+    return col.render
+      ? col.render(row)
+      : String((row as Record<string, unknown>)[col.key] ?? "");
+  }
+
   return (
-    <div className={cn("bg-surface rounded-lg overflow-hidden", className)}>
+    <div className={cn("bg-surface rounded-lg", className)}>
+      {/* Mobile card-mode (<md): cột đầu = tiêu đề, cột còn lại = label/value. */}
+      {mobileCards && (
+        <div className="md:hidden space-y-2">
+          {sorted.length === 0 ? (
+            <div className="text-center py-8 text-muted text-sm">{emptyMessage}</div>
+          ) : (
+            sorted.map((row) => (
+              <article
+                key={rowKey(row)}
+                className="rounded-lg border border-border bg-surface p-3"
+              >
+                <div className="text-sm font-medium text-ink">
+                  {renderCell(columns[0], row)}
+                </div>
+                <dl className="mt-1.5 space-y-1">
+                  {columns.slice(1).map((col) => (
+                    <div
+                      key={col.key}
+                      className="flex items-baseline justify-between gap-3 text-sm"
+                    >
+                      <dt className="text-xs text-muted shrink-0">{col.header}</dt>
+                      <dd className="text-right text-ink tabular-nums min-w-0">
+                        {renderCell(col, row)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </article>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Bảng: overflow-x-auto (trước là overflow-hidden → CẮT nội dung ở 375px). */}
+      <div
+        className={cn(
+          "overflow-x-auto rounded-lg",
+          mobileCards && "hidden md:block"
+        )}
+      >
       <table className="w-full text-sm">
         <thead className="bg-surface-muted">
           <tr>
@@ -148,6 +201,7 @@ export function DataTable<T>({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

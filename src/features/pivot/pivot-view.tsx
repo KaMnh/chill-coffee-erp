@@ -107,6 +107,7 @@ export function PivotView({ businessDate }: PivotViewProps) {
               columns={COLUMNS}
               data={orders}
               rowKey={(o) => o.id}
+              mobileCards
             />
           )}
         </CardBody>

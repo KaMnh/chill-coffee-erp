@@ -4,6 +4,27 @@
 **Preview:** `src/app/(preview)/mobile` — mock data thuần client, KHÔNG gọi DB/API
 **Phạm vi:** 11 view + Đăng nhập (codebase hiện có 11 view — thêm `cashflow` "Dòng tiền" so với 10 view trong đề bài)
 
+## Trạng thái triển khai (cập nhật 2026-06-12)
+
+**ĐÃ wiring vào app thật:**
+- ✅ Bottom tab bar role-aware + drawer "Thêm" + top bar mobile (title, avatar
+  gộp logout) — PR #32, `v4.2.0`
+- ✅ Tuỳ chỉnh 4 tab theo từng người dùng (`dashboard_preferences.mobile_tabs`,
+  sheet "Tuỳ chỉnh tab" trong drawer) — PR #33, `v4.2.1`
+- ✅ Denomination grid mobile 2 tầng + employee-grid wrap + wizard padding
+  (hết kéo ngang Chốt két / Ca & lương) — PR #31, `v4.1.30`
+- ✅ Toast nâng trên tab bar — PR #34, `v4.2.2`
+- ✅ **Modal → bottom sheet** ở <md (mọi modal) + **DataTable card-mode**
+  (bật ở Sổ quỹ + Pivot; wrapper hết cắt nội dung) — PR #36, `v4.2.3`
+- ✅ Chốt két: tổng + nút Chốt/Kiểm nhanh fixed trên tab bar (thumb zone)
+- ✅ PWA (manifest + viewport + theme-color) — PR #30
+- ✅ ProgressBar nhận `aria-label` — PR #30
+
+**CÒN LẠI (làm khi cần):** Pagination >7 trang; ListToolbar 3 control;
+Stepper label dài; printable-report 16cm + JPEG width; bảng tài khoản /
+role-matrix trong Settings; Recharts mobile (tick thưa, font nhỏ); gỡ/gate
+route `/mobile` mockup khi hết giá trị tham chiếu.
+
 ---
 
 ## 1. Nav model (chốt)

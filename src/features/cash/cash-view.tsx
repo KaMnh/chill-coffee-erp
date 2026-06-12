@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSupabase } from "@/hooks/use-supabase";
 import {
   useCashCountsQuery,
@@ -91,6 +92,10 @@ export function CashView({ businessDate, role }: CashViewProps) {
     { counts, bankTransfer, note, leaveForNextDay, isManualPos, manualPosTotal, manualPosCash, manualPosNonCash },
     { setCounts, setBankTransfer, setNote, setLeaveForNextDay, setIsManualPos, setManualPosTotal, setManualPosCash, setManualPosNonCash },
   );
+
+  // Portal mount gate cho thanh hành động mobile (SSR không có document).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Modal state.
   const [isOpeningOpen, setIsOpeningOpen] = useState(false);
@@ -250,7 +255,8 @@ export function CashView({ businessDate, role }: CashViewProps) {
     : "Nhập tiền đầu ngày";
 
   return (
-    <div className="space-y-6">
+    // Mobile: pb chừa thanh hành động fixed (sticky total + nút Chốt) ở đáy.
+    <div className="space-y-6 pb-24 md:pb-0">
       {/* Opening cash card */}
       <Card>
         <CardHeader>
@@ -374,6 +380,54 @@ export function CashView({ businessDate, role }: CashViewProps) {
         onEditReport={setEditingReportId}
         onVoidReport={setVoidingReportId}
       />
+
+      {/* Mobile (<md): tổng + nút Chốt luôn trong thumb zone — PORTAL ra
+          document.body + fixed ngay trên bottom tab bar (spec 2026-06-11 §4).
+          Phải portal vì: (1) Reveal wrapper (page.tsx) để lại transform →
+          fixed trong cây bị neo theo ancestor (xem chú thích globals.css
+          @media print); (2) bento card overflow-hidden + main overflow-auto
+          giam cả sticky. Dùng chung handler + disabled với submit card trên. */}
+      {mounted &&
+        createPortal(
+          <div
+            className="md:hidden fixed inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-border px-4 pt-2.5 pb-2.5"
+            style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-xs text-muted">
+                {activeStep === 1 ? "Tổng đếm cuối ngày" : "Để lại ngày mai · nạp quỹ"}
+              </span>
+              <strong className="font-display text-xl font-bold text-ink tabular-nums">
+                {activeStep === 1
+                  ? formatVND(physical)
+                  : `${formatNumber(nextDayDenomTotal)} · ${formatNumber(safeDepositPreview)} ₫`}
+              </strong>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => submit("spot_audit")}
+                loading={saveCountM.isPending && !finalizeM.isPending}
+                disabled={isBusy || physical === 0}
+                className="shrink-0"
+              >
+                Kiểm nhanh
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => submit("shift_close")}
+                loading={isBusy}
+                disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened}
+                className="flex-1"
+              >
+                Chốt két &amp; tạo báo cáo
+              </Button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Modals */}
       <OpeningCashModal

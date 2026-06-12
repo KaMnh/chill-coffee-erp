@@ -234,6 +234,19 @@ drop policy if exists safe_attachments_no_direct_write on public.safe_attachment
 create policy safe_attachments_no_direct_write on public.safe_attachments
   for insert to authenticated with check (false);
 
+-- Kết toán kỳ — owner only đọc; mọi write qua RPC security definer
+-- (finalize_period_close / void_period_close). Update/delete không có policy
+-- → mặc định deny. Khuôn y hệt safe_transactions.
+-- Spec: docs/superpowers/specs/2026-06-12-period-close-settlement-design.md
+alter table public.period_closes enable row level security;
+
+drop policy if exists period_closes_owner_read on public.period_closes;
+create policy period_closes_owner_read on public.period_closes
+  for select to authenticated using (public.app_role() = 'owner');
+drop policy if exists period_closes_no_direct_write on public.period_closes;
+create policy period_closes_no_direct_write on public.period_closes
+  for insert to authenticated with check (false);
+
 -- Đơn giá tham chiếu tồn kho — owner only cả đọc lẫn ghi (ghi trực tiếp qua
 -- RLS, không cần RPC vì upsert single-row đơn giản).
 -- Spec: docs/superpowers/specs/2026-06-12-inventory-reference-price-design.md

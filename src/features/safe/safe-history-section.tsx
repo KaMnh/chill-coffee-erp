@@ -35,7 +35,8 @@ const TYPE_LABELS: Record<SafeTransactionType, string> = {
   deposit_close: "Nạp từ chốt két",
   withdraw_open: "Rút mở két",
   withdraw_other: "Rút khác",
-  adjustment: "Điều chỉnh"
+  adjustment: "Điều chỉnh",
+  owner_draw: "Rút lợi nhuận"
 };
 
 const TYPE_SEMANTICS: Record<SafeTransactionType, "success" | "danger" | "warning" | "neutral"> = {
@@ -43,10 +44,11 @@ const TYPE_SEMANTICS: Record<SafeTransactionType, "success" | "danger" | "warnin
   deposit_close: "success",
   withdraw_open: "warning",
   withdraw_other: "warning",
-  adjustment: "neutral"
+  adjustment: "neutral",
+  owner_draw: "warning"
 };
 
-const TYPES: SafeTransactionType[] = ["initial_setup", "deposit_close", "withdraw_open", "withdraw_other", "adjustment"];
+const TYPES: SafeTransactionType[] = ["initial_setup", "deposit_close", "withdraw_open", "withdraw_other", "adjustment", "owner_draw"];
 
 /**
  * Transaction history with date-range + type filtering.

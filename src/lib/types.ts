@@ -158,7 +158,8 @@ export type SafeTransactionType =
   | "deposit_close"
   | "withdraw_open"
   | "withdraw_other"
-  | "adjustment";
+  | "adjustment"
+  | "owner_draw";
 
 export type SafeWithdrawCategory =
   | "utilities"
@@ -188,6 +189,8 @@ export type SafeTransaction = {
   created_at: string;
   /** Số ảnh hóa đơn đã attach (Phase 1). Đến từ safe_list_transactions. */
   attachment_count?: number;
+  /** Kỳ kết toán sinh ra giao dịch này (owner_draw / adjustment hoàn khi void). */
+  period_close_id?: string | null;
 };
 
 export type SafeAttachment = {
@@ -219,7 +222,8 @@ export const SAFE_TRANSACTION_LABELS: Record<SafeTransactionType, string> = {
   deposit_close: "Nạp từ chốt két",
   withdraw_open: "Rút mở két",
   withdraw_other: "Rút mục đích khác",
-  adjustment: "Điều chỉnh"
+  adjustment: "Điều chỉnh",
+  owner_draw: "Rút lợi nhuận"
 };
 
 export const SAFE_WITHDRAW_CATEGORY_LABELS: Record<SafeWithdrawCategory, string> = {
@@ -471,6 +475,57 @@ export interface CashFlowOverview {
   prev_in?: number;
   prev_out?: number;
   prev_net?: number;
+}
+
+// =====================================================================
+// Kết toán kỳ (Period Close & Owner Draw)
+// Spec: docs/superpowers/specs/2026-06-12-period-close-settlement-design.md
+// =====================================================================
+
+/** Kết quả period_close_preview — kỳ đang mở (chưa kết). */
+export interface PeriodClosePreview {
+  period_start: string;          // YYYY-MM-DD
+  period_end: string;            // YYYY-MM-DD (= as-of, mặc định hôm nay VN)
+  /** false khi đã có kỳ kết đến hôm nay (period_start > period_end). */
+  can_close: boolean;
+  revenue: number;
+  /** TOÀN BỘ expenses trong kỳ (gồm mirror rút quỹ vận hành) — khớp cash_flow_overview owner. */
+  expenses_total: number;
+  payroll_total: number;
+  profit: number;
+  balance_cash: number;
+  balance_transfer: number;
+  balance_total: number;
+  /** closing_total của kỳ final gần nhất; null nếu chưa kết lần nào. */
+  opening_total: number | null;
+  by_day: CashFlowDayPoint[];
+  expense_breakdown: CashFlowExpenseCategory[];
+}
+
+/** Một dòng snapshot trong period_closes (list_period_closes). */
+export interface PeriodCloseRecord {
+  id: string;
+  close_date: string;
+  period_start: string;
+  period_end: string;
+  revenue: number;
+  expenses_total: number;
+  payroll_total: number;
+  profit: number;
+  opening_total: number;
+  balance_before_cash: number;
+  balance_before_transfer: number;
+  draw_cash: number;
+  draw_transfer: number;
+  draw_total: number;
+  closing_cash: number;
+  closing_transfer: number;
+  closing_total: number;
+  note: string | null;
+  status: "final" | "voided";
+  void_reason: string | null;
+  voided_at: string | null;
+  created_at: string;
 }
 
 // =====================================================================

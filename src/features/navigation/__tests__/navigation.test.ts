@@ -28,7 +28,7 @@ describe("getGroupedNav", () => {
     const groups = getGroupedNav(makeAccount("owner"), SETTINGS);
     const byKey = Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.key)]));
     expect(byKey.overview).toEqual(["dashboard", "cashflow"]);
-    expect(byKey.cashflow).toEqual(["expenses", "cash", "safe"]);
+    expect(byKey.cashflow).toEqual(["expenses", "cash", "safe", "period-close"]);
     expect(byKey.staff).toEqual(["shifts", "handover"]);
     expect(byKey.inventory).toEqual(["inventory"]);
     expect(byKey.reports).toEqual(["reports", "pivot"]);
@@ -124,7 +124,7 @@ describe("getMobileTabs (bottom tab bar — spec 2026-06-11-mobile-uiux-design)"
     expect(drawerKeys).toContain("safe");
     expect(drawerKeys).toContain("reports");
     expect([...tabKeys, ...drawerKeys].sort()).toEqual(
-      ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
+      ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
     );
   });
 
@@ -147,7 +147,7 @@ describe("getMobileDrawerGroups (drawer 'Thêm')", () => {
     const byKey = Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.key)]));
     expect(groups.map((g) => g.key)).toEqual(["overview", "cashflow", "staff", "inventory", "reports", "system"]);
     expect(byKey.overview).toEqual(["cashflow"]);
-    expect(byKey.cashflow).toEqual(["expenses"]);
+    expect(byKey.cashflow).toEqual(["expenses", "period-close"]);
     expect(byKey.staff).toEqual(["shifts", "handover"]);
     expect(byKey.inventory).toEqual(["inventory"]);
     expect(byKey.reports).toEqual(["pivot"]);
@@ -166,7 +166,7 @@ describe("getMobileDrawerGroups (drawer 'Thêm')", () => {
     const drawerKeys = getMobileDrawerGroups(acc, SETTINGS).flatMap((g) => g.items.map((i) => i.key));
     expect(tabKeys.filter((k) => drawerKeys.includes(k))).toEqual([]);
     expect([...tabKeys, ...drawerKeys].sort()).toEqual(
-      ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
+      ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"].sort()
     );
   });
 

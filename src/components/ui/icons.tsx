@@ -21,6 +21,8 @@ import {
   Package,
   // Phase 5 — cashflow
   TrendingUp,
+  // Phase 7 — period close (kết toán kỳ)
+  HandCoins,
   type LucideIcon, type LucideProps,
 } from "lucide-react";
 import { forwardRef } from "react";
@@ -79,6 +81,8 @@ export const Icons = {
   package: Package,
   // Phase 5 — cashflow
   trendingUp: TrendingUp,
+  // Phase 7 — period close (kết toán kỳ)
+  handCoins: HandCoins,
 } as const;
 
 export type IconName = keyof typeof Icons;

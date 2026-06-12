@@ -68,4 +68,8 @@ export const queryKeys = {
   // Cash flow overview (2026-05-23)
   cashFlowOverview: (start: string, end: string) =>
     ["cash-flow-overview", start, end] as const,
+
+  // Kết toán kỳ (2026-06-12)
+  periodClosePreview: () => ["period-close", "preview"] as const,
+  periodCloses: () => ["period-close", "list"] as const,
 };

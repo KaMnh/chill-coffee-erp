@@ -45,7 +45,8 @@ P&L của ngày nhãn, không phải ngày bấm nút).
 | `payroll_out` | Chi lương |
 | `safe_withdraw_inventory` | Rút quỹ mua nguyên liệu (`reason_category='inventory'`) |
 | `safe_withdraw_other_ops` | Rút quỹ vận hành khác (thuê, điện nước, bảo trì, khác) |
-| `total_in` / `total_out` / `net_cashflow` | Tổng vào / ra / ròng |
+| `safe_draw_owner` | **Rút lợi nhuận** (`owner_draw`, kết toán kỳ 2026-06-12) — tiền rời doanh nghiệp về chủ; TÍNH vào `total_out` nhưng KHÔNG bao giờ vào `daily_pnl` (không phải chi phí) |
+| `total_in` / `total_out` / `net_cashflow` | Tổng vào / ra / ròng (gồm `safe_draw_owner`) |
 
 **Loại khỏi cashflow** (luân chuyển nội bộ, không phải dòng tiền với bên ngoài):
 `deposit_close` (két→quỹ), `withdraw_open` (quỹ→két), `adjustment` (hiệu chỉnh + bù trừ

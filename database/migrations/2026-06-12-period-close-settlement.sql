@@ -411,6 +411,28 @@ end;
 $$;
 grant execute on function public.void_period_close(uuid, text) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Data-fix (CHỈ DB cũ): sidebar_defaults / sidebar_config đã LƯU qua Settings
+-- là danh sách đóng — view mới 'period-close' sẽ bị ẩn vĩnh viễn với owner nếu
+-- không chèn. Append cuối mảng là đủ: getVisibleNav render theo thứ tự
+-- NAV_ITEMS canonical, không theo thứ tự mảng lưu. Idempotent.
+-- (DB mới không có row này → fallback DEFAULT_SIDEBAR_BY_ROLE đã chứa key.)
+-- ---------------------------------------------------------------------------
+update public.app_settings
+   set value = jsonb_set(value, '{owner}', (value -> 'owner') || '"period-close"'::jsonb)
+ where key = 'sidebar_defaults'
+   and jsonb_typeof(value -> 'owner') = 'array'
+   and not (value -> 'owner') ? 'period-close';
+
+update public.profiles p
+   set sidebar_config = p.sidebar_config || '"period-close"'::jsonb
+  from public.employee_accounts ea
+ where ea.auth_user_id = p.id
+   and ea.role = 'owner'
+   and p.sidebar_config is not null
+   and jsonb_typeof(p.sidebar_config) = 'array'
+   and not p.sidebar_config ? 'period-close';
+
 -- Kết toán kỳ — owner only đọc; mọi write qua RPC security definer
 -- (finalize_period_close / void_period_close). Update/delete không có policy
 -- → mặc định deny. Khuôn y hệt safe_transactions.

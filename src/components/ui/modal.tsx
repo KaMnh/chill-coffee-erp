@@ -26,6 +26,16 @@ export const ModalContent = forwardRef<
           "w-[min(90vw,28rem)] max-h-[85vh] overflow-auto",
           "bg-surface rounded-lg shadow-modal p-6",
           "focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out",
+          // Mobile (<md): bottom sheet — trượt từ đáy, full-width, bo góc trên,
+          // chừa safe-area (spec 2026-06-11-mobile-uiux-design §3/§5). Các
+          // max-md:* nằm trong media query nên thắng cả width override của
+          // caller (vd w-[min(95vw,40rem)]) ở mobile; ≥md giữ centered như cũ.
+          "max-md:left-0 max-md:right-0 max-md:top-auto max-md:bottom-0",
+          "max-md:translate-x-0 max-md:translate-y-0",
+          "max-md:w-full max-md:max-w-none max-md:max-h-[88dvh]",
+          "max-md:rounded-t-2xl max-md:rounded-b-none",
+          "max-md:pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]",
+          "max-md:data-[state=open]:slide-in-from-bottom max-md:data-[state=closed]:slide-out-to-bottom",
           className
         )}
         {...rest}

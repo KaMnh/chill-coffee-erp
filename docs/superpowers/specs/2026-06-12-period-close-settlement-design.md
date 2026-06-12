@@ -5,6 +5,29 @@
 - **Phương án:** A — Sổ kết kỳ có lưu vết (persisted period close).
 - **Phạm vi:** MỘT tính năng "Kết toán kỳ" — kết sổ theo kỳ linh hoạt, neo vào lần kết trước.
 
+## Amendment 2026-06-12 (re-brainstorm + codex adversarial review, đã chốt với owner)
+
+1. **Profit kỳ TRỪ ĐỦ rút quỹ vận hành.** §3.2 gốc ghi `expenses_total = expenses where
+   safe_transaction_id is null` là SAI: `cash_flow_overview` của owner gồm cả expense-mirror,
+   giữ nguyên sẽ làm "Lợi nhuận kỳ" cao hơn màn Dòng tiền. Chốt: `expenses_total` = TOÀN BỘ
+   `expenses` trong kỳ (góc nhìn owner, gồm mirror). `owner_draw` không có mirror → vẫn không bị trừ.
+2. **Retrofit CẢ `safe_transactions_amount_sign_check`** (CASE có `else false`) — không chỉ
+   transaction_type check; thiếu nó mọi insert owner_draw fail trên DB cũ.
+3. **`period_closes` thêm `void_reason/voided_by/voided_at`** (tiền lệ cash_close_reports).
+4. **Thứ tự finalize:** insert `period_closes` (returning id) TRƯỚC, rồi mới insert owner_draw
+   gắn `period_close_id` (FK immediate — thứ tự trong §4.2 gốc sẽ fail).
+5. **`pg_advisory_xact_lock(hashtext('period_close'))`** đầu finalize/void; chặn kết khi
+   `period_start > close_date` (hệ quả: không kết 2 lần cùng ngày — phải void rồi kết lại).
+6. **Anchor kỳ đầu = `least(min sales, min expenses, min payroll, min safe-tx)`** thay vì neo
+   riêng `initial_setup` (dữ liệu KiotViet import cũ hơn ngày lập sổ quỹ sẽ bị bỏ sót).
+7. **"Hôm nay" theo Asia/Ho_Chi_Minh** (`(now() at time zone 'Asia/Ho_Chi_Minh')::date`),
+   không dùng `current_date` (UTC — chặn nhầm sau 0h VN).
+8. **§6 analytics chuyển thành IN-SCOPE:** thêm cột `safe_draw_owner` vào
+   `analytics.daily_cashflow` (tính vào `total_out`/`net_cashflow`; `daily_pnl` giữ nguyên).
+9. **Giới hạn chấp nhận (codex [critical], out-of-scope theo §8):** không khoá kỳ — sửa dữ liệu
+   quá khứ KHÔNG tự cập nhật snapshot; muốn làm lại phải void kỳ gần nhất rồi kết lại. UI ghi
+   chú rõ trong card Lịch sử.
+
 ---
 
 ## 1. Bối cảnh & Vấn đề

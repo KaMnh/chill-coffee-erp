@@ -4086,13 +4086,16 @@ begin
   ) returning id into v_close_id;
 
   v_desc := 'Rút lợi nhuận kỳ ' || to_char(v_start, 'DD/MM') || '–' || to_char(p_close_date, 'DD/MM/YYYY');
+  -- occurred_at = 0h VN của ngày kết, TƯỜNG MINH (adversarial review 2026-06-12:
+  -- bare cast date::timestamptz ăn theo TimeZone GUC của session — offset > +7
+  -- sẽ lệch nhãn ngày VN trong analytics bucket).
   if v_draw_cash > 0 then
     insert into public.safe_transactions (
       transaction_type, amount, balance_after, fund, occurred_at,
       description, period_close_id, created_by
     ) values (
       'owner_draw', -v_draw_cash, v_before_cash - v_draw_cash, 'cash',
-      p_close_date::timestamptz, v_desc, v_close_id, auth.uid()
+      p_close_date::timestamp at time zone 'Asia/Ho_Chi_Minh', v_desc, v_close_id, auth.uid()
     ) returning id into v_cash_tx;
   end if;
   if v_draw_transfer > 0 then
@@ -4101,7 +4104,7 @@ begin
       description, period_close_id, created_by
     ) values (
       'owner_draw', -v_draw_transfer, v_before_transfer - v_draw_transfer, 'transfer',
-      p_close_date::timestamptz, v_desc, v_close_id, auth.uid()
+      p_close_date::timestamp at time zone 'Asia/Ho_Chi_Minh', v_desc, v_close_id, auth.uid()
     ) returning id into v_transfer_tx;
   end if;
   -- LƯU Ý: KHÔNG insert public.expenses — điểm sống còn của thiết kế (bất biến #1).

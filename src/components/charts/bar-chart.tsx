@@ -18,6 +18,12 @@ interface BarChartProps<T extends Record<string, unknown>> {
   highlightKey?: keyof T & string;
   formatY?: (value: number) => string;
   height?: number;
+  /**
+   * Recharts XAxis interval — số tick bỏ qua giữa 2 nhãn (vd 2 = hiện 1/3).
+   * Dùng cho chart nhiều cột trên màn hẹp (spec mobile: ẩn bớt nhãn trục).
+   * Bỏ trống = auto như cũ.
+   */
+  xTickInterval?: number;
   className?: string;
 }
 
@@ -53,6 +59,7 @@ export function BarChart<T extends Record<string, unknown>>({
   highlightKey,
   formatY,
   height = 240,
+  xTickInterval,
   className,
 }: BarChartProps<T>) {
   return (
@@ -70,6 +77,7 @@ export function BarChart<T extends Record<string, unknown>>({
             tickLine={false}
             axisLine={false}
             tick={{ fontSize: 12, fill: "var(--color-muted)" }}
+            interval={xTickInterval}
           />
           <YAxis hide />
           <RechartsTooltip

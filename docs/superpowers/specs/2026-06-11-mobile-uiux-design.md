@@ -20,10 +20,15 @@
 - ✅ PWA (manifest + viewport + theme-color) — PR #30
 - ✅ ProgressBar nhận `aria-label` — PR #30
 
-**CÒN LẠI (làm khi cần):** Pagination >7 trang; ListToolbar 3 control;
-Stepper label dài; printable-report 16cm + JPEG width; bảng tài khoản /
-role-matrix trong Settings; Recharts mobile (tick thưa, font nhỏ); gỡ/gate
-route `/mobile` mockup khi hết giá trị tham chiếu.
+- ✅ Polish: ListToolbar search full-width <md; JPEG export ép width 640px
+  (ảnh deterministic mọi thiết bị); chart Theo giờ tick mỗi 3h; cash-flow
+  YAxis 32px + font 10
+- ⏭️ Pagination + Stepper: KHÔNG sửa — chỉ playground dùng, chưa có view
+  thật nào render (YAGNI; sửa khi có consumer thật)
+
+**CÒN LẠI (làm khi cần):** bảng tài khoản / role-matrix trong Settings
+(đang đọc được qua overflow-x-auto); gỡ/gate route `/mobile` mockup khi
+hết giá trị tham chiếu.
 
 ---
 

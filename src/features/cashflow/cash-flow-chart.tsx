@@ -106,14 +106,16 @@ export function CashFlowChart({
                 tick={{ fontSize: 11, fill: "var(--color-muted)" }}
               />
               {/* Left axis: Thu/Chi bars. Right axis: Nạp két line — a large
-                  batch safe-deposit must NOT rescale (squash) the income bars. */}
+                  batch safe-deposit must NOT rescale (squash) the income bars.
+                  width 32 (trước 40×2): ở 375px hai trục ăn 80px của ~343px
+                  nội dung làm cột tháng thành sợi chỉ — spec mobile §5. */}
               <YAxis
                 yAxisId="left"
                 tickFormatter={abbreviateVND}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "var(--color-muted)" }}
-                width={40}
+                tick={{ fontSize: 10, fill: "var(--color-muted)" }}
+                width={32}
               />
               <YAxis
                 yAxisId="right"
@@ -121,8 +123,8 @@ export function CashFlowChart({
                 tickFormatter={abbreviateVND}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "var(--color-warning)" }}
-                width={40}
+                tick={{ fontSize: 10, fill: "var(--color-warning)" }}
+                width={32}
               />
               <RechartsTooltip
                 cursor={{ fill: "var(--color-border)", opacity: 0.2 }}

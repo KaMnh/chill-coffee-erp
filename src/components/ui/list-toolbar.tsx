@@ -66,7 +66,9 @@ export function ListToolbar({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <div className="flex-1 min-w-[12rem] relative">
+      {/* <md: search chiếm trọn hàng đầu, control rớt xuống hàng 2 gọn gàng
+          thay vì chen nhau (spec mobile §5 ListToolbar). */}
+      <div className="flex-1 min-w-[12rem] max-md:basis-full relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
           <Icon name="search" size={16} />
         </span>

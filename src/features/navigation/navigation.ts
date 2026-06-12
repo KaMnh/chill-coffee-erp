@@ -2,7 +2,7 @@ import type { Account, AppSettings, UserRole } from "@/lib/types";
 import type { IconName } from "@/components/ui/icons";
 
 export type ViewKey =
-  | "dashboard" | "expenses" | "shifts" | "cash" | "safe"
+  | "dashboard" | "expenses" | "shifts" | "cash" | "safe" | "period-close"
   | "handover" | "inventory"
   | "reports" | "pivot" | "cashflow" | "settings";
 
@@ -27,6 +27,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { key: "shifts",    label: "Ca & lương",    icon: "users",           roles: ["owner", "manager", "staff_operator"], group: "staff" },
   { key: "cash",      label: "Chốt két",      icon: "banknote",        roles: ["owner", "manager", "staff_operator"], group: "cashflow" },
   { key: "safe",      label: "Sổ quỹ",        icon: "piggyBank",       roles: ["owner"], group: "cashflow" },
+  { key: "period-close", label: "Kết toán kỳ", icon: "handCoins",      roles: ["owner"], group: "cashflow" },
   { key: "handover",  label: "Bàn giao",      icon: "clipboardList",   roles: ["owner", "manager", "staff_operator"], group: "staff" },
   { key: "inventory", label: "Kho",           icon: "package",         roles: ["owner", "manager", "staff_operator"], group: "inventory" },
   { key: "reports",   label: "Báo cáo chốt két", icon: "fileText",     roles: ["owner", "manager", "staff_operator"], group: "reports" },
@@ -36,7 +37,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
 ];
 
 export const DEFAULT_SIDEBAR_BY_ROLE: Record<UserRole, ReadonlyArray<ViewKey>> = {
-  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
+  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
   manager:         ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
   staff_operator:  ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports"],
   employee_viewer: ["dashboard"],
@@ -129,7 +130,7 @@ export function getGroupedNav(
  * tab backfill ứng viên kế tiếp để vẫn đủ 4 tab.
  */
 const MOBILE_TAB_PREFERENCE: Record<UserRole, ReadonlyArray<ViewKey>> = {
-  owner:           ["dashboard", "safe", "reports", "cash", "cashflow", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
+  owner:           ["dashboard", "safe", "reports", "cash", "cashflow", "period-close", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
   manager:         ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover"],
   staff_operator:  ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover"],
   employee_viewer: ["dashboard"],

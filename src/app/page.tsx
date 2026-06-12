@@ -32,6 +32,7 @@ import { PivotView } from "@/features/pivot/pivot-view";
 import { CashFlowView } from "@/features/cashflow/cash-flow-view";
 import { CashView } from "@/features/cash/cash-view";
 import { SafeView } from "@/features/safe/safe-view";
+import { PeriodCloseView } from "@/features/period-close/period-close-view";
 import { HandoverView } from "@/features/handover/handover-view";
 import { InventoryView } from "@/features/inventory/inventory-view";
 import { SettingsView } from "@/features/settings/settings-view";
@@ -332,6 +333,7 @@ export default function HomePage() {
         {view === "safe" && (
           <SafeView businessDate={businessDate} role={account.role} />
         )}
+        {view === "period-close" && <PeriodCloseView role={account.role} />}
         {view === "handover" && (
           <HandoverView businessDate={businessDate} role={account.role} />
         )}

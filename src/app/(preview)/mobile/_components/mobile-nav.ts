@@ -25,6 +25,9 @@ const ITEM: Record<ViewKey, MobileNavItem> = {
   handover:  { key: "handover",  label: "Bàn giao",      short: "Bàn giao",  icon: "clipboardList" },
   shifts:    { key: "shifts",    label: "Ca & lương",    short: "Ca & lương", icon: "users" },
   safe:      { key: "safe",      label: "Sổ quỹ",        short: "Sổ quỹ",    icon: "piggyBank" },
+  // Kết toán kỳ (2026-06-12): có trong app thật; mockup playground không dựng
+  // màn riêng — entry chỉ để Record<ViewKey,...> đủ key.
+  "period-close": { key: "period-close", label: "Kết toán kỳ", short: "Kết kỳ", icon: "handCoins" },
   inventory: { key: "inventory", label: "Kho",           short: "Kho",       icon: "package" },
   reports:   { key: "reports",   label: "Báo cáo chốt két", short: "Báo cáo", icon: "fileText" },
   pivot:     { key: "pivot",     label: "Pivot",         short: "Pivot",     icon: "barChart3" },
@@ -67,6 +70,7 @@ export const VIEW_TITLES: Record<ViewKey, string> = {
   handover: "Bàn giao",
   shifts: "Ca & lương",
   safe: "Sổ quỹ",
+  "period-close": "Kết toán kỳ",
   inventory: "Kho",
   reports: "Báo cáo",
   pivot: "Pivot",

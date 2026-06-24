@@ -11,13 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useRecordStockCount } from "@/hooks/mutations/use-stock-mutations";
@@ -119,28 +113,16 @@ export function StockCountModal({
             <label className="text-xs font-medium text-ink-2">
               Nguyên liệu
             </label>
-            <Select
-              value={selectedIngredientId ?? undefined}
+            <Combobox
+              value={selectedIngredientId}
               onValueChange={(v) => setSelectedIngredientId(v)}
               disabled={isBusy || initialIngredientId != null}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn nguyên liệu..." />
-              </SelectTrigger>
-              <SelectContent>
-                {ingredients.length === 0 ? (
-                  <SelectItem value="__empty" disabled>
-                    Chưa có nguyên liệu
-                  </SelectItem>
-                ) : (
-                  ingredients.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+              className="w-full"
+              placeholder="Chọn nguyên liệu..."
+              searchPlaceholder="Tìm nguyên liệu..."
+              emptyText="Chưa có nguyên liệu"
+              options={ingredients.map((i) => ({ value: i.id, label: i.name }))}
+            />
           </div>
 
           {selectedBalance && (

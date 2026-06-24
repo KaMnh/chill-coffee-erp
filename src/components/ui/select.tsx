@@ -53,7 +53,15 @@ export const SelectContent = forwardRef<
         )}
         {...rest}
       >
-        <RadixSelect.Viewport className="p-1">{children}</RadixSelect.Viewport>
+        {/* Radix sets `overflow:hidden auto` inline on the viewport; we only
+            add the height cap so long lists actually scroll. position="popper"
+            (the default) exposes --radix-select-content-available-height. The
+            outer Content keeps `overflow-hidden`, so rounded-md corners stay
+            clean. A visible scrollbar is restored globally in globals.css
+            (Radix hides it via an injected stylesheet). */}
+        <RadixSelect.Viewport className="p-1 max-h-[min(320px,var(--radix-select-content-available-height))]">
+          {children}
+        </RadixSelect.Viewport>
       </RadixSelect.Content>
     </RadixSelect.Portal>
   );

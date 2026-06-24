@@ -91,3 +91,25 @@ body {
 .toast-enter {
   animation: toast-slide-in 200ms ease-out;
 }
+
+/* Restore a visible (thin) scrollbar on the Select dropdown viewport.
+ * Radix hides it via an injected <style> (`scrollbar-width:none` +
+ * `::-webkit-scrollbar{display:none}`) with no !important, so our !important
+ * override wins regardless of source order. The bar sits inside the viewport's
+ * p-1 padding, so it doesn't break the Content's rounded-md corners. Only
+ * appears when a list overflows its height cap (see select.tsx). */
+[data-radix-select-viewport] {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-color: var(--color-muted) transparent;
+}
+[data-radix-select-viewport]::-webkit-scrollbar {
+  display: block !important;
+  width: 8px;
+}
+[data-radix-select-viewport]::-webkit-scrollbar-thumb {
+  background-color: var(--color-muted);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}

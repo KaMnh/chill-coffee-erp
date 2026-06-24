@@ -3,9 +3,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatDateTime, formatVND } from "@/lib/format";
+import { formatVND } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { CashCloseReport } from "@/lib/types";
+import { depositForDay } from "./deposit-summary";
 
 interface ReportListProps {
   reports: ReadonlyArray<CashCloseReport>;
@@ -30,6 +31,13 @@ function differenceTone(diff: number) {
   if (diff > 0) return "text-success";
   if (diff < 0) return "text-danger";
   return "text-muted";
+}
+
+/** "2026-03-05" → "05/03/2026" (parse thủ công, không qua Date để tránh lệch tz). */
+function formatBusinessDate(value: string): string {
+  const [y, m, d] = value.split("-");
+  if (!y || !m || !d) return value;
+  return `${d}/${m}/${y}`;
 }
 
 export function ReportList({ reports, selectedId, onSelect }: ReportListProps) {
@@ -63,9 +71,23 @@ export function ReportList({ reports, selectedId, onSelect }: ReportListProps) {
                   >
                     <div className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-ink">
-                        {formatDateTime(r.closed_at)}
+                        {formatBusinessDate(r.business_date)}
                       </span>
-                      <span className={cn("text-xs", differenceTone(r.difference))}>
+                      {(() => {
+                        const { cash, transfer } = depositForDay(r);
+                        const voided = r.report_status === "voided";
+                        return (
+                          <span
+                            className={cn(
+                              "block text-xs",
+                              voided ? "text-muted line-through" : "text-ink-2"
+                            )}
+                          >
+                            Nạp tiền mặt: {formatVND(cash)} · CK xác nhận: {formatVND(transfer)}
+                          </span>
+                        );
+                      })()}
+                      <span className={cn("block text-xs", differenceTone(r.difference))}>
                         Chênh: {formatVND(r.difference)}
                       </span>
                     </div>

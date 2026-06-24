@@ -70,6 +70,7 @@ export function useFinalizeCashClose(supabase: SupabaseClient | null, businessDa
       queryClient.invalidateQueries({ queryKey: queryKeys.cashCounts(businessDate) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
       queryClient.invalidateQueries({ queryKey: queryKeys.reports(businessDate) });
+      queryClient.invalidateQueries({ queryKey: ["cash-close-reports"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
       queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
       // New: opening cho ngày mai có thể vừa được tạo → invalidate ALL cash-opening
@@ -153,6 +154,7 @@ export function useEditCashCloseReport(
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashCounts(businessDate) });
       queryClient.invalidateQueries({ queryKey: queryKeys.reports(businessDate) });
+      queryClient.invalidateQueries({ queryKey: ["cash-close-reports"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
       queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
     },
@@ -177,6 +179,7 @@ export function useVoidCashCloseReport(
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashCounts(businessDate) });
       queryClient.invalidateQueries({ queryKey: queryKeys.reports(businessDate) });
+      queryClient.invalidateQueries({ queryKey: ["cash-close-reports"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
       queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
     },

@@ -43,3 +43,14 @@ export function fromDatetimeLocal(value: string) {
 export function todayInVN(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 }
+
+/**
+ * Trừ `days` khỏi một ngày 'YYYY-MM-DD', trả 'YYYY-MM-DD'.
+ * UTC-component math để host timezone không làm lệch ngày lịch (bản
+ * local-parse như safe-view.tsx bị off-by-1 ở VN). Mirror sync-range.ts.
+ */
+export function subtractDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const ms = Date.UTC(y, m - 1, d) - days * 86400 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { toDatetimeLocal, fromDatetimeLocal, todayInVN } from "../datetime";
+import { toDatetimeLocal, fromDatetimeLocal, todayInVN, subtractDays } from "../datetime";
 
 /**
  * Datetime helpers — characterization tests.
@@ -77,5 +77,16 @@ describe("todayInVN", () => {
     const result = todayInVN();
     expect(result).toHaveLength(10);
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("subtractDays", () => {
+  it("trừ ngày bằng UTC-component, không lệch tz (vitest chạy TZ=Asia/Ho_Chi_Minh)", () => {
+    expect(subtractDays("2026-06-24", 6)).toBe("2026-06-18"); // 7 ngày inclusive
+    expect(subtractDays("2026-06-24", 0)).toBe("2026-06-24");
+  });
+  it("vượt ranh giới tháng/năm", () => {
+    expect(subtractDays("2026-03-02", 5)).toBe("2026-02-25");
+    expect(subtractDays("2026-01-03", 5)).toBe("2025-12-29");
   });
 });

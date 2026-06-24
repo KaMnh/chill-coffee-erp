@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSupabase } from "@/hooks/use-supabase";
-import { useReportsQuery } from "@/hooks/queries";
+import { useReportsByPeriodQuery } from "@/hooks/queries";
 import { loadCashCloseReport } from "@/lib/data";
+import { todayInVN, subtractDays } from "@/lib/datetime";
 import type { CashCloseReport } from "@/lib/types";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -13,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { Icon } from "@/components/ui/icons";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TextField } from "@/components/ui/text-field";
 import { Reveal } from "@/components/ui/reveal";
 import { DUR } from "@/lib/gsap";
 import { ReportList } from "./report-list";
@@ -82,16 +84,30 @@ interface CashCloseTabProps {
 
 function CashCloseTab({ businessDate }: CashCloseTabProps) {
   const supabase = useSupabase();
-  const reportsQuery = useReportsQuery(supabase, businessDate, true);
+  const today = businessDate || todayInVN();
+  const [fromDate, setFromDate] = useState(() => subtractDays(today, 6));
+  const [toDate, setToDate] = useState(today);
+  const rangeValid = !!fromDate && !!toDate && fromDate <= toDate;
+  const reportsQuery = useReportsByPeriodQuery(supabase, fromDate, toDate, rangeValid);
   const { toast } = useToast();
   const [selected, setSelected] = useState<CashCloseReport | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const printRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-select latest report when list changes (matches v3 page.tsx 149-152).
+  // Auto-select báo cáo mới nhất; khi đổi khoảng mà selection cũ không còn
+  // trong list → chọn lại data[0] (mới nhất).
   useEffect(() => {
-    setSelected((current) => current ?? reportsQuery.data?.[0] ?? null);
+    const list = reportsQuery.data ?? [];
+    setSelected((current) => {
+      if (current && list.some((r) => r.id === current.id)) return current;
+      return list[0] ?? null;
+    });
   }, [reportsQuery.data]);
+
+  function handleResetRange() {
+    setFromDate(subtractDays(today, 6));
+    setToDate(today);
+  }
 
   async function handleSelect(id: string) {
     if (!supabase) return;
@@ -125,33 +141,55 @@ function CashCloseTab({ businessDate }: CashCloseTabProps) {
     }
   }
 
-  if (reportsQuery.isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Spinner size={32} />
-      </div>
-    );
-  }
-
-  if (reportsQuery.isError) {
-    return (
-      <AlertBanner variant="danger" title="Không tải được danh sách báo cáo">
-        {reportsQuery.error instanceof Error
-          ? reportsQuery.error.message
-          : String(reportsQuery.error)}
-      </AlertBanner>
-    );
-  }
-
   const reports = reportsQuery.data ?? [];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-      <ReportList
-        reports={reports}
-        selectedId={selected?.id ?? null}
-        onSelect={handleSelect}
-      />
+      <div className="space-y-3">
+        <Card>
+          <CardBody className="flex flex-wrap items-end gap-3">
+            <TextField
+              label="Từ ngày"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="min-w-[9rem]"
+            />
+            <TextField
+              label="Đến ngày"
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="min-w-[9rem]"
+            />
+            <Button variant="ghost" onClick={handleResetRange}>
+              7 ngày gần nhất
+            </Button>
+          </CardBody>
+        </Card>
+
+        {!rangeValid ? (
+          <AlertBanner variant="warning" title="Khoảng ngày không hợp lệ">
+            Chọn cả “Từ ngày” và “Đến ngày”, với Từ ≤ Đến.
+          </AlertBanner>
+        ) : reportsQuery.isLoading ? (
+          <div className="flex justify-center py-12">
+            <Spinner size={32} />
+          </div>
+        ) : reportsQuery.isError ? (
+          <AlertBanner variant="danger" title="Không tải được danh sách báo cáo">
+            {reportsQuery.error instanceof Error
+              ? reportsQuery.error.message
+              : String(reportsQuery.error)}
+          </AlertBanner>
+        ) : (
+          <ReportList
+            reports={reports}
+            selectedId={selected?.id ?? null}
+            onSelect={handleSelect}
+          />
+        )}
+      </div>
       <Card>
         <CardHeader>
           <div className="flex w-full items-center justify-between gap-3">

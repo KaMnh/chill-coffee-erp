@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardData } from "@/lib/types";
+import { DEFAULT_SHIFT_BONUS_CONFIG } from "@/lib/labor-cost";
 import { toAppError, unwrapJson } from "./_common";
 
 export async function loadDashboard(supabase: SupabaseClient, businessDate: string) {
@@ -18,7 +19,7 @@ export async function loadDashboard(supabase: SupabaseClient, businessDate: stri
     payroll_total_all: 0,
     active_staff: 0,
     active_shifts: [],
-    shift_bonus_config: { threshold_hours: 7, bonus_amount: 10000 },
+    shift_bonus_config: DEFAULT_SHIFT_BONUS_CONFIG,
     expenses: [],
     sales_orders: []
   });

@@ -21,6 +21,16 @@ export interface ShiftBonusConfig {
   bonus_amount: number;
 }
 
+/**
+ * Mặc định phụ cấp ca — khớp seed `app_settings.shift_bonus_config`
+ * (database/migrations/2026-05-26-a-shift-bonus-config.sql). Dùng làm fallback
+ * khi payload/app_settings chưa có config.
+ */
+export const DEFAULT_SHIFT_BONUS_CONFIG: ShiftBonusConfig = {
+  threshold_hours: 7,
+  bonus_amount: 10000,
+};
+
 export interface LiveLaborCostInput {
   /** Σ total_pay các ca đã chốt hôm nay, MỌI payment_method (VND). */
   finalizedTotal: number;
@@ -44,7 +54,9 @@ export function computeLiveLaborCost({
   const nowMs = now.getTime();
   let accrued = 0;
 
-  for (const shift of activeShifts) {
+  // `?? []` phòng payload RPC thiếu active_shifts (deploy FE trước migration) —
+  // tránh "activeShifts is not iterable" làm vỡ DashboardView.
+  for (const shift of activeShifts ?? []) {
     const checkInMs = new Date(shift.check_in_at).getTime();
     // clamp ≥ 0 để check-in tương lai không tạo accrual âm
     const minutes = Math.max(0, Math.floor((nowMs - checkInMs) / 60_000));

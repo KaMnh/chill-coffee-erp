@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { computeLiveLaborCost } from "@/lib/labor-cost";
+import { computeLiveLaborCost, DEFAULT_SHIFT_BONUS_CONFIG } from "@/lib/labor-cost";
 import type { DashboardData } from "@/lib/types";
 
 /** Tick mỗi 60s là đủ — mỗi phút chỉ thêm ~rate/60; không cần tick từng giây. */
@@ -25,13 +25,15 @@ export function useLiveLaborCost(data: LiveLaborInput): number {
     return () => clearInterval(id);
   }, []);
 
+  // Defensive defaults: payload có thể thiếu field nếu RPC chưa migrate (deploy
+  // FE trước khi apply migration) → tránh crash DashboardView, hiển thị tạm 0.
   return useMemo(
     () =>
       computeLiveLaborCost({
-        finalizedTotal: data.payroll_total_all,
-        activeShifts: data.active_shifts,
+        finalizedTotal: data.payroll_total_all ?? 0,
+        activeShifts: data.active_shifts ?? [],
         now,
-        bonusConfig: data.shift_bonus_config,
+        bonusConfig: data.shift_bonus_config ?? DEFAULT_SHIFT_BONUS_CONFIG,
       }),
     [data.payroll_total_all, data.active_shifts, data.shift_bonus_config, now]
   );

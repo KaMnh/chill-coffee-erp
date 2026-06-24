@@ -58,6 +58,17 @@ describe("computeLiveLaborCost", () => {
     expect(atThreshold).toBe(150_000);
   });
 
+  it("activeShifts nullish (payload RPC cũ thiếu field) → trả finalizedTotal, không crash", () => {
+    // Mô phỏng payload thiếu active_shifts (deploy FE trước khi apply migration).
+    const result = computeLiveLaborCost({
+      finalizedTotal: 80_000,
+      activeShifts: undefined as unknown as [],
+      now: NOW,
+      bonusConfig: BONUS,
+    });
+    expect(result).toBe(80_000);
+  });
+
   it("nhiều ca mở: cộng dồn + finalized", () => {
     const result = computeLiveLaborCost({
       finalizedTotal: 100_000,

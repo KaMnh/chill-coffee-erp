@@ -11,6 +11,7 @@ import { stockTotals } from "@/features/inventory/stock-value";
 import { formatVND } from "@/lib/format";
 import { useUpdateUserDashboardPreferences } from "@/hooks/mutations/use-profile-mutations";
 import { useLiveLaborCost } from "@/hooks/use-live-labor-cost";
+import { DEFAULT_SHIFT_BONUS_CONFIG } from "@/lib/labor-cost";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +43,7 @@ const EMPTY: DashboardData = {
   payroll_total_all: 0,
   active_staff: 0,
   active_shifts: [],
-  shift_bonus_config: { threshold_hours: 7, bonus_amount: 10000 },
+  shift_bonus_config: DEFAULT_SHIFT_BONUS_CONFIG,
   expenses: [],
   sales_orders: [],
 };

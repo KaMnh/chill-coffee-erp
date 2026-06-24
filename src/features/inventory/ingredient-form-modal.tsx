@@ -12,20 +12,14 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import {
   useCreateIngredient,
   useUpdateIngredient,
 } from "@/hooks/mutations/use-inventory-mutations";
-import { STOCK_UNITS, STOCK_UNIT_LABELS_VI } from "./units";
+import { STOCK_UNITS, STOCK_UNIT_LABELS_VI, formatUnit } from "./units";
 import type { Ingredient } from "@/lib/types";
 
 interface IngredientFormModalProps {
@@ -109,6 +103,18 @@ export function IngredientFormModal({
   const isBusy = createM.isPending || updateM.isPending;
   const canSubmit = nameValid && thresholdValid && !isBusy;
 
+  // Build unit options. A legacy custom unit (not in STOCK_UNITS) is preserved
+  // as a selectable option so editing an ingredient with one doesn't silently
+  // drop it while submitting a stale hidden value.
+  const unitOptions = STOCK_UNITS.map((u) => ({
+    value: u as string,
+    label: STOCK_UNIT_LABELS_VI[u],
+    keywords: [u],
+  }));
+  const unitOptionsWithCurrent = unitOptions.some((o) => o.value === unit)
+    ? unitOptions
+    : [...unitOptions, { value: unit, label: formatUnit(unit), keywords: [unit] }];
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -174,18 +180,16 @@ export function IngredientFormModal({
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-ink-2">Đơn vị</label>
-            <Select value={unit} onValueChange={setUnit} disabled={isBusy}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STOCK_UNITS.map((u) => (
-                  <SelectItem key={u} value={u}>
-                    {STOCK_UNIT_LABELS_VI[u]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              value={unit}
+              onValueChange={setUnit}
+              disabled={isBusy}
+              className="w-full"
+              placeholder="Chọn đơn vị..."
+              searchPlaceholder="Tìm đơn vị..."
+              emptyText="Không tìm thấy"
+              options={unitOptionsWithCurrent}
+            />
           </div>
 
           <TextField

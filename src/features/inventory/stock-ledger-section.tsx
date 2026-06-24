@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useStockMovementsQuery } from "@/hooks/queries";
 import type {
@@ -96,7 +97,7 @@ export function StockLedgerSection({
     <div className="space-y-3">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Select
+        <Combobox
           value={filter.ingredient_id ?? "__all"}
           onValueChange={(v) =>
             onFilterChange({
@@ -105,19 +106,15 @@ export function StockLedgerSection({
               limit: 50,
             })
           }
-        >
-          <SelectTrigger className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all">Tất cả nguyên liệu</SelectItem>
-            {ingredients.map((i) => (
-              <SelectItem key={i.id} value={i.id}>
-                {i.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          className="w-56"
+          placeholder="Tất cả nguyên liệu"
+          searchPlaceholder="Tìm nguyên liệu..."
+          emptyText="Không tìm thấy"
+          options={[
+            { value: "__all", label: "Tất cả nguyên liệu" },
+            ...ingredients.map((i) => ({ value: i.id, label: i.name })),
+          ]}
+        />
 
         <Select
           value={filter.reason ?? "__all"}

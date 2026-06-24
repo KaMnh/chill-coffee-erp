@@ -42,6 +42,20 @@ export function useRealtimeInvalidate(supabase: SupabaseClient | null, businessD
         queryClient.invalidateQueries({ queryKey: queryKeys.safeBalance() });
         queryClient.invalidateQueries({ queryKey: ["safe", "transactions"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "shift_assignments" }, (payload) => {
+        const row = (payload.new ?? {}) as { business_date?: string };
+        if (row.business_date && row.business_date !== businessDate) return;
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.shifts(businessDate) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.payroll(businessDate) });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "shift_payroll_records" }, (payload) => {
+        const row = (payload.new ?? {}) as { business_date?: string };
+        if (row.business_date && row.business_date !== businessDate) return;
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.shifts(businessDate) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.payroll(businessDate) });
+      })
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);

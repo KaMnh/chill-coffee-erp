@@ -8,23 +8,25 @@ import type { DashboardData } from "@/lib/types";
 
 interface KpiBarProps {
   data: DashboardData;
+  /** Chi phí lương tạm tính hôm nay (đã chốt mọi method + đang phát sinh). */
+  liveLaborCost: number;
 }
 
 /**
  * Top-of-dashboard KPI strip — 4 pastel StatCards.
  *
  * Mapping:
- *   pos     -> "Thu POS"          = total_sales (cash + non-cash, recorded via POS)
- *   expense -> "Tổng chi"         = total_expenses
- *   payroll -> "Lương đã phát"    = payroll_paid
- *   staff   -> "Đang trong ca"    = active_staff (integer)
+ *   pos     -> "Thu POS"                     = total_sales (cash + non-cash, qua POS)
+ *   expense -> "Tổng chi"                    = total_expenses
+ *   payroll -> "Lương hôm nay (tạm tính)"    = liveLaborCost (đã chốt mọi method + đang phát sinh)
+ *   staff   -> "Đang trong ca"               = active_staff (integer)
  *
  * Note: quán bán 100% qua POS nên một thẻ "Thu POS" đủ thể hiện doanh thu.
- * Cash vs non-cash breakdown vẫn được dùng ở Chốt két (reads from RPC fields).
+ * Lương tạm tính do useLiveLaborCost tính (client tick 60s); KpiBar chỉ hiển thị.
  *
  * Color order: peach / mint / lilac / peach — alternates warm/cool.
  */
-export function KpiBar({ data }: KpiBarProps) {
+export function KpiBar({ data, liveLaborCost }: KpiBarProps) {
   return (
     <Reveal
       stagger
@@ -44,9 +46,9 @@ export function KpiBar({ data }: KpiBarProps) {
       />
       <StatCard
         color="lilac"
-        title="Lương đã phát"
-        subtitle="Trong ngày"
-        value={<CountUp value={data.payroll_paid} format={formatVND} />}
+        title="Lương hôm nay (tạm tính)"
+        subtitle="tạm tính"
+        value={<CountUp value={liveLaborCost} format={formatVND} />}
       />
       <StatCard
         color="peach"

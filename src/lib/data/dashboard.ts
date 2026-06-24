@@ -15,7 +15,10 @@ export async function loadDashboard(supabase: SupabaseClient, businessDate: stri
     opening_cash: 0,
     total_expenses: 0,
     payroll_paid: 0,
+    payroll_total_all: 0,
     active_staff: 0,
+    active_shifts: [],
+    shift_bonus_config: { threshold_hours: 7, bonus_amount: 10000 },
     expenses: [],
     sales_orders: []
   });

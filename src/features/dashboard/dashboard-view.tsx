@@ -10,6 +10,7 @@ import {
 import { stockTotals } from "@/features/inventory/stock-value";
 import { formatVND } from "@/lib/format";
 import { useUpdateUserDashboardPreferences } from "@/hooks/mutations/use-profile-mutations";
+import { useLiveLaborCost } from "@/hooks/use-live-labor-cost";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,10 @@ const EMPTY: DashboardData = {
   opening_cash: 0,
   total_expenses: 0,
   payroll_paid: 0,
+  payroll_total_all: 0,
   active_staff: 0,
+  active_shifts: [],
+  shift_bonus_config: { threshold_hours: 7, bonus_amount: 10000 },
   expenses: [],
   sales_orders: [],
 };
@@ -119,6 +123,11 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
     }
   }
 
+  // Derive `data` + live labor cost BEFORE any early return (Rules of Hooks:
+  // useLiveLaborCost must run on every render).
+  const data = dashboardQuery.data ?? { ...EMPTY, business_date: businessDate };
+  const liveLaborCost = useLiveLaborCost(data);
+
   if (dashboardQuery.isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -137,12 +146,11 @@ export function DashboardView({ businessDate, onNavigate, account }: DashboardVi
     );
   }
 
-  const data = dashboardQuery.data ?? { ...EMPTY, business_date: businessDate };
   const handover = handoverQuery.data ?? null;
 
   return (
     <div className="space-y-6">
-      <KpiBar data={data} />
+      <KpiBar data={data} liveLaborCost={liveLaborCost} />
       <ShortcutGrid onNavigate={onNavigate} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">

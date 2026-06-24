@@ -35,6 +35,19 @@ export async function loadCashCloseReportsByDate(supabase: SupabaseClient, busin
   return unwrapJson<CashCloseReport[]>(data, []);
 }
 
+export async function loadCashCloseReportsByPeriod(
+  supabase: SupabaseClient,
+  from: string,
+  to: string
+) {
+  const { data, error } = await supabase.rpc("get_cash_close_reports_by_period", {
+    p_from: from,
+    p_to: to
+  });
+  if (error) throw toAppError(error, "Không tải được danh sách báo cáo.");
+  return unwrapJson<CashCloseReport[]>(data, []);
+}
+
 export async function loadCashCloseReport(supabase: SupabaseClient, reportId: string) {
   const { data, error } = await supabase.rpc("get_cash_close_report", { p_report_id: reportId });
   if (error) throw toAppError(error, "Không tải được báo cáo.");

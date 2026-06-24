@@ -2,7 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadCashCloseReportsByDate, loadCashCountsByDate, loadCashDayOpening } from "@/lib/data";
+import {
+  loadCashCloseReportsByDate,
+  loadCashCloseReportsByPeriod,
+  loadCashCountsByDate,
+  loadCashDayOpening
+} from "@/lib/data";
 import { queryKeys } from "./keys";
 
 export function useCashOpeningQuery(supabase: SupabaseClient | null, businessDate: string, enabled = true) {
@@ -18,6 +23,25 @@ export function useReportsQuery(supabase: SupabaseClient | null, businessDate: s
   return useQuery({
     queryKey: queryKeys.reports(businessDate),
     queryFn: () => loadCashCloseReportsByDate(supabase!, businessDate),
+    enabled: enabled && !!supabase,
+    staleTime: 60_000
+  });
+}
+
+/**
+ * Báo cáo chốt két theo KHOẢNG ngày (final + voided), business_date DESC.
+ * Prefix "cash-close-reports" để finalize/edit/void invalidate tự refresh
+ * (xem use-cash-mutations.ts). staleTime 60s như useReportsQuery.
+ */
+export function useReportsByPeriodQuery(
+  supabase: SupabaseClient | null,
+  from: string,
+  to: string,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.reportsByPeriod(from, to),
+    queryFn: () => loadCashCloseReportsByPeriod(supabase!, from, to),
     enabled: enabled && !!supabase,
     staleTime: 60_000
   });

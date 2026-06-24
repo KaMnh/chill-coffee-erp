@@ -133,7 +133,8 @@ left join lateral (
 -- Drop trước khi create để re-apply idempotent: r.* expand cash_close_reports.*
 -- nên khi v2.2 add column safe_deposit_amount + leave_for_next_day, vị trí cột
 -- closed_by_name dịch xuống → CREATE OR REPLACE VIEW fail (PG 42P16). CASCADE
--- drop cả get_cash_close_report + get_cash_close_reports_by_date (SQL funcs),
+-- drop cả get_cash_close_report + get_cash_close_reports_by_date +
+-- get_cash_close_reports_by_period (SQL funcs),
 -- chúng sẽ được create or replace lại bên dưới trong cùng file.
 drop view if exists public.daily_cash_close_report_view cascade;
 
@@ -1150,6 +1151,20 @@ as $$
   from public.daily_cash_close_report_view r
   where r.business_date = p_business_date and (public.app_is_owner_manager() or public.app_role() = 'staff_operator');
 $$;
+
+create or replace function public.get_cash_close_reports_by_period(p_from date, p_to date)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select coalesce(jsonb_agg(to_jsonb(r) order by r.business_date desc, r.closed_at desc), '[]'::jsonb)
+  from public.daily_cash_close_report_view r
+  where r.business_date between p_from and p_to and (public.app_is_owner_manager() or public.app_role() = 'staff_operator');
+$$;
+
+grant execute on function public.get_cash_close_reports_by_period(date, date) to authenticated;
 
 create or replace function public.ingest_kiotviet_batch(p_payload jsonb)
 returns jsonb

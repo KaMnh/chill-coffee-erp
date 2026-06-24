@@ -52,7 +52,8 @@ export function Combobox({
   const [query, setQuery] = useState("");
   // cmdk's "active item" (highlighted row). Controlled so reopening highlights
   // the currently-selected option instead of always defaulting to the first
-  // item. cmdk lowercases item values internally, so seed lowercase.
+  // item. cmdk stores each Item's explicit `value` trimmed (NOT lowercased) and
+  // compares it case-sensitively, so seed `active` with the original-case value.
   const [active, setActive] = useState("");
 
   const selected = options.find((o) => o.value === value) ?? null;
@@ -65,7 +66,7 @@ export function Combobox({
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
-      setActive((value ?? "").toLowerCase()); // highlight current selection on open
+      setActive(value ?? ""); // highlight current selection on open (case-sensitive match)
     } else {
       setQuery("");
     }

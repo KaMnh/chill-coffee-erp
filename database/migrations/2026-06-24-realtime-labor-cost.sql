@@ -79,13 +79,18 @@ begin
 end;
 $$;
 
--- Realtime publication cho ca/lương (idempotent — chỉ add nếu chưa là member).
+-- Realtime publication cho ca/lương (idempotent).
+-- Guard: publication `supabase_realtime` chỉ tồn tại ở dev/prod (tạo trong
+-- supabase/dev/data.sql), KHÔNG có ở DB schema-only của CI pgTAP → bọc kiểm tra
+-- publication tồn tại trước, rồi mới add từng bảng nếu chưa là member.
 do $$
 begin
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shift_assignments') then
-    alter publication supabase_realtime add table public.shift_assignments;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shift_payroll_records') then
-    alter publication supabase_realtime add table public.shift_payroll_records;
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shift_assignments') then
+      alter publication supabase_realtime add table public.shift_assignments;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shift_payroll_records') then
+      alter publication supabase_realtime add table public.shift_payroll_records;
+    end if;
   end if;
 end $$;

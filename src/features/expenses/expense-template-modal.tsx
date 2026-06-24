@@ -10,13 +10,7 @@ import {
 } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useCreateExpenseTemplate } from "@/hooks/mutations/use-expense-mutations";
@@ -111,22 +105,17 @@ export function ExpenseTemplateModal({
             >
               Danh mục
             </label>
-            <Select
-              value={categoryId}
+            <Combobox
+              id="template-category"
+              value={categoryId || null}
               onValueChange={setCategoryId}
               disabled={createTemplate.isPending}
-            >
-              <SelectTrigger id="template-category">
-                <SelectValue placeholder="Chọn danh mục..." />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-full"
+              placeholder="Chọn danh mục..."
+              searchPlaceholder="Tìm danh mục..."
+              emptyText="Không tìm thấy"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <TextField

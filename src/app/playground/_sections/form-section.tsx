@@ -7,6 +7,7 @@ import { RadioGroup, Radio } from "@/components/ui/radio";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 export function FormSection() {
   const [radioValue, setRadioValue] = useState("a");
@@ -55,7 +56,29 @@ export function FormSection() {
           </SelectContent>
         </Select>
       </SubSection>
+      <SubSection title="Combobox (searchable)">
+        <ComboboxDemo />
+      </SubSection>
     </div>
+  );
+}
+
+function ComboboxDemo() {
+  const [value, setValue] = useState<string | null>(null);
+  return (
+    <Combobox
+      value={value}
+      onValueChange={setValue}
+      className="w-60"
+      placeholder="Chọn trái cây..."
+      searchPlaceholder="Tìm..."
+      options={[
+        { value: "apple", label: "Táo" },
+        { value: "banana", label: "Chuối" },
+        { value: "durian", label: "Sầu riêng" },
+        { value: "ca-phe", label: "Cà phê", keywords: ["coffee"] },
+      ]}
+    />
   );
 }
 

@@ -4,13 +4,7 @@ import { useState } from "react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
@@ -173,22 +167,17 @@ export function ExpenseForm({
             <label htmlFor="form-category" className="text-xs font-medium text-ink-2">
               Loại chi phí
             </label>
-            <Select
-              value={categoryId}
+            <Combobox
+              id="form-category"
+              value={categoryId || null}
               onValueChange={setCategoryId}
               disabled={isBusy}
-            >
-              <SelectTrigger id="form-category">
-                <SelectValue placeholder="Chọn loại chi phí..." />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-full"
+              placeholder="Chọn loại chi phí..."
+              searchPlaceholder="Tìm loại chi phí..."
+              emptyText="Không tìm thấy"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </div>
 
           {/* Description */}

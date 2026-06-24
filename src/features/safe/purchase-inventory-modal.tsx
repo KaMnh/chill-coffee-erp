@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Icon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
@@ -234,22 +234,20 @@ export function PurchaseInventoryModal({ open, onOpenChange, balances }: Purchas
                   <div className="flex items-end gap-2">
                     <div className="flex-1 flex flex-col gap-1.5">
                       <label className="text-xs font-medium text-ink-2">Nguyên liệu</label>
-                      <Select
-                        value={row.ingredientId}
+                      <Combobox
+                        value={row.ingredientId || null}
                         onValueChange={(v) => handleSelectIngredient(row.key, v)}
                         disabled={isBusy}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn nguyên liệu..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ingredients.map((i) => (
-                            <SelectItem key={i.id} value={i.id}>
-                              {i.name} ({i.unit})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        className="w-full"
+                        placeholder="Chọn nguyên liệu..."
+                        searchPlaceholder="Tìm nguyên liệu..."
+                        emptyText="Không tìm thấy"
+                        options={ingredients.map((i) => ({
+                          value: i.id,
+                          label: `${i.name} (${i.unit})`,
+                          keywords: [i.unit],
+                        }))}
+                      />
                     </div>
                     <Button
                       type="button"

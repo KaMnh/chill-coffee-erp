@@ -12,13 +12,7 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/ui/icons";
@@ -240,32 +234,28 @@ export function RecipeBuilderModal({
             {/* Menu item picker */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-ink-2">Sản phẩm</label>
-              <Select
-                value={selectedMenuItemId ?? undefined}
+              <Combobox
+                value={selectedMenuItemId}
                 onValueChange={(v) => setSelectedMenuItemId(v)}
                 disabled={isEdit || isBusy}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn sản phẩm..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {isEdit && editingRecipe ? (
-                    <SelectItem value={editingRecipe.menu_item_id}>
-                      {editingRecipe.menu_item_name}
-                    </SelectItem>
-                  ) : menuItemOptionsForCreate.length === 0 ? (
-                    <SelectItem value="__empty" disabled>
-                      Không còn sản phẩm khả dụng
-                    </SelectItem>
-                  ) : (
-                    menuItemOptionsForCreate.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                className="w-full"
+                placeholder="Chọn sản phẩm..."
+                searchPlaceholder="Tìm sản phẩm..."
+                emptyText={isEdit ? "—" : "Không còn sản phẩm khả dụng"}
+                options={
+                  isEdit && editingRecipe
+                    ? [
+                        {
+                          value: editingRecipe.menu_item_id,
+                          label: editingRecipe.menu_item_name,
+                        },
+                      ]
+                    : menuItemOptionsForCreate.map((m) => ({
+                        value: m.id,
+                        label: m.name,
+                      }))
+                }
+              />
             </div>
 
             {/* Notes */}
@@ -312,28 +302,23 @@ export function RecipeBuilderModal({
                     className="flex items-start gap-2 p-2 rounded-md border border-border bg-surface"
                   >
                     <div className="flex-1 min-w-0">
-                      <Select
-                        value={it.ingredient_id || undefined}
+                      <Combobox
+                        value={it.ingredient_id || null}
                         onValueChange={(v) => handleChangeIngredient(idx, v)}
                         disabled={isBusy}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn nguyên liệu..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ingredients.length === 0 ? (
-                            <SelectItem value="__empty" disabled>
-                              Chưa có nguyên liệu
-                            </SelectItem>
-                          ) : (
-                            ingredients.map((i) => (
-                              <SelectItem key={i.id} value={i.id}>
-                                {i.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                        className="w-full"
+                        placeholder="Chọn nguyên liệu..."
+                        searchPlaceholder="Tìm nguyên liệu..."
+                        emptyText={
+                          ingredients.length === 0
+                            ? "Chưa có nguyên liệu"
+                            : "Không tìm thấy"
+                        }
+                        options={ingredients.map((i) => ({
+                          value: i.id,
+                          label: i.name,
+                        }))}
+                      />
                     </div>
                     <div className="w-24">
                       <TextField

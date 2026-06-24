@@ -120,6 +120,8 @@ alter publication supabase_realtime add table public.cash_close_reports;
 alter publication supabase_realtime add table public.handover_tasks;
 alter publication supabase_realtime add table public.expenses;
 alter publication supabase_realtime add table public.sales_sync_runs;
+alter publication supabase_realtime add table public.shift_assignments;
+alter publication supabase_realtime add table public.shift_payroll_records;
 ```
 
 ---

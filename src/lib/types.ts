@@ -1,4 +1,6 @@
-﻿export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer";
+﻿import type { ActiveShiftInput, ShiftBonusConfig } from "@/lib/labor-cost";
+
+export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer";
 
 export type DashboardPreferences = {
   stock_sort?: string | null;
@@ -46,7 +48,13 @@ export type DashboardData = {
   opening_cash?: number;
   total_expenses: number;
   payroll_paid: number;
+  /** Σ total_pay đã chốt hôm nay — MỌI payment_method (khác payroll_paid cash-only). */
+  payroll_total_all: number;
   active_staff: number;
+  /** Ca đang mở hôm nay (đã vào, chưa ra) — client tính chi phí lương real-time. */
+  active_shifts: ActiveShiftInput[];
+  /** Config phụ cấp đọc kèm payload (security definer) để client tính ngưỡng. */
+  shift_bonus_config: ShiftBonusConfig;
   latest_cash_count?: CashCount | null;
   latest_sync?: SalesSyncRun | null;
   expenses: Expense[];

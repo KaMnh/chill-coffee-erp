@@ -10,6 +10,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY — server-only, NEVER expose to browser
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { UserRole } from "@/lib/types";
 
 export function getServiceRoleClient(): SupabaseClient {
   const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,10 +50,10 @@ export function getUserClient(authHeader: string | null): SupabaseClient {
  */
 export async function requireAuth(
   authHeader: string | null,
-  allowedRoles: Array<"owner" | "manager" | "staff_operator" | "employee_viewer">
+  allowedRoles: Array<UserRole>
 ): Promise<{
   userId: string;
-  role: "owner" | "manager" | "staff_operator" | "employee_viewer";
+  role: UserRole;
 }> {
   if (!authHeader) {
     throw new Error("Thiếu Authorization header.");

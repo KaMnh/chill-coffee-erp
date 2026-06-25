@@ -37,6 +37,7 @@ import { HandoverView } from "@/features/handover/handover-view";
 import { InventoryView } from "@/features/inventory/inventory-view";
 import { SettingsView } from "@/features/settings/settings-view";
 import { ShiftsView } from "@/features/shifts/shifts-view";
+import { CheckinScreen } from "@/features/checkin/checkin-screen";
 import { Card, CardBody } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
 import { useToast } from "@/components/ui/toast";
@@ -339,6 +340,7 @@ export default function HomePage() {
         )}
         {view === "inventory" && <InventoryView role={account.role} />}
         {view === "settings" && <SettingsView role={account.role} authHeader={authHeader} />}
+        {view === "checkin" && <CheckinScreen />}
       </Reveal>
     </AppShell>
   );

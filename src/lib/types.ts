@@ -1,6 +1,6 @@
 ﻿import type { ActiveShiftInput, ShiftBonusConfig } from "@/lib/labor-cost";
 
-export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer";
+export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer" | "employee_self_service";
 
 export type DashboardPreferences = {
   stock_sort?: string | null;

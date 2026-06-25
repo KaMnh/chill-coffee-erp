@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShopAnchor, CheckinNetworkConfig, MyCheckinStatus } from "@/lib/types";
+import type { CheckinResult } from "@/lib/types";
+export type { CheckinResult } from "@/lib/types";
 import { toAppError } from "./_common";
-export interface CheckinResult { employee_name: string; check_in_at: string; already_checked_in: boolean; }
 
 export async function submitCheckin(authHeaders: Record<string, string>): Promise<CheckinResult> {
   if (!authHeaders.Authorization) throw new Error("Phiên đăng nhập hết hạn. Hãy đăng nhập lại.");
@@ -16,8 +17,7 @@ export async function getMyCheckinStatus(supabase: SupabaseClient): Promise<MyCh
   if (error) throw toAppError(error, "Không tải được trạng thái."); return data as MyCheckinStatus;
 }
 
-// listShopAnchors / addShopAnchor / removeShopAnchor / updateCheckinNetworkConfig / sendAnchorHeartbeat / fetchWhoami
-// — implemented in Task 9; sendAnchorHeartbeat/fetchWhoami also take Record<string,string> auth headers (spread).
+// sendAnchorHeartbeat / fetchWhoami hit the Task 6 /api/shop-presence/* routes and take Record<string,string> auth headers (spread).
 
 export async function listShopAnchors(supabase: SupabaseClient): Promise<ShopAnchor[]> {
   const { data, error } = await supabase.from("checkin_anchor").select("*").order("created_at");

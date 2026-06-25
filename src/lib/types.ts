@@ -586,3 +586,5 @@ export interface MyCheckinStatus {
   checked_in_today: boolean;
   check_in_at: string | null;
 }
+
+export type CheckinResult = { employee_name: string; check_in_at: string; already_checked_in: boolean };

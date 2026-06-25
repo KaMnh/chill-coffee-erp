@@ -107,3 +107,11 @@ on conflict (key) do update
   set value = excluded.value,
       is_public = excluded.is_public,
       updated_at = now();
+
+-- -----------------------------------------------------------------------------
+-- 6. Check-in network gate (self-check-in 2026-06-25)
+--    enabled:false = tính năng TẮT (503) cho tới khi owner cấu hình + có anchor IP.
+-- -----------------------------------------------------------------------------
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"enabled": false, "reject_message": "Chỉ chấm công được khi ở tại quán (nối wifi quán).", "grace_hours": 12}'::jsonb, false)
+on conflict (key) do nothing;

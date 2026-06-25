@@ -56,6 +56,15 @@ grant usage, select on all sequences in schema public to authenticated, anon, se
 -- Functions — RPC + helpers
 grant execute on all functions in schema public to anon, authenticated, service_role;
 
+-- Self-check-in (2026-06-25): các hàm SERVICE-ROLE-ONLY — re-assert NGAY SAU blanket
+-- grant ở trên (blanket grant vừa cấp lại cho anon/authenticated). Client không được
+-- gọi thẳng để bỏ qua cổng IP / giả mạo IP/UA/giờ (check_in_self) hoặc đọc anchor IP
+-- (fresh_anchor_ips). Restore endpoint replay khối 003 này nên phải giữ REVOKE tại đây.
+revoke execute on function public.check_in_self(uuid, inet, text) from public, anon, authenticated;
+grant execute on function public.check_in_self(uuid, inet, text) to service_role;
+revoke execute on function public.fresh_anchor_ips(numeric) from public, anon, authenticated;
+grant execute on function public.fresh_anchor_ips(numeric) to service_role;
+
 -- Default privileges — applies to FUTURE objects created by this role
 -- (typically `postgres` via scripts/db-init.mjs or the migrator container).
 -- Without these, every new table relies on inherited Supabase defaults that
@@ -290,23 +299,25 @@ alter table public.recipes         enable row level security;
 alter table public.recipe_items    enable row level security;
 alter table public.stock_movements enable row level security;
 
--- SELECT: all authenticated users can read all 5 tables.
+-- SELECT: operational roles read all 5 tables. employee_self_service is EXCLUDED
+-- (C5/R5) — ẩn nav không phải authorization boundary; role mới không được đọc giá
+-- nguyên liệu / lịch sử kho qua PostgREST.
 drop policy if exists ingredients_select_all     on public.ingredients;
 drop policy if exists menu_items_select_all      on public.menu_items;
 drop policy if exists recipes_select_all         on public.recipes;
 drop policy if exists recipe_items_select_all    on public.recipe_items;
 drop policy if exists stock_movements_select_all on public.stock_movements;
 
-create policy ingredients_select_all on public.ingredients
-  for select to authenticated using (true);
-create policy menu_items_select_all on public.menu_items
-  for select to authenticated using (true);
-create policy recipes_select_all on public.recipes
-  for select to authenticated using (true);
-create policy recipe_items_select_all on public.recipe_items
-  for select to authenticated using (true);
-create policy stock_movements_select_all on public.stock_movements
-  for select to authenticated using (true);
+create policy ingredients_select_all on public.ingredients for select to authenticated
+  using (public.app_role() in ('owner','manager','staff_operator','employee_viewer'));
+create policy menu_items_select_all on public.menu_items for select to authenticated
+  using (public.app_role() in ('owner','manager','staff_operator','employee_viewer'));
+create policy recipes_select_all on public.recipes for select to authenticated
+  using (public.app_role() in ('owner','manager','staff_operator','employee_viewer'));
+create policy recipe_items_select_all on public.recipe_items for select to authenticated
+  using (public.app_role() in ('owner','manager','staff_operator','employee_viewer'));
+create policy stock_movements_select_all on public.stock_movements for select to authenticated
+  using (public.app_role() in ('owner','manager','staff_operator','employee_viewer'));
 
 -- WRITE: deny direct INSERT/UPDATE/DELETE from authenticated clients.
 -- All writes go through SECURITY DEFINER RPCs (or the trigger which is also SECURITY DEFINER).
@@ -332,6 +343,16 @@ alter table public.backup_runs enable row level security;
 drop policy if exists backup_runs_owner_read on public.backup_runs;
 create policy backup_runs_owner_read on public.backup_runs for select
   using (public.app_role() = 'owner');
+
+-- checkin_anchor (self-check-in 2026-06-25): owner-only read; mọi ghi trực tiếp bị
+-- chặn — chỉ qua RPC SECURITY DEFINER (add/remove/heartbeat). Anchor IP không lộ.
+alter table public.checkin_anchor enable row level security;
+drop policy if exists checkin_anchor_owner_read on public.checkin_anchor;
+create policy checkin_anchor_owner_read on public.checkin_anchor for select
+  using (public.app_role() = 'owner');
+drop policy if exists checkin_anchor_no_direct_write on public.checkin_anchor;
+create policy checkin_anchor_no_direct_write on public.checkin_anchor
+  for all to authenticated using (false) with check (false);
 
 -- ============================================================== ANALYTICS-GRANTS-BEGIN
 -- Schema analytics: CHỈ service_role (n8n). KHÔNG grant anon/authenticated.

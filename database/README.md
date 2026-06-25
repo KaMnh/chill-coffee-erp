@@ -200,14 +200,43 @@ sales_sync_runs ──┬── sales_orders ──┬── sales_order_items
                   │                  └── sales_payments
                   └── (created by ingest_kiotviet_batch)
 
-app_settings  (kv_credentials, denominations, sidebar_defaults, ...)
+app_settings  (kv_credentials, denominations, sidebar_defaults, checkin_network, ...)
 integration_clients  (auth cho ingest_kiotviet_batch)
 pos_sync_attempts    (rate limit log)
 audit_log            (8 trigger audit_*)
+checkin_anchor       (recorded shop public IP + timestamp for the self-check-in IP gate)
 
 handover_sessions
     └── handover_tasks
 ```
+
+### Roles
+
+| Role | Description |
+|---|---|
+| `owner` | Full access. Only owner can grant owner role. |
+| `manager` | Most operational access; cannot grant owner. |
+| `staff_operator` | Day-to-day ops (cash, shifts, expenses). |
+| `employee_viewer` | Read-only access to their own data. |
+| `employee_self_service` | Restricted role for self-check-in via phone. Cannot read other employees' rows. Excluded from the five `*_select_all` RLS policies. |
+
+### `app_settings` keys (seed via `004_seed.sql`)
+
+| Key | Purpose |
+|---|---|
+| `denominations` | Cash denomination config |
+| `cash_diff_threshold` | Acceptable cash discrepancy |
+| `sidebar_defaults` | Default sidebar nav visibility |
+| `handover_default_tasks` | Template handover checklist |
+| `kiotviet_credentials` | KiotViet API credentials |
+| `checkin_network` | Check-in gate config: `enabled`, `anchor_ip`, `anchor_updated_at`, freshness window |
+
+### RLS notes
+
+- The five `*_select_all` policies (one per main operational table) now explicitly
+  **exclude `employee_self_service`**. This role can only read its own rows via
+  the corresponding `*_select_own` policies.
+- `checkin_anchor` is readable by `owner` and `manager` only; write requires `owner`.
 
 ---
 

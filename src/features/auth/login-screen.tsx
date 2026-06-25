@@ -53,12 +53,16 @@ export function LoginScreen() {
         });
         setMode("sign-in");
       } else {
-        // forgot-password: always show neutral message (no account enumeration)
-        if (supabase) {
-          await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/auth/reset`,
-          });
+        // forgot-password: when supabase is unavailable, surface an honest error.
+        // When available, always show the same neutral message regardless of
+        // success or failure (no account enumeration).
+        if (!supabase) {
+          setError("Không thể kết nối dịch vụ xác thực.");
+          return;
         }
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset`,
+        });
         toast({
           semantic: "info",
           title: "Kiểm tra hộp thư",

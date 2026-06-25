@@ -42,7 +42,6 @@ export default function ResetPasswordPage() {
 
   const mountedRef = useRef(true);
   useEffect(() => {
-    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
@@ -55,32 +54,15 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    // If a recovery session is already present from a previous event on this
-    // page load, honour it immediately.
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mountedRef.current) return;
-      if (data.session) {
-        // A session exists — could be a normal session (user navigated here
-        // directly) or a recovery session. We rely on onAuthStateChange to
-        // distinguish via the PASSWORD_RECOVERY event type. However, if the
-        // page was hard-refreshed after the link was followed, Supabase may
-        // not re-fire the event. In that case we check the AMR claims.
-        const amr = data.session.user?.aud;
-        // Fall through to the subscription which will also fire INITIAL_SESSION.
-        void amr;
-      }
-    });
-
     const { data: listenerData } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mountedRef.current) return;
       if (event === "PASSWORD_RECOVERY" && session) {
         setRecoveryStatus("ready");
-      } else if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-        // If the page loads with an existing session but no PASSWORD_RECOVERY,
-        // the link may be invalid or already used. Mark invalid only if we
-        // have not already reached "ready".
-        setRecoveryStatus((prev) => (prev === "loading" ? "invalid" : prev));
       }
+      // All other events (INITIAL_SESSION, SIGNED_IN, etc.) are ignored here.
+      // A valid recovery link may fire INITIAL_SESSION before PASSWORD_RECOVERY;
+      // treating those as "invalid" would wrongly reject a good link.
+      // The 5-second fallback timer below is the sole trigger for "invalid".
     });
 
     // Safety timeout: if no auth event fires within 5 s, treat link as invalid.

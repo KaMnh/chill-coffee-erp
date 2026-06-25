@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Account, SettingsAccount, UserRole } from "@/lib/types";
 import { toAppError } from "./_common";
 
-async function authHeader(supabase: SupabaseClient): Promise<Record<string, string>> {
+export async function authHeader(supabase: SupabaseClient): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};

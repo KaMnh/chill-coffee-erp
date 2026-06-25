@@ -4573,7 +4573,7 @@ create or replace function public.fresh_anchor_ips(p_grace_hours numeric)
 returns setof text language sql security definer set search_path = public, auth as $$
   select host(current_public_ip) from public.checkin_anchor
   where is_active and current_public_ip is not null
-    and last_heartbeat_at > now() - make_interval(hours => greatest(0, p_grace_hours)::int);
+    and last_heartbeat_at > now() - make_interval(secs => greatest(0, p_grace_hours)::double precision * 3600);
 $$;
 revoke execute on function public.fresh_anchor_ips(numeric) from public, anon, authenticated;
 grant execute on function public.fresh_anchor_ips(numeric) to service_role;

@@ -204,7 +204,7 @@ begin
     where status = 'checked_in' group by employee_id, business_date having count(*) > 1
   ) x;
   if v_dupe > 0 then
-    raise exception 'Khong the tao unique index open-shift: con % nhom trung co payroll. Don tay roi chay lai.', v_dupe;
+    raise exception 'Khong the tao unique index open-shift: con % nhom (employee_id@business_date) trung co payroll: %. Don tay roi chay lai.', v_dupe, (select string_agg(employee_id::text || '@' || business_date::text, ', ') from (select employee_id, business_date from public.shift_assignments where status = 'checked_in' group by employee_id, business_date having count(*) > 1) z);
   end if;
   create unique index if not exists shift_assignments_one_open_per_day
     on public.shift_assignments (employee_id, business_date) where status = 'checked_in';
@@ -220,7 +220,7 @@ begin
     group by employee_id having count(*) > 1
   ) x;
   if v_dupe > 0 then
-    raise exception 'Khong the tao unique employee_id: % nhan vien co >1 tai khoan. Don tay roi chay lai.', v_dupe;
+    raise exception 'Khong the tao unique employee_id: % nhan vien co >1 tai khoan: %. Don tay roi chay lai.', v_dupe, (select string_agg(employee_id::text, ', ') from (select employee_id from public.employee_accounts where employee_id is not null group by employee_id having count(*) > 1) z);
   end if;
   create unique index if not exists employee_accounts_one_account_per_employee
     on public.employee_accounts (employee_id) where employee_id is not null;

@@ -96,6 +96,7 @@ export function CheckinConfigForm() {
   // Anchor marking state.
   const [anchorLabel, setAnchorLabel] = useState("Máy quán");
   const [marking, setMarking] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   // whoami readout.
   const [whoami, setWhoami] = useState<{ ip: string | null } | null>(null);
@@ -128,6 +129,13 @@ export function CheckinConfigForm() {
   const hasAnchorIp = anchors.some((a) => a.is_active && a.current_public_ip);
   const canEnable = hasAnchorIp;
 
+  // Dirty: true when any field differs from the loaded config (or DEFAULT).
+  const loadedConfig = configQuery.data ?? DEFAULT_CONFIG;
+  const dirty =
+    enabled !== loadedConfig.enabled ||
+    rejectMessage !== loadedConfig.reject_message ||
+    graceNum !== loadedConfig.grace_hours;
+
   async function handleMarkDevice() {
     if (!supabase || marking) return;
     const label = anchorLabel.trim() || "Máy quán";
@@ -135,7 +143,7 @@ export function CheckinConfigForm() {
     try {
       const token = crypto.randomUUID() + crypto.randomUUID();
       const hash = await sha256Hex(token);
-      const created = (await addAnchor.mutateAsync({ label, tokenHash: hash })) as { id: string };
+      const created = await addAnchor.mutateAsync({ label, tokenHash: hash });
       const id = created.id;
       window.localStorage.setItem("checkin:anchorId", id);
       window.localStorage.setItem("checkin:anchorToken", token);
@@ -159,6 +167,7 @@ export function CheckinConfigForm() {
   }
 
   async function handleRemove(anchorId: string) {
+    setRemovingId(anchorId);
     try {
       await removeAnchor.mutateAsync(anchorId);
       // If we removed THIS device, clear its local token too.
@@ -172,11 +181,13 @@ export function CheckinConfigForm() {
         semantic: "danger",
         message: err instanceof Error ? err.message : "Không gỡ được thiết bị.",
       });
+    } finally {
+      setRemovingId(null);
     }
   }
 
   async function handleSaveConfig() {
-    if (!validGrace || updateConfig.isPending) return;
+    if (!validGrace || !dirty || updateConfig.isPending) return;
     if (enabled && !canEnable) return; // guard — RPC also enforces this
     try {
       await updateConfig.mutateAsync({
@@ -278,7 +289,8 @@ export function CheckinConfigForm() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        loading={removeAnchor.isPending}
+                        loading={removingId === anchor.id}
+                        disabled={removingId !== null}
                         onClick={() => handleRemove(anchor.id)}
                       >
                         Gỡ
@@ -355,7 +367,7 @@ export function CheckinConfigForm() {
                   type="button"
                   variant="primary"
                   loading={updateConfig.isPending}
-                  disabled={!validGrace || (enabled && !canEnable)}
+                  disabled={!validGrace || !dirty || (enabled && !canEnable)}
                   onClick={handleSaveConfig}
                 >
                   Lưu cấu hình

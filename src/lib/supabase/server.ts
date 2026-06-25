@@ -89,3 +89,10 @@ export function assertCanAssignRole(approverRole: UserRole, targetRole: UserRole
     throw new Error("Chỉ owner mới được cấp quyền owner.");
   }
 }
+
+/** Only an owner may modify an account that is currently an owner (demote, disable, etc.). Throws → 403. */
+export function assertCanModifyTarget(approverRole: UserRole, currentTargetRole: UserRole): void {
+  if (currentTargetRole === "owner" && approverRole !== "owner") {
+    throw new Error("Chỉ owner mới được sửa tài khoản owner.");
+  }
+}

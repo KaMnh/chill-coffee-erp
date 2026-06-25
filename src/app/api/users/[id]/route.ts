@@ -17,7 +17,12 @@
  *         Để xóa hẳn → admin manual qua Supabase Studio Auth UI.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { assertCanAssignRole, getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
+import {
+  assertCanAssignRole,
+  assertCanModifyTarget,
+  getServiceRoleClient,
+  requireAuth
+} from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +79,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   const supabase = getServiceRoleClient();
+
+  // Load the target account's CURRENT role before applying ANY change.
+  // Ceiling guard: only an owner may modify an account that is currently an owner
+  // (demote, disable, or change any field) — runs regardless of body contents.
+  const { data: targetAccount } = await supabase
+    .from("employee_accounts")
+    .select("role")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (!targetAccount) return badRequest("Không tìm thấy tài khoản employee_accounts.", 404);
+  try {
+    assertCanModifyTarget(caller.role as UserRole, targetAccount.role as UserRole);
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Không đủ quyền sửa tài khoản.", 403);
+  }
 
   // Update employee_accounts (role/status)
   const accountPatch: Record<string, unknown> = {};

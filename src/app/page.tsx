@@ -38,6 +38,7 @@ import { InventoryView } from "@/features/inventory/inventory-view";
 import { SettingsView } from "@/features/settings/settings-view";
 import { ShiftsView } from "@/features/shifts/shifts-view";
 import { CheckinScreen } from "@/features/checkin/checkin-screen";
+import { AnchorHeartbeat } from "@/components/checkin/anchor-heartbeat";
 import { Card, CardBody } from "@/components/ui/card";
 import { Reveal } from "@/components/ui/reveal";
 import { useToast } from "@/components/ui/toast";
@@ -342,6 +343,8 @@ export default function HomePage() {
         {view === "settings" && <SettingsView role={account.role} authHeader={authHeader} />}
         {view === "checkin" && <CheckinScreen />}
       </Reveal>
+      {/* Headless: keeps the shop public IP fresh on anchor devices; no-op elsewhere. */}
+      <AnchorHeartbeat />
     </AppShell>
   );
 }

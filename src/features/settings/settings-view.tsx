@@ -21,6 +21,7 @@ import { KiotvietExcelImportCard } from "./kiotviet-excel-import-card";
 import { AccountsManagerCard } from "./accounts-manager-card";
 import { SignupRequestsCard } from "./signup-requests-card";
 import { BackupRestoreSection } from "./backup-restore-section";
+import { CheckinConfigForm } from "./checkin-config-form";
 
 interface SettingsViewProps {
   role: UserRole;
@@ -108,6 +109,7 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
             config={appSettings.shift_bonus_config ?? { threshold_hours: 7, bonus_amount: 10000 }}
           />
           <HandoverDefaultTasksEditor tasks={appSettings.handover_default_tasks} />
+          {role === "owner" && <CheckinConfigForm />}
           <KiotvietConfigForm />
           <KiotvietExcelImportCard role={role} authHeader={authHeader} />
         </div>

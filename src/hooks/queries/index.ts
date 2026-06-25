@@ -24,3 +24,4 @@ export {
   usePeriodClosesQuery
 } from "./use-period-close-queries";
 export { useMyCheckinStatusQuery } from "./use-my-checkin-status-query";
+export { useShopAnchorsQuery } from "./use-shop-anchors-query";

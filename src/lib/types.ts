@@ -100,6 +100,10 @@ export type ShiftAssignment = {
   check_out_at: string | null;
   total_minutes: number | null;
   status: string;
+  /** Audit: source IP of a self-check-in (null for operator-created shifts). */
+  check_in_ip?: string | null;
+  /** Audit: user-agent of a self-check-in device. */
+  check_in_user_agent?: string | null;
   employee_name?: string | null;
   position?: string | null;
 };

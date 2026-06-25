@@ -75,6 +75,22 @@ export function EmployeeGrid({
             {employee.position ?? "Nhân viên"} ·{" "}
             {formatVND(employee.hourly_rate)}/giờ
           </span>
+          {(shift?.check_in_ip || shift?.check_in_user_agent) && (
+            <span
+              className="mt-0.5 block truncate text-[11px] text-muted"
+              title={
+                [
+                  shift.check_in_ip ? `IP: ${shift.check_in_ip}` : null,
+                  shift.check_in_user_agent ? `Thiết bị: ${shift.check_in_user_agent}` : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n") || undefined
+              }
+            >
+              Tự chấm công · {shift.check_in_ip ?? "?"}
+              {shift.check_in_user_agent ? ` · ${shift.check_in_user_agent}` : ""}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {statusBadge(shift?.status)}

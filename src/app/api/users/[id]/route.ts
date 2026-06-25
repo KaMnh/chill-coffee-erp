@@ -156,26 +156,36 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const caller = auth;
 
   const { id: authUserId } = await ctx.params;
   if (!authUserId) return badRequest("Thiếu auth_user_id");
 
   const supabase = getServiceRoleClient();
 
-  // Soft delete: disable account + deactivate employee
+  // Load the target account's CURRENT role before disabling.
+  // Ceiling guard: only an owner may disable an account that is currently an owner —
+  // matches the same protection applied in PATCH.
   const { data: account } = await supabase
     .from("employee_accounts")
-    .select("employee_id")
+    .select("role, employee_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
+  if (!account) return badRequest("Không tìm thấy tài khoản employee_accounts.", 404);
+  try {
+    assertCanModifyTarget(caller.role as UserRole, account.role as UserRole);
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Không đủ quyền vô hiệu hóa tài khoản.", 403);
+  }
 
+  // Soft delete: disable account + deactivate employee
   const { error: accError } = await supabase
     .from("employee_accounts")
     .update({ status: "disabled" })
     .eq("auth_user_id", authUserId);
   if (accError) return badRequest(`Không disable account: ${accError.message}`, 500);
 
-  if (account?.employee_id) {
+  if (account.employee_id) {
     await supabase
       .from("employees")
       .update({ is_active: false })

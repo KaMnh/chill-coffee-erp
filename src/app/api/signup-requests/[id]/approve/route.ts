@@ -2,18 +2,27 @@
  * POST /api/signup-requests/<id>/approve
  *
  * Auth: owner / manager only.
- * Body: { role: 'owner' | 'manager' | 'staff_operator' | 'employee_viewer' }
+ * Body: { role: string, employee_id?: string }
+ *   - role must be a valid VALID_ROLES entry; only an owner may grant the 'owner' role.
+ *   - employee_id (optional): explicit UUID of an existing unlinked employees row to link.
  *
  * Flow:
  *   1. Fetch signup_requests row; 404 if missing, 409 if not pending_approval.
  *   2. Read auth_user_id, email, name, employee_code from row.
  *   3. Reject (409) if employee_accounts already exists for that auth_user_id.
- *   4. INSERT employees (name, code, position=null, hourly_rate=0, is_active=true).
+ *   4. Resolve the employees row to link (link-existing-first, insert-fallback):
+ *        a) Explicit employee_id supplied → must exist AND not already have an account.
+ *        b) No explicit id but signup's employee_code matches exactly ONE unlinked
+ *           employees row → link that row automatically.
+ *        c) Neither a nor b → INSERT a new employees row (legacy/fallback behavior).
+ *      `createdEmployee` flag ensures rollback never deletes a pre-existing row.
  *   5. INSERT employee_accounts (employee_id, auth_user_id, role, status='active').
- *   6. UPSERT profiles (id=auth_user_id, display_name=name).
+ *   6. UPSERT profiles (id=auth_user_id, display_name=name). Best-effort, non-fatal.
  *   7. UPDATE signup_requests.status='approved', reviewed_by, reviewed_at.
  *
- * Best-effort rollback if 4/5/6 fail.
+ * Rollback: if step 5 fails and we created the employees row in step 4c, that row is
+ * deleted. If step 7 fails after step 5 succeeds, returns ok_with_warning (account
+ * created but signup_requests row still shows pending_approval until next refetch fix).
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { assertCanAssignRole, getServiceRoleClient, requireAuth } from "@/lib/supabase/server";

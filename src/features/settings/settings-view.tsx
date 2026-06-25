@@ -98,7 +98,7 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
             accounts={accounts}
             currentUserAuthId={currentAccount.auth_user_id}
           />
-          <SignupRequestsCard requests={signupRequestsQuery.data ?? []} />
+          <SignupRequestsCard requests={signupRequestsQuery.data ?? []} role={role} />
           <SidebarConfigForm
             sidebarDefaults={appSettings.sidebar_defaults}
             accounts={accounts}

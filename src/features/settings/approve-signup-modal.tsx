@@ -23,18 +23,27 @@ import { useApproveSignup } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { SignupRequest, UserRole } from "@/lib/types";
 
-const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer"];
+const ROLES: UserRole[] = [
+  "owner",
+  "manager",
+  "staff_operator",
+  "employee_viewer",
+  "employee_self_service"
+];
 
 interface ApproveSignupModalProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   request: SignupRequest | null;
+  /** Role of the approver — only an owner may grant `owner` (role ceiling). */
+  approverRole: UserRole;
 }
 
 export function ApproveSignupModal({
   open,
   onOpenChange,
-  request
+  request,
+  approverRole
 }: ApproveSignupModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
@@ -42,6 +51,11 @@ export function ApproveSignupModal({
 
   const [role, setRole] = useState<UserRole>("employee_viewer");
   const [error, setError] = useState<string | null>(null);
+
+  // Role ceiling: only an owner may grant `owner`. Hide it for other approvers
+  // so a manager can't reach owner via this UI (the server enforces this too).
+  const availableRoles =
+    approverRole === "owner" ? ROLES : ROLES.filter((r) => r !== "owner");
 
   useEffect(() => {
     if (open) {
@@ -101,7 +115,7 @@ export function ApproveSignupModal({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => (
+                {availableRoles.map((r) => (
                   <SelectItem key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </SelectItem>

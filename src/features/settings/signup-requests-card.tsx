@@ -13,12 +13,14 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useRejectSignup } from "@/hooks/mutations/use-settings-mutations";
-import type { SignupRequest } from "@/lib/types";
+import type { SignupRequest, UserRole } from "@/lib/types";
 import { Reveal } from "@/components/ui/reveal";
 import { ApproveSignupModal } from "./approve-signup-modal";
 
 interface SignupRequestsCardProps {
   requests: SignupRequest[];
+  /** Role of the current user (approver) — gates the `owner` option in the modal. */
+  role: UserRole;
 }
 
 /**
@@ -29,7 +31,7 @@ interface SignupRequestsCardProps {
  * preferred to an EmptyState here because the absence of pending requests
  * is the common case.)
  */
-export function SignupRequestsCard({ requests }: SignupRequestsCardProps) {
+export function SignupRequestsCard({ requests, role }: SignupRequestsCardProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
   const rejectM = useRejectSignup(supabase);
@@ -138,6 +140,7 @@ export function SignupRequestsCard({ requests }: SignupRequestsCardProps) {
           if (!open) setApproving(null);
         }}
         request={approving}
+        approverRole={role}
       />
 
       <Modal

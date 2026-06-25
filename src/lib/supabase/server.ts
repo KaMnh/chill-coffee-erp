@@ -82,3 +82,10 @@ export async function requireAuth(
   }
   return { userId: userData.user.id, role: account.role };
 }
+
+/** Only an owner may grant/modify the `owner` role. Throws (caller maps to 403). */
+export function assertCanAssignRole(approverRole: UserRole, targetRole: UserRole): void {
+  if (targetRole === "owner" && approverRole !== "owner") {
+    throw new Error("Chỉ owner mới được cấp quyền owner.");
+  }
+}

@@ -17,22 +17,34 @@
  *         Để xóa hẳn → admin manual qua Supabase Studio Auth UI.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
+import { assertCanAssignRole, getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
+import type { UserRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const VALID_ROLES = ["owner", "manager", "staff_operator", "employee_viewer"] as const;
+const VALID_ROLES = [
+  "owner",
+  "manager",
+  "staff_operator",
+  "employee_viewer",
+  "employee_self_service"
+] as const;
 const VALID_STATUS = ["active", "disabled"] as const;
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ status: "error", error: message }, { status });
 }
 
-async function ensureAuth(req: NextRequest) {
+/**
+ * Verify owner/manager. Returns the caller's row on success, or a NextResponse
+ * (error) to short-circuit. Callers must check `instanceof NextResponse`.
+ */
+async function ensureAuth(
+  req: NextRequest
+): Promise<NextResponse | { userId: string; role: string }> {
   try {
-    await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
-    return null;
+    return await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auth failed.";
     const code = message.includes("Authorization") || message.includes("Token") ? 401 : 403;
@@ -41,8 +53,9 @@ async function ensureAuth(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await ensureAuth(req);
-  if (authError) return authError;
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+  const caller = auth;
 
   const { id: authUserId } = await ctx.params;
   if (!authUserId) return badRequest("Thiếu auth_user_id");
@@ -66,6 +79,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const accountPatch: Record<string, unknown> = {};
   if (body.role !== undefined) {
     if (!VALID_ROLES.includes(body.role as never)) return badRequest("Role không hợp lệ.");
+    // Role ceiling (R3/C2): only an owner may change a role to `owner`.
+    try {
+      assertCanAssignRole(caller.role as UserRole, body.role as UserRole);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "Không đủ quyền cấp role.", 403);
+    }
     accountPatch.role = body.role;
   }
   if (body.status !== undefined) {
@@ -120,8 +139,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await ensureAuth(req);
-  if (authError) return authError;
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
 
   const { id: authUserId } = await ctx.params;
   if (!authUserId) return badRequest("Thiếu auth_user_id");

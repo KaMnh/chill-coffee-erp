@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   // (demote, disable, or change any field) — runs regardless of body contents.
   const { data: targetAccount } = await supabase
     .from("employee_accounts")
-    .select("role")
+    .select("role, employee_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (!targetAccount) return badRequest("Không tìm thấy tài khoản employee_accounts.", 404);
@@ -133,18 +133,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   if (Object.keys(employeePatch).length > 0) {
-    // Resolve employee_id from auth_user_id
-    const { data: account } = await supabase
-      .from("employee_accounts")
-      .select("employee_id")
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
-    if (!account?.employee_id) return badRequest("Không tìm thấy employee gắn với auth user.", 404);
+    // employee_id already loaded with the ceiling guard above (single SELECT).
+    if (!targetAccount.employee_id) return badRequest("Không tìm thấy employee gắn với auth user.", 404);
 
     const { error } = await supabase
       .from("employees")
       .update(employeePatch)
-      .eq("id", account.employee_id);
+      .eq("id", targetAccount.employee_id);
     if (error) return badRequest(`Không update employees: ${error.message}`, 500);
 
     // Update profile display_name if name changed

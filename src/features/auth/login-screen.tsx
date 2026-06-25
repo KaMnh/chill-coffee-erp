@@ -10,8 +10,9 @@ import { Reveal } from "@/components/ui/reveal";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useAuthSession } from "@/hooks/use-auth-session";
+import { useSupabase } from "@/hooks/use-supabase";
 
-type Mode = "sign-in" | "sign-up";
+type Mode = "sign-in" | "sign-up" | "forgot-password";
 
 /**
  * Single-card auth screen with two modes: sign-in vs viewer self-signup.
@@ -26,6 +27,7 @@ type Mode = "sign-in" | "sign-up";
 export function LoginScreen() {
   const router = useRouter();
   const { signIn, signupViewer } = useAuthSession();
+  const supabase = useSupabase();
   const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
@@ -42,7 +44,7 @@ export function LoginScreen() {
       if (mode === "sign-in") {
         await signIn(email, password);
         router.push("/");
-      } else {
+      } else if (mode === "sign-up") {
         await signupViewer(email, password, fullName);
         toast({
           semantic: "success",
@@ -50,9 +52,32 @@ export function LoginScreen() {
           message: "Quản lý sẽ duyệt tài khoản viewer trước khi bạn dùng được.",
         });
         setMode("sign-in");
+      } else {
+        // forgot-password: always show neutral message (no account enumeration)
+        if (supabase) {
+          await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/auth/reset`,
+          });
+        }
+        toast({
+          semantic: "info",
+          title: "Kiểm tra hộp thư",
+          message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu.",
+        });
+        setMode("sign-in");
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Có lỗi xảy ra. Thử lại.");
+    } catch {
+      // For forgot-password: swallow and still show neutral message
+      if (mode === "forgot-password") {
+        toast({
+          semantic: "info",
+          title: "Kiểm tra hộp thư",
+          message: "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu.",
+        });
+        setMode("sign-in");
+      } else {
+        setError("Có lỗi xảy ra. Thử lại.");
+      }
     } finally {
       setBusy(false);
     }
@@ -98,16 +123,18 @@ export function LoginScreen() {
               disabled={isBusy}
               placeholder="owner@chill.local"
             />
-            <TextField
-              label="Mật khẩu"
-              type="password"
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isBusy}
-              placeholder="••••••••"
-            />
+            {mode !== "forgot-password" && (
+              <TextField
+                label="Mật khẩu"
+                type="password"
+                autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isBusy}
+                placeholder="••••••••"
+              />
+            )}
             {mode === "sign-up" && (
               <TextField
                 label="Họ và tên"
@@ -127,23 +154,44 @@ export function LoginScreen() {
               loading={isBusy}
               className="w-full"
             >
-              {mode === "sign-in" ? "Đăng nhập" : "Gửi yêu cầu đăng ký"}
+              {mode === "sign-in"
+                ? "Đăng nhập"
+                : mode === "sign-up"
+                  ? "Gửi yêu cầu đăng ký"
+                  : "Gửi link đặt lại"}
             </Button>
           </form>
 
-          <div className="text-center text-sm text-muted">
-            {mode === "sign-in" ? (
-              <button
-                type="button"
-                className="text-ink underline-offset-4 hover:underline"
-                onClick={() => {
-                  setMode("sign-up");
-                  setError(null);
-                }}
-              >
-                Chưa có tài khoản? Đăng ký viewer
-              </button>
-            ) : (
+          <div className="text-center text-sm text-muted space-y-2">
+            {mode === "sign-in" && (
+              <>
+                <div>
+                  <button
+                    type="button"
+                    className="text-ink underline-offset-4 hover:underline"
+                    onClick={() => {
+                      setMode("forgot-password");
+                      setError(null);
+                    }}
+                  >
+                    Quên mật khẩu?
+                  </button>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    className="text-ink underline-offset-4 hover:underline"
+                    onClick={() => {
+                      setMode("sign-up");
+                      setError(null);
+                    }}
+                  >
+                    Chưa có tài khoản? Đăng ký viewer
+                  </button>
+                </div>
+              </>
+            )}
+            {mode !== "sign-in" && (
               <button
                 type="button"
                 className="text-ink underline-offset-4 hover:underline"
@@ -152,7 +200,7 @@ export function LoginScreen() {
                   setError(null);
                 }}
               >
-                Đã có tài khoản? Đăng nhập
+                Quay lại đăng nhập
               </button>
             )}
           </div>

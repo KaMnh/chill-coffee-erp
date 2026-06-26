@@ -159,3 +159,25 @@ export async function fetchUnlinkedAccounts(supabase: SupabaseClient): Promise<U
   if (!res.ok || json.status !== "ok") throw new Error(json.error ?? "Không tải được tài khoản chưa gắn.");
   return json.accounts ?? [];
 }
+
+/** Re-point một tài khoản ĐÃ gắn sang NV đích khác (owner-only). */
+export async function repointAccount(
+  supabase: SupabaseClient,
+  authUserId: string,
+  targetEmployeeId: string,
+  sourceEmployeeId: string
+) {
+  const headers = { ...(await authHeader(supabase)), "Content-Type": "application/json" };
+  const res = await fetch(`/api/users/${authUserId}/repoint`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      target_employee_id: targetEmployeeId,
+      source_employee_id: sourceEmployeeId
+    })
+  });
+  const json = (await res.json()) as { status: string; error?: string };
+  if (!res.ok || json.status !== "ok") {
+    throw new Error(json.error ?? `Đổi nhân viên thất bại (HTTP ${res.status}).`);
+  }
+}

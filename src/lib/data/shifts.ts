@@ -5,7 +5,7 @@ import { toAppError } from "./_common";
 export async function loadShiftAssignments(supabase: SupabaseClient, businessDate: string) {
   const { data, error } = await supabase
     .from("shift_assignments")
-    .select("id, employee_id, business_date, check_in_at, check_out_at, total_minutes, status, employees(name, position)")
+    .select("id, employee_id, business_date, check_in_at, check_out_at, total_minutes, status, check_in_ip, check_in_user_agent, employees(name, position)")
     .eq("business_date", businessDate)
     .order("check_in_at", { ascending: false, nullsFirst: false });
   if (error) throw toAppError(error, "Không tải được danh sách ca.");

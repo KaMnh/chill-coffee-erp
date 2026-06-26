@@ -35,8 +35,21 @@ services:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
       SUPABASE_ANON_KEY: ${ANON_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?run supabase/utils/generate-keys.sh and paste into Section 3}
+      # Employee self-check-in proxy security (Section 13 in .env.example).
+      # CHECKIN_PROXY_SECRET must be set in production (non-empty) so the
+      # /api/checkin route can verify requests arrived through the reverse proxy.
+      CHECKIN_PROXY_SECRET: ${CHECKIN_PROXY_SECRET}
+      CHECKIN_TRUSTED_PROXY_COUNT: ${CHECKIN_TRUSTED_PROXY_COUNT:-1}
+      CHECKIN_TRUSTED_IP_HEADER: ${CHECKIN_TRUSTED_IP_HEADER:-}
+      CHECKIN_RATE_MAX: ${CHECKIN_RATE_MAX:-10}
+      CHECKIN_RATE_WINDOW_MS: ${CHECKIN_RATE_WINDOW_MS:-60000}
+    # SECURITY: Port is bound to loopback only. Direct off-host access to the raw
+    # app port is blocked at the kernel level. A reverse proxy on this host MUST
+    # be the sole public listener; it forwards to 127.0.0.1:${APP_PORT} and is
+    # responsible for injecting the x-checkin-proxy-secret header so the check-in
+    # IP gate can trust the request came through the expected proxy.
     ports:
-      - "${APP_PORT:-3009}:3000"
+      - "127.0.0.1:${APP_PORT:-3009}:3000"
     volumes:
       # Shared with chill-backup-cron. The restore endpoint writes pre-restore
       # snapshots to /backups/pre-restore/ (chmod 1777 by backup-cron init) so

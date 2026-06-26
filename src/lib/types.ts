@@ -1,6 +1,6 @@
 ﻿import type { ActiveShiftInput, ShiftBonusConfig } from "@/lib/labor-cost";
 
-export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer";
+export type UserRole = "owner" | "manager" | "staff_operator" | "employee_viewer" | "employee_self_service";
 
 export type DashboardPreferences = {
   stock_sort?: string | null;
@@ -100,6 +100,10 @@ export type ShiftAssignment = {
   check_out_at: string | null;
   total_minutes: number | null;
   status: string;
+  /** Audit: source IP of a self-check-in (null for operator-created shifts). */
+  check_in_ip?: string | null;
+  /** Audit: user-agent of a self-check-in device. */
+  check_in_user_agent?: string | null;
   employee_name?: string | null;
   position?: string | null;
 };
@@ -558,3 +562,33 @@ export interface BackupRun {
 export interface BackupRunWithLog extends BackupRun {
   log_text: string;
 }
+
+// =====================================================================
+// Self check-in (Task 5)
+// =====================================================================
+
+export interface ShopAnchor {
+  id: string;
+  label: string;
+  device_token_hash: string;
+  current_public_ip: string | null;
+  last_heartbeat_at: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CheckinNetworkConfig {
+  enabled: boolean;
+  reject_message: string;
+  grace_hours: number;
+}
+
+export interface MyCheckinStatus {
+  employee_name: string;
+  checked_in_today: boolean;
+  check_in_at: string | null;
+}
+
+export type CheckinResult = { employee_name: string; check_in_at: string; already_checked_in: boolean };

@@ -53,7 +53,7 @@ create table if not exists public.employee_accounts (
   id uuid primary key default gen_random_uuid(),
   employee_id uuid references public.employees(id) on delete set null,
   auth_user_id uuid not null references auth.users(id) on delete cascade,
-  role text not null check (role in ('owner','manager','staff_operator','employee_viewer')),
+  role text not null constraint employee_accounts_role_check check (role in ('owner','manager','staff_operator','employee_viewer','employee_self_service')),
   status text not null default 'active' check (status in ('active','pending','disabled')),
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
@@ -182,6 +182,49 @@ create table if not exists public.shift_payroll_records (
   created_at timestamptz not null default now()
 );
 create index if not exists shift_payroll_records_date_idx on public.shift_payroll_records(business_date);
+
+-- Self-check-in (2026-06-25): dấu IP + thiết bị cho mỗi check-in.
+alter table public.shift_assignments add column if not exists check_in_ip inet;
+alter table public.shift_assignments add column if not exists check_in_user_agent text;
+
+-- (c) FAIL-FAST preflight + partial unique index trên ca đang mở.
+do $$
+declare v_dupe int;
+begin
+  delete from public.shift_assignments sa using (
+    select id, row_number() over (
+      partition by employee_id, business_date
+      order by check_in_at asc nulls first, created_at asc, id asc) rn
+    from public.shift_assignments where status = 'checked_in'
+  ) d
+  where sa.id = d.id and d.rn > 1
+    and not exists (select 1 from public.shift_payroll_records p where p.shift_assignment_id = sa.id);
+  select count(*) into v_dupe from (
+    select employee_id, business_date from public.shift_assignments
+    where status = 'checked_in' group by employee_id, business_date having count(*) > 1
+  ) x;
+  if v_dupe > 0 then
+    raise exception 'Khong the tao unique index open-shift: con % nhom (employee_id@business_date) trung co payroll: %. Don tay roi chay lai.', v_dupe, (select string_agg(employee_id::text || '@' || business_date::text, ', ') from (select employee_id, business_date from public.shift_assignments where status = 'checked_in' group by employee_id, business_date having count(*) > 1) z);
+  end if;
+  create unique index if not exists shift_assignments_one_open_per_day
+    on public.shift_assignments (employee_id, business_date) where status = 'checked_in';
+end $$;
+
+-- (d) FAIL-FAST preflight + unique employee_accounts.employee_id.
+do $$
+declare v_dupe int;
+begin
+  -- reconcile payroll-free duplicate accounts is unsafe (accounts ≠ shifts); fail-fast on ANY dup.
+  select count(*) into v_dupe from (
+    select employee_id from public.employee_accounts where employee_id is not null
+    group by employee_id having count(*) > 1
+  ) x;
+  if v_dupe > 0 then
+    raise exception 'Khong the tao unique employee_id: % nhan vien co >1 tai khoan: %. Don tay roi chay lai.', v_dupe, (select string_agg(employee_id::text, ', ') from (select employee_id from public.employee_accounts where employee_id is not null group by employee_id having count(*) > 1) z);
+  end if;
+  create unique index if not exists employee_accounts_one_account_per_employee
+    on public.employee_accounts (employee_id) where employee_id is not null;
+end $$;
 
 -- -----------------------------------------------------------------------------
 -- 4. Sales (POS — populated by ingest_kiotviet_batch RPC)
@@ -384,6 +427,17 @@ create table if not exists public.app_settings (
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now()
 );
+
+-- checkin_anchor (2026-06-25): thiết bị quán giữ IP công cộng "tươi" (anchor-heartbeat).
+create table if not exists public.checkin_anchor (
+  id uuid primary key default gen_random_uuid(), label text not null,
+  device_token_hash text not null, current_public_ip inet, last_heartbeat_at timestamptz,
+  is_active boolean not null default true, created_by uuid references auth.users(id),
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create index if not exists checkin_anchor_active_idx on public.checkin_anchor(is_active) where is_active;
+drop trigger if exists checkin_anchor_set_updated_at on public.checkin_anchor;
+create trigger checkin_anchor_set_updated_at before update on public.checkin_anchor
+  for each row execute function public.set_updated_at();
 
 create table if not exists public.integration_clients (
   id uuid primary key default gen_random_uuid(),

@@ -33,6 +33,8 @@ const ITEM: Record<ViewKey, MobileNavItem> = {
   pivot:     { key: "pivot",     label: "Pivot",         short: "Pivot",     icon: "barChart3" },
   cashflow:  { key: "cashflow",  label: "Dòng tiền",     short: "Dòng tiền", icon: "trendingUp" },
   settings:  { key: "settings",  label: "Thiết lập",     short: "Thiết lập", icon: "settings" },
+  // Chấm công (Task 8 stub): có trong app thật; mockup playground không dựng màn riêng.
+  checkin:   { key: "checkin",   label: "Chấm công",     short: "Chấm công", icon: "clock" },
 };
 
 // Feedback owner 2026-06-11: Bàn giao ít dùng nhất → KHÔNG đặt ở bottom bar,
@@ -76,6 +78,7 @@ export const VIEW_TITLES: Record<ViewKey, string> = {
   pivot: "Pivot",
   cashflow: "Dòng tiền",
   settings: "Thiết lập",
+  checkin: "Chấm công",
 };
 
 /** View khả dụng theo role (mirror DEFAULT_SIDEBAR_BY_ROLE cho 2 role preview). */

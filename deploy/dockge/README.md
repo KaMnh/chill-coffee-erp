@@ -5,9 +5,14 @@ This folder is a self-contained [Dockge](https://dockge.kuma.pet/) stack that ru
 - The Next.js app (pulled as a pre-built image from GHCR)
 - The full self-hosted Supabase stack (13 services: Postgres, Auth, Kong, Studio, ...)
 
-The user handles NAT + reverse proxy + TLS externally. Only two host ports
-reach the network by default: `APP_PORT` (Next.js) and `KONG_HTTP_PORT`
-(Supabase API gateway).
+The user handles NAT + reverse proxy + TLS externally. Two host ports are
+published by the stack: `APP_PORT` (Next.js) and `KONG_HTTP_PORT` (Supabase
+API gateway). **`APP_PORT` is bound to `127.0.0.1` only** — it is not
+reachable from any other host on the network. A reverse proxy running on this
+machine (nginx, Caddy, Traefik, etc.) must be the sole public listener and
+must forward to `http://127.0.0.1:${APP_PORT}`. This binding is required for
+the employee self-check-in IP gate to be trustworthy (see §C1 of the design
+spec and `docs/checkin-self-service-ops.md`).
 
 ## Prerequisites
 
@@ -161,12 +166,14 @@ inside the Docker network.
 ### 8. Smoke test
 
 ```bash
-curl -fsS http://localhost:${APP_PORT:-3009}/        # 200 OK
+curl -fsS http://localhost:${APP_PORT:-3009}/        # 200 OK (from the server itself)
 curl -fsS http://localhost:${KONG_HTTP_PORT:-8000}/  # Kong response (HTTP 404 is fine — root has no route)
-
-# On a LAN device:
-xdg-open http://<server-ip>:${APP_PORT:-3009}        # Chill ERP login screen
 ```
+
+> **Note:** `APP_PORT` is loopback-bound (`127.0.0.1`) and is **not reachable
+> from other hosts**. To access the app from a browser, go through your reverse
+> proxy's public URL (e.g. `https://app.example.com`). Direct LAN access to
+> `http://<server-ip>:${APP_PORT}` will be refused — this is intentional.
 
 ### 9. Configure your reverse proxy
 

@@ -4,7 +4,8 @@ import type { IconName } from "@/components/ui/icons";
 export type ViewKey =
   | "dashboard" | "expenses" | "shifts" | "cash" | "safe" | "period-close"
   | "handover" | "inventory"
-  | "reports" | "pivot" | "cashflow" | "settings";
+  | "reports" | "pivot" | "cashflow" | "settings"
+  | "checkin";
 
 export type NavGroupKey =
   | "overview" | "cashflow" | "staff" | "inventory" | "reports" | "system";
@@ -34,13 +35,15 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { key: "pivot",     label: "Pivot",         icon: "barChart3",       roles: ["owner", "manager"], group: "reports" },
   { key: "cashflow",  label: "Dòng tiền",     icon: "trendingUp",      roles: ["owner", "manager"], group: "overview" },
   { key: "settings",  label: "Thiết lập",     icon: "settings",        roles: ["owner", "manager"], group: "system" },
+  { key: "checkin",   label: "Chấm công",     icon: "clock",           roles: ["employee_self_service"], group: "staff" },
 ];
 
 export const DEFAULT_SIDEBAR_BY_ROLE: Record<UserRole, ReadonlyArray<ViewKey>> = {
-  owner:           ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
-  manager:         ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
-  staff_operator:  ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports"],
-  employee_viewer: ["dashboard"],
+  owner:                 ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
+  manager:               ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
+  staff_operator:        ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports"],
+  employee_viewer:       ["dashboard"],
+  employee_self_service: ["checkin"],
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -48,6 +51,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   manager: "Quản lý",
   staff_operator: "Nhân viên vận hành",
   employee_viewer: "Viewer",
+  employee_self_service: "Nhân viên",
 };
 
 export function hasBasePageAccess(role: UserRole, key: ViewKey): boolean {
@@ -130,10 +134,11 @@ export function getGroupedNav(
  * tab backfill ứng viên kế tiếp để vẫn đủ 4 tab.
  */
 const MOBILE_TAB_PREFERENCE: Record<UserRole, ReadonlyArray<ViewKey>> = {
-  owner:           ["dashboard", "safe", "reports", "cash", "cashflow", "period-close", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
-  manager:         ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover"],
-  staff_operator:  ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover"],
-  employee_viewer: ["dashboard"],
+  owner:                 ["dashboard", "safe", "reports", "cash", "cashflow", "period-close", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
+  manager:               ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover"],
+  staff_operator:        ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover"],
+  employee_viewer:       ["dashboard"],
+  employee_self_service: ["checkin"],
 };
 
 export const MOBILE_TAB_COUNT = 4;

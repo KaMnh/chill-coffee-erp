@@ -74,4 +74,10 @@ export const queryKeys = {
   // Kết toán kỳ (2026-06-12)
   periodClosePreview: () => ["period-close", "preview"] as const,
   periodCloses: () => ["period-close", "list"] as const,
+
+  // Task 8: Employee self-check-in status (2026-06-25)
+  myCheckinStatus: () => ["my-checkin-status"] as const,
+
+  // Task 9: Owner anchor/gate panel (2026-06-25)
+  shopAnchors: () => ["shop-anchors"] as const,
 };

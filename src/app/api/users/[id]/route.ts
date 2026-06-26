@@ -17,22 +17,39 @@
  *         Để xóa hẳn → admin manual qua Supabase Studio Auth UI.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
+import {
+  assertCanAssignRole,
+  assertCanModifyTarget,
+  getServiceRoleClient,
+  requireAuth
+} from "@/lib/supabase/server";
+import type { UserRole } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const VALID_ROLES = ["owner", "manager", "staff_operator", "employee_viewer"] as const;
+const VALID_ROLES = [
+  "owner",
+  "manager",
+  "staff_operator",
+  "employee_viewer",
+  "employee_self_service"
+] as const;
 const VALID_STATUS = ["active", "disabled"] as const;
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ status: "error", error: message }, { status });
 }
 
-async function ensureAuth(req: NextRequest) {
+/**
+ * Verify owner/manager. Returns the caller's row on success, or a NextResponse
+ * (error) to short-circuit. Callers must check `instanceof NextResponse`.
+ */
+async function ensureAuth(
+  req: NextRequest
+): Promise<NextResponse | { userId: string; role: string }> {
   try {
-    await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
-    return null;
+    return await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auth failed.";
     const code = message.includes("Authorization") || message.includes("Token") ? 401 : 403;
@@ -41,8 +58,9 @@ async function ensureAuth(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await ensureAuth(req);
-  if (authError) return authError;
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+  const caller = auth;
 
   const { id: authUserId } = await ctx.params;
   if (!authUserId) return badRequest("Thiếu auth_user_id");
@@ -62,10 +80,31 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   const supabase = getServiceRoleClient();
 
+  // Load the target account's CURRENT role before applying ANY change.
+  // Ceiling guard: only an owner may modify an account that is currently an owner
+  // (demote, disable, or change any field) — runs regardless of body contents.
+  const { data: targetAccount } = await supabase
+    .from("employee_accounts")
+    .select("role, employee_id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (!targetAccount) return badRequest("Không tìm thấy tài khoản employee_accounts.", 404);
+  try {
+    assertCanModifyTarget(caller.role as UserRole, targetAccount.role as UserRole);
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Không đủ quyền sửa tài khoản.", 403);
+  }
+
   // Update employee_accounts (role/status)
   const accountPatch: Record<string, unknown> = {};
   if (body.role !== undefined) {
     if (!VALID_ROLES.includes(body.role as never)) return badRequest("Role không hợp lệ.");
+    // Role ceiling (R3/C2): only an owner may change a role to `owner`.
+    try {
+      assertCanAssignRole(caller.role as UserRole, body.role as UserRole);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "Không đủ quyền cấp role.", 403);
+    }
     accountPatch.role = body.role;
   }
   if (body.status !== undefined) {
@@ -94,18 +133,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   if (Object.keys(employeePatch).length > 0) {
-    // Resolve employee_id from auth_user_id
-    const { data: account } = await supabase
-      .from("employee_accounts")
-      .select("employee_id")
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
-    if (!account?.employee_id) return badRequest("Không tìm thấy employee gắn với auth user.", 404);
+    // employee_id already loaded with the ceiling guard above (single SELECT).
+    if (!targetAccount.employee_id) return badRequest("Không tìm thấy employee gắn với auth user.", 404);
 
     const { error } = await supabase
       .from("employees")
       .update(employeePatch)
-      .eq("id", account.employee_id);
+      .eq("id", targetAccount.employee_id);
     if (error) return badRequest(`Không update employees: ${error.message}`, 500);
 
     // Update profile display_name if name changed
@@ -120,28 +154,38 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await ensureAuth(req);
-  if (authError) return authError;
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+  const caller = auth;
 
   const { id: authUserId } = await ctx.params;
   if (!authUserId) return badRequest("Thiếu auth_user_id");
 
   const supabase = getServiceRoleClient();
 
-  // Soft delete: disable account + deactivate employee
+  // Load the target account's CURRENT role before disabling.
+  // Ceiling guard: only an owner may disable an account that is currently an owner —
+  // matches the same protection applied in PATCH.
   const { data: account } = await supabase
     .from("employee_accounts")
-    .select("employee_id")
+    .select("role, employee_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
+  if (!account) return badRequest("Không tìm thấy tài khoản employee_accounts.", 404);
+  try {
+    assertCanModifyTarget(caller.role as UserRole, account.role as UserRole);
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Không đủ quyền vô hiệu hóa tài khoản.", 403);
+  }
 
+  // Soft delete: disable account + deactivate employee
   const { error: accError } = await supabase
     .from("employee_accounts")
     .update({ status: "disabled" })
     .eq("auth_user_id", authUserId);
   if (accError) return badRequest(`Không disable account: ${accError.message}`, 500);
 
-  if (account?.employee_id) {
+  if (account.employee_id) {
     await supabase
       .from("employees")
       .update({ is_active: false })

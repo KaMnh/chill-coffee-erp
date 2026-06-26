@@ -69,6 +69,10 @@ grant execute on function public.fresh_anchor_ips(numeric) to service_role;
 -- so the shop anchor device keeps its IP fresh under ANY session (manager/staff).
 revoke execute on function public.record_shop_anchor_heartbeat(uuid, inet) from public, anon, authenticated;
 grant execute on function public.record_shop_anchor_heartbeat(uuid, inet) to service_role;
+-- Re-point account (2026-06-26): service-role-only (route verify owner JWT → trusted
+-- p_auth_user_id). Re-assert sau blanket grant để client không gọi thẳng RPC này.
+revoke execute on function public.repoint_account(uuid, uuid, uuid) from public, anon, authenticated;
+grant execute on function public.repoint_account(uuid, uuid, uuid) to service_role;
 
 -- Default privileges — applies to FUTURE objects created by this role
 -- (typically `postgres` via scripts/db-init.mjs or the migrator container).

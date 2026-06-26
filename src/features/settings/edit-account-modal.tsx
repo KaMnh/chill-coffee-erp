@@ -310,7 +310,7 @@ export function EditAccountModal({
 
           {canRepoint && (
             <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-border p-3">
-              <p className="text-sm font-medium text-ink">Đổi nhân viên cho tài khoản</p>
+              <label htmlFor="edit-account-repoint" className="text-sm font-medium text-ink">Đổi nhân viên cho tài khoản</label>
               {repointError && (
                 <AlertBanner variant="danger" title="Không đổi được">
                   {repointError}
@@ -330,7 +330,7 @@ export function EditAccountModal({
                     }}
                     disabled={repointM.isPending}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="edit-account-repoint" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

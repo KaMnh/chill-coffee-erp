@@ -124,8 +124,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       .from("employees")
       .select("id")
       .eq("id", body.employee_id)
+      .eq("is_active", true)
       .maybeSingle();
-    if (!emp) return badRequest("Nhân viên không tồn tại.", 400);
+    if (!emp) return badRequest("Nhân viên không tồn tại hoặc đã nghỉ.", 400);
     const { data: taken } = await supabase
       .from("employee_accounts")
       .select("id")

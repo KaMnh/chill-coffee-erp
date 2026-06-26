@@ -27,6 +27,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertCanAssignRole, getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/types";
+import { MANAGE_USERS_ROLES } from "@/lib/api-roles";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,12 +40,6 @@ const VALID_ROLES = [
   "employee_self_service"
 ] as const;
 type Role = (typeof VALID_ROLES)[number];
-
-/**
- * Roles được phép quản lý/cấp tài khoản (POST/PATCH/DELETE /api/users…).
- * owner + manager — KHÔNG owner-only. Guard chống siết nhầm (regression test).
- */
-export const MANAGE_USERS_ROLES: UserRole[] = ["owner", "manager"];
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ status: "error", error: message }, { status });

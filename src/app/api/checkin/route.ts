@@ -2,17 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
 import { parseClientIp, isIpAllowed } from "@/lib/ip-allowlist";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { UserRole } from "@/lib/types";
+import { CHECKIN_ALLOWED_ROLES } from "@/lib/api-roles";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/**
- * Roles allowed to self-check-in. Mọi cấp DƯỚI owner đều phải chấm công
- * (manager + staff_operator + employee_self_service); owner KHÔNG tự chấm công
- * (owner vận hành/sửa giờ). Đây là cổng authz thật của route — test trực tiếp.
- */
-export const CHECKIN_ALLOWED_ROLES: UserRole[] = ["employee_self_service", "staff_operator", "manager"];
 
 const limiter = createRateLimiter({ max: Number(process.env.CHECKIN_RATE_MAX ?? 10), windowMs: Number(process.env.CHECKIN_RATE_WINDOW_MS ?? 60_000) });
 const TRUSTED_PROXY_COUNT = Math.max(1, Number(process.env.CHECKIN_TRUSTED_PROXY_COUNT ?? 1));

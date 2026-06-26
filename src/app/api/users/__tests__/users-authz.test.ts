@@ -24,7 +24,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 import { requireAuth } from "@/lib/supabase/server";
-import { MANAGE_USERS_ROLES } from "@/app/api/users/route";
+import { MANAGE_USERS_ROLES } from "@/lib/api-roles";
 
 beforeAll(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL ||= "http://localhost:54321";

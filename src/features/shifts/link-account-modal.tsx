@@ -191,6 +191,11 @@ export function LinkAccountModal({
 
           <TabsContent value="link">
             <form onSubmit={handleLink} className="space-y-3">
+              <p className="text-xs text-muted">
+                Chỉ hiện tài khoản CHƯA gắn nhân viên nào. Tài khoản tạo ở Cài đặt
+                thường đã gắn sẵn nên không xuất hiện ở đây — muốn cấp login cho{" "}
+                {emp.name}, hãy dùng tab &quot;Tạo mới&quot;.
+              </p>
               {unlinkedAccounts.length === 0 ? (
                 <p className="text-sm text-muted">
                   Không có tài khoản nào chưa gắn nhân viên. Dùng tab &quot;Tạo mới&quot;.

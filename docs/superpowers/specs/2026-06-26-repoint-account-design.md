@@ -182,7 +182,7 @@ Mẫu theo `database/tests/310_self_checkin.sql` (fixtures auth.users/employees/
 - [ ] UI trong Edit Account modal, bước xác nhận tách khỏi "Lưu". (§2.5, §4.3)
 - [ ] TDD: pgTAP + Vitest xanh; có test cho mọi nhánh. (§6, §7)
 - [ ] **Triple-write RPC lock-down (002 + 003 + migration)** — re-assert revoke/grant sau blanket grant 003 ([B-1]). (§4.1, §8)
-- [ ] **Upsert profile** (khớp PATCH), không UPDATE-only ([B-3]). (§4.1 b10)
+- [ ] **Upsert profile** (khớp PATCH), không UPDATE-only ([B-3]). (§4.1 b9)
 - [ ] **Stale-source guard** `p_expected_source_employee_id` ([NB-1]). (§4.1 b7, §4.2, §4.3)
 - [ ] **Concurrency-safe**: `FOR UPDATE` + atomic conditional UPDATE (không TOCTOU) ([B-NEW]). (§4.1 b2, b7)
 - [ ] **Helper thuần + Vitest** cho mapper/validate/self ([B-2]). (§4.2, §7.2)
@@ -204,8 +204,8 @@ Spec v1 bị Codex **REJECT**. Đã xác minh từng finding (đúng cả 5) và
 
 - **[B-1] (blocking, security)** Thiếu re-assert lock-down ở `003_rls.sql` (blanket grant dòng 57 cấp lại execute cho `authenticated` sau 002). → **Đã sửa**: triple-write 002+003+migration (§4.1, §8); acceptance §6.4 + pgTAP §7.1 #9 kiểm trên DB sạch sau 001→002→003.
 - **[B-2] (blocking)** Yêu cầu route-only (self=400, owner=403, SQLSTATE→HTTP) không có test. → **Đã sửa**: tách helper thuần `src/lib/repoint-account.ts` + Vitest (§4.2, §7.2, §8); owner-only qua `requireAuth(["owner"])`.
-- **[B-3] (blocking)** Spec dùng `UPDATE profiles` nhưng PATCH dùng upsert → thiếu profile row sẽ fail acceptance. → **Đã sửa**: upsert `ON CONFLICT (id)` (§4.1 b10); pgTAP §7.1 #1/#1b.
-- **[NB-1]** Confirm không bind NV nguồn (stale UI). → **Đã thêm** `p_expected_source_employee_id` + guard (§4.1 b4, §4.2, §4.3); pgTAP §7.1 #8.
+- **[B-3] (blocking)** Spec dùng `UPDATE profiles` nhưng PATCH dùng upsert → thiếu profile row sẽ fail acceptance. → **Đã sửa**: upsert `ON CONFLICT (id)` (§4.1 b9); pgTAP §7.1 #1/#1b.
+- **[NB-1]** Confirm không bind NV nguồn (stale UI). → **Đã thêm** `p_expected_source_employee_id` + guard (§4.1 b7, §4.2, §4.3); pgTAP §7.1 #8.
 - **[NB-2]** pgTAP chỉ kiểm 1 bảng con. → **Đã mở rộng** kiểm cả `shift_assignments`+`shift_payroll_records`+`expense_history_permissions` (§7.1 #2).
 
 ### Codex re-review v2 (resumed thread) — REJECT với 1 finding blocking MỚI, đã sửa:

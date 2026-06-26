@@ -147,10 +147,9 @@ export function CheckinConfigForm() {
       const id = created.id;
       window.localStorage.setItem("checkin:anchorId", id);
       window.localStorage.setItem("checkin:anchorToken", token);
-      // Fire one heartbeat immediately to populate current_public_ip.
+      // Fire one heartbeat immediately to populate current_public_ip (token-only).
       try {
-        const headers = await authHeader(supabase);
-        await sendAnchorHeartbeat(id, token, headers);
+        await sendAnchorHeartbeat(id, token);
       } catch {
         // The anchor row exists; IP just won't show until the next heartbeat.
       }

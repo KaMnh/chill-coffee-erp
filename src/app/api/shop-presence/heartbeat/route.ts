@@ -1,12 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
-import { getServiceRoleClient, getUserClient, requireAuth } from "@/lib/supabase/server";
+import { getServiceRoleClient } from "@/lib/supabase/server";
 import { parseClientIp } from "@/lib/ip-allowlist";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TRUSTED_PROXY_COUNT = Math.max(1, Number(process.env.CHECKIN_TRUSTED_PROXY_COUNT ?? 1));
+
+// Heartbeat is authenticated by the DEVICE TOKEN alone — NOT an owner session — so
+// the always-on shop anchor device keeps its IP fresh under any logged-in session
+// (manager/staff). Light per-source-IP rate-limit: legit traffic is ~1 ping/focus/6h.
+const limiter = createRateLimiter({ max: 30, windowMs: 60_000 });
 
 /** Constant-time comparison để tránh timing attack. */
 function safeEquals(a: string, b: string): boolean {
@@ -18,13 +24,15 @@ function safeEquals(a: string, b: string): boolean {
 const sha256Hex = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  try {
-    await requireAuth(authHeader, ["owner"]);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Auth failed.";
-    const code = msg.includes("Authorization") || msg.includes("Token") ? 401 : 403;
-    return NextResponse.json({ status: "error", error: msg }, { status: code });
+  // (C1) proxy-secret parity with /api/checkin: this route WRITES the IP that
+  // check-in trusts, so it must be gated at least as strongly. Fail-closed in prod.
+  const proxySecret = process.env.CHECKIN_PROXY_SECRET;
+  if (!proxySecret) {
+    if (process.env.NODE_ENV === "production")
+      return NextResponse.json({ status: "error", error: "Chưa cấu hình (proxy)." }, { status: 503 });
+  } else {
+    const presented = req.headers.get("x-checkin-proxy-secret") || "";
+    if (!safeEquals(presented, proxySecret)) return NextResponse.json({ status: "error", error: "Forbidden." }, { status: 403 });
   }
 
   let anchorId: string | undefined;
@@ -40,16 +48,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "error", error: "Thiếu anchor_id hoặc device_token." }, { status: 400 });
   }
 
-  const admin = getServiceRoleClient();
-  const { data: anchor } = await admin
-    .from("checkin_anchor")
-    .select("id, device_token_hash")
-    .eq("id", anchorId)
-    .maybeSingle();
-  if (!anchor || !safeEquals(sha256Hex(deviceToken), String(anchor.device_token_hash))) {
-    return NextResponse.json({ status: "error", error: "Thiết bị không hợp lệ." }, { status: 403 });
-  }
-
   const ip = parseClientIp(req.headers, {
     trustedProxyCount: TRUSTED_PROXY_COUNT,
     trustedHeader: process.env.CHECKIN_TRUSTED_IP_HEADER || null,
@@ -58,9 +56,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "error", error: "Không xác định được IP thật của thiết bị (kiểm tra proxy)." }, { status: 400 });
   }
 
-  // Call via the owner JWT so the SQL owner-gate (app_role()='owner') is the enforced boundary.
-  const userClient = getUserClient(authHeader);
-  const { data, error } = await userClient.rpc("record_shop_anchor_heartbeat", {
+  // Rate-limit by SOURCE IP (not the attacker-controllable anchor_id) BEFORE the DB
+  // lookup, and sweep every request so the bucket map stays bounded by distinct IPs.
+  const now = Date.now();
+  const rl = limiter.check(ip, now);
+  limiter.sweep(now);
+  if (!rl.allowed) {
+    return NextResponse.json({ status: "error", error: "Quá nhiều heartbeat." }, { status: 429 });
+  }
+
+  const admin = getServiceRoleClient();
+  const { data: anchor } = await admin
+    .from("checkin_anchor")
+    .select("id, device_token_hash")
+    .eq("id", anchorId)
+    .maybeSingle();
+  // The device token is the credential — constant-time compare against the stored hash.
+  if (!anchor || !safeEquals(sha256Hex(deviceToken), String(anchor.device_token_hash))) {
+    return NextResponse.json({ status: "error", error: "Thiết bị không hợp lệ." }, { status: 403 });
+  }
+
+  // Token verified → write via SERVICE ROLE (record_shop_anchor_heartbeat is
+  // service-role-only). No owner session required. IP is the server-read source IP.
+  const { data, error } = await admin.rpc("record_shop_anchor_heartbeat", {
     p_anchor_id: anchorId,
     p_public_ip: ip,
   });

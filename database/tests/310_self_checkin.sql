@@ -7,7 +7,7 @@
 -- See docs/superpowers/plans/2026-06-25-employee-login-self-checkin.md Task 4.
 
 begin;
-select plan(25);
+select plan(28);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$
@@ -148,6 +148,20 @@ select ok(
 select ok(
   has_function_privilege('service_role', 'public.fresh_anchor_ips(numeric)', 'execute'),
   'service_role CAN execute fresh_anchor_ips'
+);
+
+-- record_shop_anchor_heartbeat(uuid, inet) — service-role-only (token-only route, no owner session)
+select ok(
+  not has_function_privilege('anon', 'public.record_shop_anchor_heartbeat(uuid, inet)', 'execute'),
+  'anon CANNOT execute record_shop_anchor_heartbeat'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.record_shop_anchor_heartbeat(uuid, inet)', 'execute'),
+  'authenticated CANNOT execute record_shop_anchor_heartbeat'
+);
+select ok(
+  has_function_privilege('service_role', 'public.record_shop_anchor_heartbeat(uuid, inet)', 'execute'),
+  'service_role CAN execute record_shop_anchor_heartbeat'
 );
 
 -- =========================================================================

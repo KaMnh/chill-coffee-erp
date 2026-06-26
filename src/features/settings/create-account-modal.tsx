@@ -60,12 +60,18 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
   const [position, setPosition] = useState("");
   const [code, setCode] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
-  const [linkEmployeeId, setLinkEmployeeId] = useState("");
+  // Explicit, REQUIRED choice — guardrail against silently creating a duplicate
+  // employee. "" = chưa chọn, "__new__" = tạo nhân viên mới, else an employee id.
+  const [employeeChoice, setEmployeeChoice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const isNewMode = employeeChoice === "__new__";
   // When an existing employee is picked, we LINK the new login to it (no duplicate
-  // employee) and the name/position/rate come from that employee.
-  const linkedEmp = linkEmployeeId ? unlinkedEmployees.find((e) => e.id === linkEmployeeId) ?? null : null;
+  // employee); name/position/rate come from that employee.
+  const linkedEmp =
+    employeeChoice && employeeChoice !== "__new__"
+      ? unlinkedEmployees.find((e) => e.id === employeeChoice) ?? null
+      : null;
 
   function reset() {
     setEmail("");
@@ -75,7 +81,7 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
     setPosition("");
     setCode("");
     setHourlyRate("");
-    setLinkEmployeeId("");
+    setEmployeeChoice("");
     setError(null);
   }
 
@@ -95,6 +101,16 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
     }
     if (password.length < 8) {
       setError("Mật khẩu tối thiểu 8 ký tự.");
+      return;
+    }
+
+    // Guardrail: force an explicit choice so we never silently create a duplicate NV.
+    if (employeeChoice === "") {
+      setError("Hãy chọn nhân viên có sẵn, hoặc 'Tạo nhân viên mới'.");
+      return;
+    }
+    if (!isNewMode && !linkedEmp) {
+      setError("Nhân viên đã chọn không còn khả dụng (có thể vừa được cấp tài khoản). Chọn lại.");
       return;
     }
 
@@ -151,8 +167,8 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
       <ModalContent>
         <ModalTitle>Thêm tài khoản</ModalTitle>
         <ModalDescription>
-          Tạo auth user + employee + employee_account trong 1 bước. Tài khoản
-          ở trạng thái active ngay.
+          Tạo tài khoản đăng nhập cho một nhân viên — chọn nhân viên có sẵn để gắn,
+          hoặc tạo nhân viên mới. Tài khoản active ngay.
         </ModalDescription>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
@@ -162,30 +178,29 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
             </AlertBanner>
           )}
 
-          {unlinkedEmployees.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="create-account-link" className="text-sm text-ink-2">
-                Gắn vào nhân viên có sẵn (tuỳ chọn)
-              </label>
-              <Select
-                value={linkEmployeeId || "__new__"}
-                onValueChange={(v) => setLinkEmployeeId(v === "__new__" ? "" : v)}
-                disabled={isBusy}
-              >
-                <SelectTrigger id="create-account-link" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__new__">— Tạo nhân viên mới —</SelectItem>
-                  {unlinkedEmployees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-account-link" className="text-sm text-ink-2">
+              Tài khoản này dành cho nhân viên nào? <span className="text-danger">*</span>
+            </label>
+            <Select value={employeeChoice} onValueChange={setEmployeeChoice} disabled={isBusy}>
+              <SelectTrigger id="create-account-link" className="w-full">
+                <SelectValue placeholder="— Chọn nhân viên có sẵn, hoặc tạo mới —" />
+              </SelectTrigger>
+              <SelectContent>
+                {unlinkedEmployees.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__new__">➕ Tạo nhân viên mới</SelectItem>
+              </SelectContent>
+            </Select>
+            {isNewMode && (
+              <p className="text-xs text-warning">
+                Sẽ tạo MỘT nhân viên mới. Nếu người này đã là nhân viên, hãy chọn họ ở danh sách trên để tránh trùng.
+              </p>
+            )}
+          </div>
 
           <TextField
             label="Email"
@@ -207,12 +222,13 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
             disabled={isBusy}
             placeholder="≥ 8 ký tự"
           />
-          {linkedEmp ? (
+          {linkedEmp && (
             <p className="text-sm text-ink-2">
               Sẽ gắn tài khoản vào nhân viên có sẵn:{" "}
               <strong className="text-ink">{linkedEmp.name}</strong>
             </p>
-          ) : (
+          )}
+          {isNewMode && (
             <TextField
               label="Họ và tên"
               type="text"
@@ -241,9 +257,8 @@ export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedE
             </Select>
           </div>
 
-          {/* New-employee fields — hidden when linking to an existing employee
-              (the server ignores these, and they belong to the picked employee). */}
-          {!linkedEmp && (
+          {/* New-employee fields — only when creating a brand-new employee. */}
+          {isNewMode && (
             <>
               <TextField
                 label="Mã nhân viên (tuỳ chọn)"

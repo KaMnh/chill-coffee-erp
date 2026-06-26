@@ -9,6 +9,23 @@ describe("parseClientIp", () => {
   it("null when no header", () => { expect(parseClientIp(H({}), { trustedProxyCount: 1 })).toBeNull(); });
   it("null when fewer hops", () => { expect(parseClientIp(H({ "x-forwarded-for": "9.9.9.9" }), { trustedProxyCount: 2 })).toBeNull(); });
   it("IPv6 normalised", () => { expect(parseClientIp(H({ "x-forwarded-for": "[2001:DB8::1%eth0]" }), { trustedProxyCount: 1 })).toBe("2001:db8::1"); });
+
+  // Anti-spoof: khi đã khai báo trusted real-IP header (vd cf-connecting-ip sau
+  // Cloudflare), đó là NGUỒN DUY NHẤT. Thiếu/không hợp lệ → FAIL CLOSED (null),
+  // KHÔNG fallback về x-forwarded-for (kẻ tấn công bypass edge có thể giả mạo XFF).
+  it("trustedHeader đã set nhưng VẮNG → null (không fallback XFF spoofable)", () => {
+    expect(parseClientIp(H({ "x-forwarded-for": "1.2.3.4, 9.9.9.9" }), { trustedHeader: "cf-connecting-ip" })).toBeNull();
+  });
+  it("trustedHeader có mặt nhưng không phải IP → null (không fallback)", () => {
+    expect(parseClientIp(H({ "cf-connecting-ip": "not-an-ip", "x-forwarded-for": "9.9.9.9" }), { trustedHeader: "cf-connecting-ip" })).toBeNull();
+  });
+  it("trustedHeader có IP hợp lệ → trả IP thật của client", () => {
+    expect(parseClientIp(H({ "cf-connecting-ip": "203.0.113.7", "x-forwarded-for": "1.2.3.4, 9.9.9.9" }), { trustedHeader: "cf-connecting-ip" })).toBe("203.0.113.7");
+  });
+
+  // Chỉ trả IP hợp lệ — header rác không được nhận làm IP client.
+  it("XFF rác → null", () => { expect(parseClientIp(H({ "x-forwarded-for": "garbage" }), { trustedProxyCount: 1 })).toBeNull(); });
+  it("XFF hop đúng vị trí nhưng rác → null", () => { expect(parseClientIp(H({ "x-forwarded-for": "203.0.113.7, junk" }), { trustedProxyCount: 1 })).toBeNull(); });
 });
 describe("ipEquals", () => {
   it("IPv4 exact", () => { expect(ipEquals("203.0.113.7","203.0.113.7")).toBe(true); expect(ipEquals("203.0.113.7","203.0.113.8")).toBe(false); });

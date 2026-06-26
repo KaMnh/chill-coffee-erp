@@ -17,10 +17,17 @@ container. That proxy must:
 1. Be the **only** listener reachable from outside the server. The app port
    (`APP_PORT`, default `3009`) is bound to `127.0.0.1` in `compose.yaml` and
    is not reachable off-host — do not change this binding.
-2. **Set the real client IP** by appending it to the `x-forwarded-for` header
-   (standard behaviour for all major proxies). If you use Cloudflare in front,
-   set `CHECKIN_TRUSTED_PROXY_COUNT=2` and optionally
-   `CHECKIN_TRUSTED_IP_HEADER=cf-connecting-ip`.
+2. **Set the real client IP.** A plain proxy appends it to `x-forwarded-for`.
+   **Behind Cloudflare you MUST set `CHECKIN_TRUSTED_IP_HEADER=cf-connecting-ip`** —
+   the right-most `x-forwarded-for` hop is a Cloudflare **edge** IP that *rotates per
+   request*, so the anchor IP and the employee's IP never match and every check-in
+   fails. `cf-connecting-ip` is the stable real ISP IP that Cloudflare sets (and
+   overwrites if a client tries to forge it). When that header is set it is the
+   **only** trusted source: a request missing a valid value is **rejected
+   (fail-closed)** — the app never downgrades to the spoofable `x-forwarded-for`
+   chain. For full anti-spoof, also restrict the origin firewall to Cloudflare IP
+   ranges (or enable Cloudflare Authenticated Origin Pulls), so the origin can only
+   be reached *through* Cloudflare.
 3. **Inject the `x-checkin-proxy-secret` header** on every request, using the
    value you put in `CHECKIN_PROXY_SECRET`. The app rejects check-in requests
    that arrive without this header (returns `503`), so bypassing the proxy is
@@ -71,8 +78,8 @@ app container by `compose.yaml`.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `CHECKIN_PROXY_SECRET` | **Yes** | _(empty = disabled)_ | Long random string the reverse proxy injects as `x-checkin-proxy-secret`. Generate: `openssl rand -hex 32`. |
-| `CHECKIN_TRUSTED_PROXY_COUNT` | No | `1` | Number of trusted proxy hops. Use `2` if behind Cloudflare + local proxy. |
-| `CHECKIN_TRUSTED_IP_HEADER` | No | _(empty)_ | Platform real-IP header, e.g. `cf-connecting-ip` (Cloudflare). Leave empty to use `x-forwarded-for` with the count above. |
+| `CHECKIN_TRUSTED_PROXY_COUNT` | No | `1` | Trusted `x-forwarded-for` hops. **Ignored** when `CHECKIN_TRUSTED_IP_HEADER` is set. |
+| `CHECKIN_TRUSTED_IP_HEADER` | **Behind Cloudflare** | _(empty)_ | Set to `cf-connecting-ip` behind Cloudflare. When set it is the ONLY IP source — a missing/invalid value → request **rejected** (fail-closed), no `x-forwarded-for` fallback. Leave empty only for a plain `nginx → app` (no platform proxy). |
 | `CHECKIN_RATE_MAX` | No | `10` | Max check-in attempts per window per process. |
 | `CHECKIN_RATE_WINDOW_MS` | No | `60000` | Rate-limit window in milliseconds (default: 60 s). |
 
@@ -135,7 +142,8 @@ is closed past `grace_hours`, re-open it (or re-anchor — section 5).
 3. Taps **"Bắt đầu ca"**.
 4. The app calls `/api/checkin`, which:
    - Verifies the `x-checkin-proxy-secret` header (proxy-secret gate).
-   - Extracts the real client IP from `x-forwarded-for`.
+   - Extracts the real client IP — from `CHECKIN_TRUSTED_IP_HEADER` when set
+     (`cf-connecting-ip` behind Cloudflare), otherwise from `x-forwarded-for`.
    - Checks the IP against the anchor (fails with `403` if mismatch).
    - Checks anchor freshness (fails with `503` if stale).
    - Inserts a `shift_assignments` row, stamping `check_in_ip` and
@@ -199,6 +207,8 @@ These are stored in `shift_assignments` and subject to the following:
 | Check-in returns `503 Proxy secret missing or invalid` | Reverse proxy is not injecting `x-checkin-proxy-secret`, or value mismatches `.env` | Verify nginx/Caddy config adds the header; check `CHECKIN_PROXY_SECRET` in `.env` |
 | Check-in returns `503 Anchor IP stale` | No anchor heartbeat within the freshness window | Re-anchor from shop network; configure POS device to call `/api/checkin/heartbeat` at startup |
 | Check-in returns `403 IP not allowed` | Employee is on mobile data or a different network | Employee must connect to shop Wi-Fi; re-anchor if the shop IP changed |
+| **Behind Cloudflare:** every employee gets `403 IP not allowed` even on shop Wi-Fi, or the anchor IP keeps changing on its own | App is reading the rotating Cloudflare **edge** IP instead of the real visitor IP | Set `CHECKIN_TRUSTED_IP_HEADER=cf-connecting-ip` in `.env`, redeploy, then **re-anchor** from shop Wi-Fi (the old anchor holds a stale edge IP) |
+| Check-in returns `400 Không xác định được IP` after setting `cf-connecting-ip` | Request reached the app without a valid `cf-connecting-ip` (proxy stripped it, or traffic bypassed Cloudflare) | Ensure the proxy forwards `cf-connecting-ip` and all traffic goes through Cloudflare; this is the fail-closed guard working as intended |
 | Check-in returns `429 Too many requests` | Rate limit exceeded | Wait for the window to expire (`CHECKIN_RATE_WINDOW_MS`); or restart the container to reset (not recommended under attack) |
 | Check-in returns `403 Not employee_self_service` | Employee's account has a different role | Owner must change the role to `employee_self_service` in Settings → Tài khoản |
 | Heartbeat call fails with `401` | Heartbeat route requires an active owner/manager session | Ensure the POS device is logged in as owner/manager before calling the heartbeat endpoint |

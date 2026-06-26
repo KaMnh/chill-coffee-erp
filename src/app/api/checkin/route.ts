@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
   if (allow.length === 0) return NextResponse.json({ status: "error", error: "Chưa có thiết bị quán hoạt động." }, { status: 503 });
 
   const ip = parseClientIp(req.headers, { trustedProxyCount: TRUSTED_PROXY_COUNT, trustedHeader: process.env.CHECKIN_TRUSTED_IP_HEADER || null });
+  // Distinct from a wrong-IP reject: a NULL ip means we couldn't resolve a real
+  // client IP (missing/invalid trusted header → fail-closed, or misconfigured proxy).
+  if (!ip) return NextResponse.json({ status: "error", error: "Không xác định được IP thật của bạn (kiểm tra cấu hình proxy/Cloudflare)." }, { status: 400 });
   if (!isIpAllowed(ip, allow)) return NextResponse.json({ status: "error", error: rejectMessage }, { status: 403 });
 
   // (S1) rate-limit only AFTER auth + config + IP gate pass (matches spec §6 order; the write is what we throttle).

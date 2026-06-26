@@ -65,6 +65,28 @@ grant select on all tables in schema public to anon;
 grant all on all tables in schema public to service_role;
 grant usage, select on all sequences in schema public to authenticated, anon, service_role;
 grant execute on all functions in schema public to authenticated, anon, service_role;
+-- Re-assert SERVICE-ROLE-ONLY lock-down for security-definer RPCs that the blanket
+-- grant above just re-opened — must mirror database/003_rls.sql (lines after the
+-- blanket grant). Guarded with to_regprocedure so restoring an OLDER dump that
+-- predates a function does not abort the grant block.
+do $$ begin
+  if to_regprocedure('public.check_in_self(uuid, inet, text)') is not null then
+    revoke execute on function public.check_in_self(uuid, inet, text) from public, anon, authenticated;
+    grant execute on function public.check_in_self(uuid, inet, text) to service_role;
+  end if;
+  if to_regprocedure('public.fresh_anchor_ips(numeric)') is not null then
+    revoke execute on function public.fresh_anchor_ips(numeric) from public, anon, authenticated;
+    grant execute on function public.fresh_anchor_ips(numeric) to service_role;
+  end if;
+  if to_regprocedure('public.record_shop_anchor_heartbeat(uuid, inet)') is not null then
+    revoke execute on function public.record_shop_anchor_heartbeat(uuid, inet) from public, anon, authenticated;
+    grant execute on function public.record_shop_anchor_heartbeat(uuid, inet) to service_role;
+  end if;
+  if to_regprocedure('public.repoint_account(uuid, uuid, uuid)') is not null then
+    revoke execute on function public.repoint_account(uuid, uuid, uuid) from public, anon, authenticated;
+    grant execute on function public.repoint_account(uuid, uuid, uuid) to service_role;
+  end if;
+end $$;
 alter default privileges in schema public
   grant select, insert, update, delete on tables to authenticated;
 alter default privileges in schema public

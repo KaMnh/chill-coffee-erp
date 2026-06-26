@@ -20,7 +20,7 @@ import {
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
-import { useUpdateUser } from "@/hooks/mutations/use-settings-mutations";
+import { useUpdateUser, useRepointUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { SettingsAccount, UserRole } from "@/lib/types";
 
@@ -57,6 +57,10 @@ export function EditAccountModal({
   const supabase = useSupabase();
   const { toast } = useToast();
   const updateM = useUpdateUser(supabase);
+  const repointM = useRepointUser(supabase);
+  const [repointTargetId, setRepointTargetId] = useState("");
+  const [repointConfirm, setRepointConfirm] = useState(false);
+  const [repointError, setRepointError] = useState<string | null>(null);
 
   const [role, setRole] = useState<UserRole>("employee_viewer");
   const [status, setStatus] = useState<"active" | "disabled">("active");
@@ -76,14 +80,38 @@ export function EditAccountModal({
     setHourlyRate(""); // backend doesn't return hourly_rate in SettingsAccount; leave blank → unchanged
     setLinkEmployeeId("");
     setError(null);
+    setRepointTargetId("");
+    setRepointConfirm(false);
+    setRepointError(null);
   }, [open, account]);
 
   if (!account) return null;
 
   const isSelf = account.auth_user_id === currentUserAuthId;
-  const isBusy = updateM.isPending;
+  const isBusy = updateM.isPending || repointM.isPending;
   // An account with no employee can only be LINKED here (no name/position/rate to edit).
   const isUnlinked = !account.employee_id;
+
+  // Re-point: chỉ owner, account ĐÃ gắn NV, và không phải chính mình.
+  const canRepoint = !isUnlinked && !isSelf && approverRole === "owner";
+  const repointTargetName =
+    unlinkedEmployees.find((e) => e.id === repointTargetId)?.name ?? "";
+
+  async function handleRepoint() {
+    if (!account || !account.employee_id || !repointTargetId) return;
+    setRepointError(null);
+    try {
+      await repointM.mutateAsync({
+        authUserId: account.auth_user_id,
+        targetEmployeeId: repointTargetId,
+        sourceEmployeeId: account.employee_id
+      });
+      toast({ semantic: "success", message: "Đã đổi nhân viên cho tài khoản." });
+      onOpenChange(false);
+    } catch (err) {
+      setRepointError(err instanceof Error ? err.message : "Đổi nhân viên thất bại.");
+    }
+  }
 
   // Owner-only ceiling (UI; server also enforces): a non-owner cannot grant `owner`
   // nor modify an account that is currently `owner`.
@@ -278,6 +306,86 @@ export function EditAccountModal({
                 placeholder=""
               />
             </>
+          )}
+
+          {canRepoint && (
+            <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-border p-3">
+              <label htmlFor="edit-account-repoint" className="text-sm font-medium text-ink">Đổi nhân viên cho tài khoản</label>
+              {repointError && (
+                <AlertBanner variant="danger" title="Không đổi được">
+                  {repointError}
+                </AlertBanner>
+              )}
+              {unlinkedEmployees.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Không có nhân viên (chưa có tài khoản) để chuyển sang.
+                </p>
+              ) : (
+                <>
+                  <Select
+                    value={repointTargetId || "__none__"}
+                    onValueChange={(v) => {
+                      setRepointTargetId(v === "__none__" ? "" : v);
+                      setRepointConfirm(false);
+                    }}
+                    disabled={repointM.isPending}
+                  >
+                    <SelectTrigger id="edit-account-repoint" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Chọn nhân viên đích —</SelectItem>
+                      {unlinkedEmployees.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {repointTargetId && !repointConfirm && (
+                    <>
+                      <p className="text-xs text-warning">
+                        Nhân viên nguồn «{account.employee_name}» sẽ chuyển sang Nghỉ;
+                        tài khoản sẽ gắn vào «{repointTargetName}».
+                      </p>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setRepointConfirm(true)}
+                          disabled={repointM.isPending}
+                        >
+                          Đổi nhân viên
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  {repointTargetId && repointConfirm && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRepointConfirm(false)}
+                        disabled={repointM.isPending}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleRepoint}
+                        loading={repointM.isPending}
+                      >
+                        Xác nhận đổi sang «{repointTargetName}»
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           <ModalActions>

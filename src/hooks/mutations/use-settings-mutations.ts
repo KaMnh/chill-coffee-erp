@@ -10,6 +10,7 @@ import {
   createUserAccount,
   updateUserAccount,
   deactivateUserAccount,
+  repointAccount,
   approveSignupRequest,
   rejectSignupRequest,
   type CreateUserPayload
@@ -158,6 +159,34 @@ export function useDeactivateUser(supabase: SupabaseClient | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+    }
+  });
+}
+
+export interface RepointUserInput {
+  authUserId: string;
+  targetEmployeeId: string;
+  sourceEmployeeId: string;
+}
+
+export function useRepointUser(supabase: SupabaseClient | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RepointUserInput) => {
+      if (!supabase) throw new Error("Thiếu cấu hình Supabase.");
+      return repointAccount(
+        supabase,
+        input.authUserId,
+        input.targetEmployeeId,
+        input.sourceEmployeeId
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.account() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.accountedEmployeeIds() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedAccounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.employees() });
     }
   });
 }

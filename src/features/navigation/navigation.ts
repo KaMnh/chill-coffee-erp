@@ -35,13 +35,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { key: "pivot",     label: "Pivot",         icon: "barChart3",       roles: ["owner", "manager"], group: "reports" },
   { key: "cashflow",  label: "Dòng tiền",     icon: "trendingUp",      roles: ["owner", "manager"], group: "overview" },
   { key: "settings",  label: "Thiết lập",     icon: "settings",        roles: ["owner", "manager"], group: "system" },
-  { key: "checkin",   label: "Chấm công",     icon: "clock",           roles: ["employee_self_service"], group: "staff" },
+  { key: "checkin",   label: "Chấm công",     icon: "clock",           roles: ["employee_self_service", "manager", "staff_operator"], group: "staff" },
 ];
 
 export const DEFAULT_SIDEBAR_BY_ROLE: Record<UserRole, ReadonlyArray<ViewKey>> = {
   owner:                 ["dashboard", "expenses", "shifts", "cash", "safe", "period-close", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
-  manager:               ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "pivot", "cashflow", "settings"],
-  staff_operator:        ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports"],
+  manager:               ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "pivot", "cashflow", "settings", "checkin"],
+  staff_operator:        ["dashboard", "expenses", "shifts", "cash", "handover", "inventory", "reports", "checkin"],
   employee_viewer:       ["dashboard"],
   employee_self_service: ["checkin"],
 };
@@ -135,8 +135,8 @@ export function getGroupedNav(
  */
 const MOBILE_TAB_PREFERENCE: Record<UserRole, ReadonlyArray<ViewKey>> = {
   owner:                 ["dashboard", "safe", "reports", "cash", "cashflow", "period-close", "expenses", "shifts", "inventory", "pivot", "settings", "handover"],
-  manager:               ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover"],
-  staff_operator:        ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover"],
+  manager:               ["dashboard", "expenses", "reports", "cash", "cashflow", "shifts", "inventory", "pivot", "settings", "handover", "checkin"],
+  staff_operator:        ["dashboard", "cash", "expenses", "shifts", "inventory", "reports", "handover", "checkin"],
   employee_viewer:       ["dashboard"],
   employee_self_service: ["checkin"],
 };

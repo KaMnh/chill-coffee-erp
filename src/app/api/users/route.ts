@@ -40,6 +40,12 @@ const VALID_ROLES = [
 ] as const;
 type Role = (typeof VALID_ROLES)[number];
 
+/**
+ * Roles được phép quản lý/cấp tài khoản (POST/PATCH/DELETE /api/users…).
+ * owner + manager — KHÔNG owner-only. Guard chống siết nhầm (regression test).
+ */
+export const MANAGE_USERS_ROLES: UserRole[] = ["owner", "manager"];
+
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ status: "error", error: message }, { status });
 }
@@ -47,7 +53,7 @@ function badRequest(message: string, status = 400) {
 export async function POST(req: NextRequest) {
   let caller: { userId: string; role: string };
   try {
-    caller = await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
+    caller = await requireAuth(req.headers.get("authorization"), MANAGE_USERS_ROLES);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auth failed.";
     const code = message.includes("Authorization") || message.includes("Token") ? 401 : 403;

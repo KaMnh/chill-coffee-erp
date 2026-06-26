@@ -4539,16 +4539,21 @@ begin
   return jsonb_build_object('removed', p_anchor_id);
 end; $$;
 
+-- SERVICE-ROLE-ONLY: /api/shop-presence/heartbeat verifies the device token
+-- (constant-time) then calls this via service role. The device token IS the
+-- credential — NO owner session required — so an always-on shop device keeps the
+-- anchor IP fresh under ANY logged-in session (manager/staff). IP is route-read.
 create or replace function public.record_shop_anchor_heartbeat(p_anchor_id uuid, p_public_ip inet)
 returns jsonb language plpgsql security definer set search_path = public, auth as $$
 declare v public.checkin_anchor%rowtype;
 begin
-  if not (public.app_role() = 'owner') then raise exception 'Bạn không có quyền cập nhật thiết bị quán.'; end if;
   update public.checkin_anchor set current_public_ip = p_public_ip, last_heartbeat_at = now()
    where id = p_anchor_id returning * into v;
   if not found then raise exception 'Không tìm thấy thiết bị quán.'; end if;
   return jsonb_build_object('id', v.id, 'current_public_ip', host(v.current_public_ip), 'last_heartbeat_at', v.last_heartbeat_at);
 end; $$;
+revoke execute on function public.record_shop_anchor_heartbeat(uuid, inet) from public, anon, authenticated;
+grant execute on function public.record_shop_anchor_heartbeat(uuid, inet) to service_role;
 
 create or replace function public.update_checkin_network_config(p_config jsonb)
 returns jsonb language plpgsql security definer set search_path = public, auth as $$

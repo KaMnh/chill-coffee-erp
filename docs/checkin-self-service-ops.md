@@ -112,12 +112,19 @@ In the same panel, toggle **"Bật xác thực IP"** to `on`. This writes
 
 ### 3d. Freshness window
 
-The anchor IP is considered stale after the freshness window (configurable in
-`app_settings`, default 24 h). A stale anchor causes all check-ins to return
-`503 Anchor IP stale`. The POS device or owner must re-anchor from the shop
-network. The heartbeat route (`/api/checkin/heartbeat`) can be called
-automatically (e.g. by the POS device at startup) to refresh the anchor
-without requiring a manual button press.
+The anchor IP is considered stale after the freshness window (`grace_hours` in
+the `checkin_network` setting, default 12 h). A stale anchor causes all check-ins
+to return `503`. To keep the IP fresh automatically, leave the ERP app **open on
+the anchored POS device**: it pings the heartbeat route on focus + every 6 h.
+
+**Token-only heartbeat (important):** the heartbeat authenticates by the
+**device token** stored on the anchored device when the owner marked it — it does
+**NOT** require an owner session. So the POS can stay logged in as a **manager or
+staff** and still keep the anchor IP fresh; the owner only needs to mark the
+device once. The route is `POST /api/shop-presence/heartbeat` (device token +
+server-read source IP; `record_shop_anchor_heartbeat` is service-role-only). If
+the ISP changes the IP, the next heartbeat updates it automatically; if the app
+is closed past `grace_hours`, re-open it (or re-anchor — section 5).
 
 ---
 

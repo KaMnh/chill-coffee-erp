@@ -64,6 +64,11 @@ revoke execute on function public.check_in_self(uuid, inet, text) from public, a
 grant execute on function public.check_in_self(uuid, inet, text) to service_role;
 revoke execute on function public.fresh_anchor_ips(numeric) from public, anon, authenticated;
 grant execute on function public.fresh_anchor_ips(numeric) to service_role;
+-- record_shop_anchor_heartbeat (2026-06-26): service-role-only. The heartbeat route
+-- authenticates by the device token (no owner session) then writes via service role,
+-- so the shop anchor device keeps its IP fresh under ANY session (manager/staff).
+revoke execute on function public.record_shop_anchor_heartbeat(uuid, inet) from public, anon, authenticated;
+grant execute on function public.record_shop_anchor_heartbeat(uuid, inet) to service_role;
 
 -- Default privileges — applies to FUTURE objects created by this role
 -- (typically `postgres` via scripts/db-init.mjs or the migrator container).

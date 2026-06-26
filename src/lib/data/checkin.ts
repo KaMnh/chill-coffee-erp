@@ -42,10 +42,12 @@ export async function updateCheckinNetworkConfig(supabase: SupabaseClient, confi
   return data as CheckinNetworkConfig;
 }
 
-export async function sendAnchorHeartbeat(anchorId: string, deviceToken: string, authHeaders: Record<string, string>): Promise<{ current_public_ip: string; last_heartbeat_at: string }> {
+// Token-only: the heartbeat route authenticates by the device token (no session),
+// so this no longer sends an Authorization header.
+export async function sendAnchorHeartbeat(anchorId: string, deviceToken: string): Promise<{ current_public_ip: string; last_heartbeat_at: string }> {
   const res = await fetch("/api/shop-presence/heartbeat", {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ anchor_id: anchorId, device_token: deviceToken }),
   });
   const body = (await res.json().catch(() => ({}))) as { current_public_ip?: string; last_heartbeat_at?: string; error?: string };

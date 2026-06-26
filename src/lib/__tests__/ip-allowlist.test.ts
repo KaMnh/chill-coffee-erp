@@ -37,4 +37,20 @@ describe("isIpAllowed", () => {
   it("exact match true", () => { expect(isIpAllowed("203.0.113.7",["198.51.100.1","203.0.113.7"])).toBe(true); });
   it("null fail-closed", () => { expect(isIpAllowed(null,["203.0.113.7"])).toBe(false); });
   it("empty allowlist false", () => { expect(isIpAllowed("203.0.113.7",[])).toBe(false); });
+
+  // Cloudflare cf-connecting-ip thường là IPv6; host trong /64 XOAY theo thiết bị /
+  // SLAAC privacy. Exact-match rớt; /64 (cùng mạng quán) là granularity đúng.
+  it("IPv6 cùng /64 khác host: exact KHÔNG khớp (bug), /64 khớp (fix)", () => {
+    const anchor = ["2401:e180:8a01:abcd::1"];
+    const userOtherHost = "2401:e180:8a01:abcd:9:8:7:6";
+    expect(isIpAllowed(userOtherHost, anchor)).toBe(false);
+    expect(isIpAllowed(userOtherHost, anchor, { ipv6Prefix64: true })).toBe(true);
+  });
+  it("IPv6 khác /64 → /64 vẫn KHÔNG khớp (mạng khác)", () => {
+    expect(isIpAllowed("2401:e180:8a01:ffff::1", ["2401:e180:8a01:abcd::1"], { ipv6Prefix64: true })).toBe(false);
+  });
+  it("IPv4 KHÔNG bị /64 ảnh hưởng (vẫn exact)", () => {
+    expect(isIpAllowed("203.0.113.7", ["203.0.113.7"], { ipv6Prefix64: true })).toBe(true);
+    expect(isIpAllowed("203.0.113.8", ["203.0.113.7"], { ipv6Prefix64: true })).toBe(false);
+  });
 });

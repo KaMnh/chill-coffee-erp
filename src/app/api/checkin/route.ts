@@ -9,6 +9,10 @@ export const runtime = "nodejs";
 
 const limiter = createRateLimiter({ max: Number(process.env.CHECKIN_RATE_MAX ?? 10), windowMs: Number(process.env.CHECKIN_RATE_WINDOW_MS ?? 60_000) });
 const TRUSTED_PROXY_COUNT = Math.max(1, Number(process.env.CHECKIN_TRUSTED_PROXY_COUNT ?? 1));
+// IPv6 (vd cf-connecting-ip sau Cloudflare) so theo /64 mặc định: host trong /64
+// xoay theo thiết bị / SLAAC privacy, nhưng /64 = mạng quán là cố định. IPv4 không
+// bị ảnh hưởng (luôn exact). Đặt CHECKIN_IPV6_PREFIX64=false để buộc exact IPv6.
+const IPV6_PREFIX64 = process.env.CHECKIN_IPV6_PREFIX64 !== "false";
 function safeEquals(a: string, b: string) { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; }
 
 export async function POST(req: NextRequest) {
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
   // Distinct from a wrong-IP reject: a NULL ip means we couldn't resolve a real
   // client IP (missing/invalid trusted header → fail-closed, or misconfigured proxy).
   if (!ip) return NextResponse.json({ status: "error", error: "Không xác định được IP thật của bạn (kiểm tra cấu hình proxy/Cloudflare)." }, { status: 400 });
-  if (!isIpAllowed(ip, allow)) return NextResponse.json({ status: "error", error: rejectMessage }, { status: 403 });
+  if (!isIpAllowed(ip, allow, { ipv6Prefix64: IPV6_PREFIX64 })) return NextResponse.json({ status: "error", error: rejectMessage }, { status: 403 });
 
   // (S1) rate-limit only AFTER auth + config + IP gate pass (matches spec §6 order; the write is what we throttle).
   const now = Date.now();

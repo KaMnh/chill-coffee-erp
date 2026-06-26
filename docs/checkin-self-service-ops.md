@@ -193,7 +193,8 @@ These are stored in `shift_assignments` and subject to the following:
 |---|---|---|
 | On-site password sharing (employee A uses employee B's credentials) | Physical supervision; shift anomaly review | Accepted — no biometric |
 | CGNAT / shared-IP environment (multiple businesses share one public IP) | Shop must have a dedicated public IP; verify with ISP | Operator responsibility |
-| IPv6 /64 prefix (ISP assigns rotating /64 host addresses) | `ipEquals` in `ip-allowlist.ts` supports `ipv6Prefix64` prefix matching; follow-up tracking issue exists | Partial mitigation — review if ISP is IPv6-only |
+| IPv6 host rotation (Cloudflare `cf-connecting-ip` is often IPv6; SLAAC privacy host bits rotate per device) | Gate matches IPv6 by **/64** (the shop's site network) by default — `CHECKIN_IPV6_PREFIX64=true`. A /64 is the per-customer allocation, the IPv6 analog of the IPv4 NAT public IP | Handled by default |
+| Anchor recorded on IPv4 but employee connects on IPv6 (or vice-versa) | Cross-family IPs never match | Anchor from a device on the SAME family staff use; or register both (multiple anchors are supported); or **disable IPv6 on shop Wi-Fi** so all clients fall back to the stable IPv4 NAT IP (simplest) |
 | Rate-limiter resets on restart | In-process design; acceptable for single-instance deployment | Accepted |
 | Mobile-data bypass if Wi-Fi also allows check-in from another IP | Anchor is a single IP; any mismatch blocks. 4G is a different public IP, so it's blocked automatically | Handled by design |
 
@@ -209,6 +210,7 @@ These are stored in `shift_assignments` and subject to the following:
 | Check-in returns `403 IP not allowed` | Employee is on mobile data or a different network | Employee must connect to shop Wi-Fi; re-anchor if the shop IP changed |
 | **Behind Cloudflare:** every employee gets `403 IP not allowed` even on shop Wi-Fi, or the anchor IP keeps changing on its own | App is reading the rotating Cloudflare **edge** IP instead of the real visitor IP | Set `CHECKIN_TRUSTED_IP_HEADER=cf-connecting-ip` in `.env`, redeploy, then **re-anchor** from shop Wi-Fi (the old anchor holds a stale edge IP) |
 | Check-in returns `400 Không xác định được IP` after setting `cf-connecting-ip` | Request reached the app without a valid `cf-connecting-ip` (proxy stripped it, or traffic bypassed Cloudflare) | Ensure the proxy forwards `cf-connecting-ip` and all traffic goes through Cloudflare; this is the fail-closed guard working as intended |
+| Check-in still `403` and `cf-connecting-ip` is an **IPv6** address that differs slightly each time | IPv6 host portion rotates within the shop /64; matching is per-/64 by default but the **anchor** was recorded on IPv4 (or a different /64) | Re-anchor from a device on the SAME network/family employees use (so the anchor stores the shop's IPv6 /64); or disable IPv6 on shop Wi-Fi to use the stable IPv4 NAT IP |
 | Check-in returns `429 Too many requests` | Rate limit exceeded | Wait for the window to expire (`CHECKIN_RATE_WINDOW_MS`); or restart the container to reset (not recommended under attack) |
 | Check-in returns `403 Not employee_self_service` | Employee's account has a different role | Owner must change the role to `employee_self_service` in Settings → Tài khoản |
 | Heartbeat call fails with `401` | Heartbeat route requires an active owner/manager session | Ensure the POS device is logged in as owner/manager before calling the heartbeat endpoint |

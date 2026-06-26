@@ -19,13 +19,34 @@ function expandIpv6(ip: string): string[] | null {
   const parts = [...head, ...middle, ...tail]; if (parts.length !== 8) return null;
   return parts.map((p) => { const n = parseInt(p || "0", 16); return Number.isNaN(n) || n < 0 || n > 0xffff ? "INVALID" : n.toString(16); });
 }
+/** True only for a syntactically valid IPv4 or IPv6 literal (post-normalise). */
+export function isValidIp(ip: string | null | undefined): boolean {
+  const s = normaliseIp(ip);
+  if (!s) return false;
+  if (s.includes(":")) {
+    const parts = expandIpv6(s);
+    return parts !== null && !parts.includes("INVALID");
+  }
+  const octets = s.split(".");
+  if (octets.length !== 4) return false;
+  return octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255);
+}
+
 export function parseClientIp(headers: Headers, opts: ParseClientIpOptions = {}): string | null {
   const trustedProxyCount = Math.max(1, opts.trustedProxyCount ?? 1);
-  if (opts.trustedHeader) { const n = normaliseIp(headers.get(opts.trustedHeader)); if (n) return n; }
+  // A configured platform real-IP header (e.g. cf-connecting-ip behind Cloudflare)
+  // is the ONLY trusted source. A request without a VALID value there did NOT come
+  // through the expected edge → FAIL CLOSED (null). Never fall back to the spoofable
+  // x-forwarded-for chain in that mode, and never trust a non-IP value.
+  if (opts.trustedHeader) {
+    const n = normaliseIp(headers.get(opts.trustedHeader));
+    return isValidIp(n) ? n : null;
+  }
   const xff = headers.get("x-forwarded-for"); if (!xff) return null;
   const parts = xff.split(",").map((p) => normaliseIp(p)).filter(Boolean);
   if (parts.length < trustedProxyCount) return null;
-  return parts[parts.length - trustedProxyCount] ?? null;
+  const ip = parts[parts.length - trustedProxyCount];
+  return ip && isValidIp(ip) ? ip : null;
 }
 export function ipEquals(a: string | null | undefined, b: string | null | undefined, opts: IpMatchOptions = {}): boolean {
   const na = normaliseIp(a), nb = normaliseIp(b); if (!na || !nb) return false;

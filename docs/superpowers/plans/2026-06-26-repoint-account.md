@@ -245,14 +245,16 @@ rollback;
 
 - [ ] **Step 2: Chạy test, xác nhận FAIL (hàm chưa tồn tại)**
 
-Tạo throwaway DB (ví dụ DB tên `chill_pgtap` trong container `supabase-db`, hoặc Postgres 15 docker riêng) rồi:
+Tạo throwaway DB (ví dụ DB tên `chill_pgtap` trong container `supabase-db`, hoặc Postgres 15 docker riêng) rồi (PowerShell — shell chính của workspace):
 
-```bash
-export PGTAP_DB_URL='postgres://postgres:postgres@localhost:5432/chill_pgtap'
-psql "$PGTAP_DB_URL" -c "CREATE EXTENSION IF NOT EXISTS pgtap;"
+```powershell
+$env:PGTAP_DB_URL = 'postgres://postgres:postgres@localhost:5432/chill_pgtap'
+psql $env:PGTAP_DB_URL -c "CREATE EXTENSION IF NOT EXISTS pgtap;"
 node scripts/ci/apply-schema.mjs
 node scripts/pgtap-run.mjs --file database/tests/320_repoint_account.sql
 ```
+
+(Bash tool tương đương: `export PGTAP_DB_URL='...'`. Nếu `psql` không có trên PATH host → chạy qua `docker exec -i supabase-db psql -U postgres -d chill_pgtap`; xem memory "pgTAP run on clean DB".)
 
 Expected: FAIL — `function public.repoint_account(uuid, uuid, uuid) does not exist` (vì Task 2 chưa làm). Đây là RED của TDD.
 
@@ -298,7 +300,6 @@ begin
     raise exception 'Thiếu tham số.' using errcode = 'P0001';
   end if;
 
-  -- Lock account row → serialize re-point đồng thời trên CÙNG account.
   select employee_id into v_source
     from public.employee_accounts
     where auth_user_id = p_auth_user_id
@@ -313,19 +314,16 @@ begin
     raise exception 'Tài khoản đã gắn đúng nhân viên này rồi.' using errcode = 'P0001';
   end if;
 
-  -- NV đích phải tồn tại + active.
   select name, is_active into v_target_name, v_target_active
     from public.employees where id = p_target_employee_id;
   if not found or v_target_active is not true then
     raise exception 'Nhân viên đích không tồn tại hoặc đã nghỉ.' using errcode = 'P0002';
   end if;
 
-  -- NV đích chưa có TK (unique partial index là backstop cho đua → 23505).
   if exists (select 1 from public.employee_accounts where employee_id = p_target_employee_id) then
     raise exception 'Nhân viên đích đã có tài khoản.' using errcode = '23505';
   end if;
 
-  -- Atomic conditional re-point + stale-source guard trong 1 câu lệnh.
   update public.employee_accounts
      set employee_id = p_target_employee_id
    where auth_user_id = p_auth_user_id
@@ -335,10 +333,8 @@ begin
     raise exception 'Dữ liệu đã thay đổi — tải lại trang rồi thử lại.' using errcode = 'P0001';
   end if;
 
-  -- Deactivate NV nguồn (KHÔNG xoá → mọi FK con giữ nguyên).
   update public.employees set is_active = false where id = v_source;
 
-  -- Đồng bộ display_name của login = tên NV đích (khớp PATCH dùng upsert).
   insert into public.profiles (id, display_name)
   values (p_auth_user_id, v_target_name)
   on conflict (id) do update set display_name = excluded.display_name;
@@ -451,15 +447,15 @@ node scripts/pgtap-run.mjs --file database/tests/320_repoint_account.sql
 
 Expected: `18/18 passed`.
 
-- [ ] **Step 5: Verify dual-write trùng khít (body 002 ≡ migration)**
+- [ ] **Step 5: Verify dual-write trùng khít (body 002 ≡ migration) — cross-shell (node)**
+
+Chạy được cả PowerShell lẫn Bash tool (không dùng process substitution):
 
 ```bash
-# So sánh thân hàm giữa 002 và migration phải giống hệt (chỉ khác comment header).
-diff <(sed -n '/create or replace function public.repoint_account/,/grant execute on function public.repoint_account(uuid, uuid, uuid) to service_role;/p' database/002_functions.sql) \
-     <(sed -n '/create or replace function public.repoint_account/,/grant execute on function public.repoint_account(uuid, uuid, uuid) to service_role;/p' database/migrations/2026-06-26-repoint-account.sql)
+node -e "const fs=require('fs');const ex=s=>{const m=s.match(/create or replace function public\.repoint_account[\s\S]*?grant execute on function public\.repoint_account\(uuid, uuid, uuid\) to service_role;/);return m?m[0]:null;};const a=ex(fs.readFileSync('database/002_functions.sql','utf8'));const b=ex(fs.readFileSync('database/migrations/2026-06-26-repoint-account.sql','utf8'));if(a&&b&&a===b){console.log('IDENTICAL OK')}else{console.error('DIFFERS — sửa cho trùng');process.exit(1)}"
 ```
 
-Expected: không có dòng khác biệt (rỗng). Nếu lệch → sửa cho trùng.
+Expected: in `IDENTICAL OK`. Nếu `DIFFERS` → chỉnh 2 block cho byte-identical (thân hàm comment-free như precedent check_in_self).
 
 - [ ] **Step 6: Commit**
 
@@ -803,6 +799,14 @@ Trong `useEffect` init (đoạn reset khi mở modal), thêm:
     setRepointError(null);
 ```
 
+[NB-2] Gộp trạng thái busy để khi repoint chạy thì nút "Lưu" (luồng sửa field) cũng disable, tránh PATCH + repoint chạy song song. Sửa dòng `const isBusy = updateM.isPending;` thành:
+
+```ts
+  const isBusy = updateM.isPending || repointM.isPending;
+```
+
+(`repointM` khai báo ngay sau `updateM`, trước dòng `isBusy` — hợp lệ.)
+
 - [ ] **Step 2: Thêm điều kiện hiển thị + handler (sau khai báo `isUnlinked`)**
 
 ```ts
@@ -942,11 +946,13 @@ Expected: tất cả xanh. (KHÔNG chạy `npm run build` khi `next dev` 3009 đ
 
 - [ ] **Step 2: pgTAP toàn suite trên throwaway DB (xác nhận không vỡ test khác)**
 
-```bash
-export PGTAP_DB_URL='postgres://postgres:postgres@localhost:5432/chill_pgtap'
+```powershell
+$env:PGTAP_DB_URL = 'postgres://postgres:postgres@localhost:5432/chill_pgtap'
 node scripts/ci/apply-schema.mjs
 node scripts/pgtap-run.mjs            # toàn bộ database/tests/*.sql
 ```
+
+(Bash tool tương đương: `export PGTAP_DB_URL='...'`.)
 
 Expected: `✓ All assertions passed.` (gồm cả 320 mới = 18/18).
 
@@ -991,3 +997,11 @@ docker exec -i supabase-db psql -U postgres -d postgres -c \
 **Placeholder scan:** không có TBD/TODO; mọi step có code/lệnh cụ thể + expected output.
 
 **Type consistency:** `repointAccount(supabase, authUserId, targetEmployeeId, sourceEmployeeId)` đồng nhất giữa Task 6 (định nghĩa) và Task 7 (gọi qua hook input `{authUserId, targetEmployeeId, sourceEmployeeId}`). RPC param `p_auth_user_id/p_target_employee_id/p_expected_source_employee_id` đồng nhất giữa Task 2 (định nghĩa), Task 5 (route gọi), Task 1 (pgTAP gọi). Helper tên `mapRepointErrorStatus/validateRepointBody/isSelfRepoint` đồng nhất Task 3/4/5.
+
+## Codex plan review — findings đã xử lý
+
+- **[B-1] (blocking)** Block hàm 002 có inline comment nhưng migration không → Step 5 diff fail. → **Đã sửa**: gỡ inline comment khỏi thân hàm 002 → 002 ≡ migration (comment-free, theo precedent `check_in_self`).
+- **[NB-1]** Lệnh verify dùng Bash syntax không chạy PowerShell. → **Đã sửa**: env-var `$env:PGTAP_DB_URL` (Task 1 Step 2, Task 8 Step 2) + diff byte-identical đổi sang node one-liner cross-shell (Task 2 Step 5).
+- **[NB-2]** Repoint pending nhưng nút Lưu vẫn bật → PATCH + repoint song song. → **Đã sửa**: `const isBusy = updateM.isPending || repointM.isPending;` (Task 7 Step 1).
+
+Codex đã verify OK: SQL logic, vị trí chèn 003 (002 tạo hàm trước 003 → không pitfall ordering), pgTAP fixtures khớp schema + `plan(18)` đúng, imports/queryKeys/UI props tồn tại.

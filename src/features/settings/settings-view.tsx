@@ -10,7 +10,9 @@ import {
   useAppSettingsQuery,
   useSettingsAccountsQuery,
   useAccountQuery,
-  useSignupRequestsQuery
+  useSignupRequestsQuery,
+  useEmployeesQuery,
+  useAccountedEmployeeIdsQuery
 } from "@/hooks/queries";
 import type { UserRole } from "@/lib/types";
 import { SidebarConfigForm } from "./sidebar-config-form";
@@ -46,6 +48,9 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
   const settingsAccountsQuery = useSettingsAccountsQuery(supabase, isEnabled);
   const accountQuery = useAccountQuery(supabase, isEnabled);
   const signupRequestsQuery = useSignupRequestsQuery(supabase, isEnabled);
+  // For the "gắn tài khoản vào nhân viên có sẵn" pickers in the account modals.
+  const employeesQuery = useEmployeesQuery(supabase, isEnabled);
+  const accountedQuery = useAccountedEmployeeIdsQuery(supabase, isEnabled);
 
   if (!isEnabled) {
     return (
@@ -75,6 +80,12 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
   const accounts = settingsAccountsQuery.data ?? [];
   const currentAccount = accountQuery.data;
 
+  // Active employees with no login account yet — candidates for linking.
+  const accountedIds = new Set(accountedQuery.data ?? []);
+  const unlinkedEmployees = (employeesQuery.data ?? [])
+    .filter((e) => e.is_active && !accountedIds.has(e.id))
+    .map((e) => ({ id: e.id, name: e.name }));
+
   if (!appSettings || !currentAccount) {
     return (
       <EmptyState
@@ -99,6 +110,7 @@ export function SettingsView({ role, authHeader }: SettingsViewProps) {
             accounts={accounts}
             currentUserAuthId={currentAccount.auth_user_id}
             currentUserRole={role}
+            unlinkedEmployees={unlinkedEmployees}
           />
           <SignupRequestsCard requests={signupRequestsQuery.data ?? []} role={role} />
           <SidebarConfigForm

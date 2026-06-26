@@ -23,6 +23,7 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useCreateUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { UserRole } from "@/lib/types";
+import type { CreateUserPayload } from "@/lib/data/accounts";
 
 const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer", "employee_self_service"];
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
@@ -32,6 +33,8 @@ interface CreateAccountModalProps {
   onOpenChange(open: boolean): void;
   /** The current user's role — owner-only role ceiling: only an owner may grant `owner`. */
   approverRole: UserRole;
+  /** Active employees with no account yet — for the optional "gắn vào NV có sẵn" picker. */
+  unlinkedEmployees: { id: string; name: string }[];
 }
 
 /**
@@ -41,7 +44,7 @@ interface CreateAccountModalProps {
  * password ≥8, name required, role enum, hourly_rate 0..10_000_000).
  * Showing inline errors avoids a round-trip for obvious typos.
  */
-export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateAccountModalProps) {
+export function CreateAccountModal({ open, onOpenChange, approverRole, unlinkedEmployees }: CreateAccountModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
   const createM = useCreateUser(supabase);
@@ -57,7 +60,12 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
   const [position, setPosition] = useState("");
   const [code, setCode] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
+  const [linkEmployeeId, setLinkEmployeeId] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // When an existing employee is picked, we LINK the new login to it (no duplicate
+  // employee) and the name/position/rate come from that employee.
+  const linkedEmp = linkEmployeeId ? unlinkedEmployees.find((e) => e.id === linkEmployeeId) ?? null : null;
 
   function reset() {
     setEmail("");
@@ -67,6 +75,7 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
     setPosition("");
     setCode("");
     setHourlyRate("");
+    setLinkEmployeeId("");
     setError(null);
   }
 
@@ -79,7 +88,7 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
     event.preventDefault();
     setError(null);
 
-    // Client-side validation
+    // Client-side validation (email/password always required)
     if (!EMAIL_REGEX.test(email.trim())) {
       setError("Email không hợp lệ.");
       return;
@@ -88,18 +97,29 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
       setError("Mật khẩu tối thiểu 8 ký tự.");
       return;
     }
-    if (!name.trim()) {
-      setError("Họ và tên bắt buộc.");
-      return;
-    }
-    const rateNum = hourlyRate.trim() === "" ? 0 : Number(hourlyRate);
-    if (!Number.isFinite(rateNum) || rateNum < 0 || rateNum > 10_000_000) {
-      setError("Lương theo giờ phải nằm trong 0–10.000.000.");
-      return;
-    }
 
-    try {
-      await createM.mutateAsync({
+    // Two paths: link to an existing employee (no new employee — name comes from
+    // that employee, position/rate are ignored server-side) vs create a new one.
+    let payload: CreateUserPayload;
+    if (linkedEmp) {
+      payload = {
+        email: email.trim(),
+        password,
+        name: linkedEmp.name,
+        role,
+        employee_id: linkedEmp.id
+      };
+    } else {
+      if (!name.trim()) {
+        setError("Họ và tên bắt buộc.");
+        return;
+      }
+      const rateNum = hourlyRate.trim() === "" ? 0 : Number(hourlyRate);
+      if (!Number.isFinite(rateNum) || rateNum < 0 || rateNum > 10_000_000) {
+        setError("Lương theo giờ phải nằm trong 0–10.000.000.");
+        return;
+      }
+      payload = {
         email: email.trim(),
         password,
         name: name.trim(),
@@ -107,11 +127,16 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
         position: position.trim() || undefined,
         code: code.trim() || undefined,
         hourly_rate: rateNum
-      });
+      };
+    }
+
+    try {
+      await createM.mutateAsync(payload);
+      const displayName = linkedEmp ? linkedEmp.name : name.trim();
       toast({
         semantic: "success",
         title: "Đã tạo tài khoản",
-        message: `${name.trim()} (${ROLE_LABELS[role]}) đã có thể đăng nhập.`
+        message: `${displayName} (${ROLE_LABELS[role]}) đã có thể đăng nhập.`
       });
       handleOpenChange(false);
     } catch (err) {
@@ -137,6 +162,31 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
             </AlertBanner>
           )}
 
+          {unlinkedEmployees.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="create-account-link" className="text-sm text-ink-2">
+                Gắn vào nhân viên có sẵn (tuỳ chọn)
+              </label>
+              <Select
+                value={linkEmployeeId || "__new__"}
+                onValueChange={(v) => setLinkEmployeeId(v === "__new__" ? "" : v)}
+                disabled={isBusy}
+              >
+                <SelectTrigger id="create-account-link" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__new__">— Tạo nhân viên mới —</SelectItem>
+                  {unlinkedEmployees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <TextField
             label="Email"
             type="email"
@@ -157,16 +207,23 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
             disabled={isBusy}
             placeholder="≥ 8 ký tự"
           />
-          <TextField
-            label="Họ và tên"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            disabled={isBusy}
-            placeholder="Nguyễn Văn A"
-          />
+          {linkedEmp ? (
+            <p className="text-sm text-ink-2">
+              Sẽ gắn tài khoản vào nhân viên có sẵn:{" "}
+              <strong className="text-ink">{linkedEmp.name}</strong>
+            </p>
+          ) : (
+            <TextField
+              label="Họ và tên"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              disabled={isBusy}
+              placeholder="Nguyễn Văn A"
+            />
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="create-account-role" className="text-sm text-ink-2">Vai trò</label>
@@ -184,34 +241,40 @@ export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateA
             </Select>
           </div>
 
-          <TextField
-            label="Mã nhân viên (tuỳ chọn)"
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            disabled={isBusy}
-            placeholder="NV001"
-          />
-          <TextField
-            label="Vị trí (tuỳ chọn)"
-            type="text"
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            disabled={isBusy}
-            placeholder="Barista"
-          />
-          <TextField
-            label="Lương theo giờ (tuỳ chọn, VND)"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={10_000_000}
-            step={1000}
-            value={hourlyRate}
-            onChange={(e) => setHourlyRate(e.target.value)}
-            disabled={isBusy}
-            placeholder="0"
-          />
+          {/* New-employee fields — hidden when linking to an existing employee
+              (the server ignores these, and they belong to the picked employee). */}
+          {!linkedEmp && (
+            <>
+              <TextField
+                label="Mã nhân viên (tuỳ chọn)"
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                disabled={isBusy}
+                placeholder="NV001"
+              />
+              <TextField
+                label="Vị trí (tuỳ chọn)"
+                type="text"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                disabled={isBusy}
+                placeholder="Barista"
+              />
+              <TextField
+                label="Lương theo giờ (tuỳ chọn, VND)"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={10_000_000}
+                step={1000}
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                disabled={isBusy}
+                placeholder="0"
+              />
+            </>
+          )}
 
           <ModalActions>
             <Button

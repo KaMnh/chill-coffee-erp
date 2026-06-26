@@ -27,6 +27,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { assertCanAssignRole, getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/types";
+import { MANAGE_USERS_ROLES } from "@/lib/api-roles";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,7 +48,7 @@ function badRequest(message: string, status = 400) {
 export async function POST(req: NextRequest) {
   let caller: { userId: string; role: string };
   try {
-    caller = await requireAuth(req.headers.get("authorization"), ["owner", "manager"]);
+    caller = await requireAuth(req.headers.get("authorization"), MANAGE_USERS_ROLES);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auth failed.";
     const code = message.includes("Authorization") || message.includes("Token") ? 401 : 403;

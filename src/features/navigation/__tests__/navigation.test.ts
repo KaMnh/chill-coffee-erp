@@ -4,6 +4,7 @@ import {
   getGroupedNav,
   getMobileTabs,
   getMobileDrawerGroups,
+  hasBasePageAccess,
   NAV_GROUPS,
 } from "../navigation";
 
@@ -154,10 +155,12 @@ describe("getMobileDrawerGroups (drawer 'Thêm')", () => {
     expect(byKey.system).toEqual(["settings"]);
   });
 
-  it("staff_operator mặc định: Bàn giao + Kho + Báo cáo", () => {
+  it("staff_operator mặc định: Bàn giao + Chấm công + Kho + Báo cáo", () => {
+    // checkin (Phase 1) thêm vào nhóm staff cho staff_operator — đứng sau handover
+    // theo thứ tự NAV_ITEMS; nằm trong drawer (không lên 4 tab đầu).
     const groups = getMobileDrawerGroups(makeAccount("staff_operator"), SETTINGS);
     const flat = groups.flatMap((g) => g.items.map((i) => i.key));
-    expect(flat).toEqual(["handover", "inventory", "reports"]);
+    expect(flat).toEqual(["handover", "checkin", "inventory", "reports"]);
   });
 
   it("tabs và drawer không trùng nhau, gộp lại = đúng visible nav", () => {
@@ -172,5 +175,30 @@ describe("getMobileDrawerGroups (drawer 'Thêm')", () => {
 
   it("employee_viewer → drawer rỗng (dashboard đã ở tab)", () => {
     expect(getMobileDrawerGroups(makeAccount("employee_viewer"), SETTINGS)).toEqual([]);
+  });
+});
+
+describe("checkin view (Phase 1: self-checkin cho manager + staff_operator, KHÔNG owner)", () => {
+  it("manager + staff_operator + employee_self_service xem được checkin; owner + viewer thì không", () => {
+    expect(hasBasePageAccess("manager", "checkin")).toBe(true);
+    expect(hasBasePageAccess("staff_operator", "checkin")).toBe(true);
+    expect(hasBasePageAccess("employee_self_service", "checkin")).toBe(true);
+    expect(hasBasePageAccess("owner", "checkin")).toBe(false);
+    expect(hasBasePageAccess("employee_viewer", "checkin")).toBe(false);
+  });
+
+  it("manager mặc định: 'Chấm công' nằm trong nhóm staff", () => {
+    const staff = getGroupedNav(makeAccount("manager"), SETTINGS).find((g) => g.key === "staff");
+    expect(staff?.items.map((i) => i.key)).toContain("checkin");
+  });
+
+  it("staff_operator mặc định: 'Chấm công' nằm trong nhóm staff", () => {
+    const staff = getGroupedNav(makeAccount("staff_operator"), SETTINGS).find((g) => g.key === "staff");
+    expect(staff?.items.map((i) => i.key)).toContain("checkin");
+  });
+
+  it("owner mặc định KHÔNG có 'Chấm công'", () => {
+    const flat = getGroupedNav(makeAccount("owner"), SETTINGS).flatMap((g) => g.items.map((i) => i.key));
+    expect(flat).not.toContain("checkin");
   });
 });

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
 import { parseClientIp, isIpAllowed } from "@/lib/ip-allowlist";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { CHECKIN_ALLOWED_ROLES } from "@/lib/api-roles";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   // (B4) employees only; operators use the existing check_in_employee flow.
   let userId: string;
-  try { ({ userId } = await requireAuth(req.headers.get("authorization"), ["employee_self_service"])); }
+  try { ({ userId } = await requireAuth(req.headers.get("authorization"), CHECKIN_ALLOWED_ROLES)); }
   catch (e) { const m = e instanceof Error ? e.message : "Auth failed."; return NextResponse.json({ status: "error", error: m }, { status: m.includes("Authorization") || m.includes("Token") ? 401 : 403 }); }
 
   const supabase = getServiceRoleClient();

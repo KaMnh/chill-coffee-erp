@@ -71,6 +71,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     name?: string;
     position?: string;
     hourly_rate?: number;
+    employee_id?: string;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -112,12 +113,40 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     accountPatch.status = body.status;
   }
 
+  // Link an UNLINKED account to an existing employee ("Cấp tài khoản → liên kết").
+  // Only links accounts that are NOT already attached (no re-pointing) and only to
+  // an employee that has no account yet (the unique(employee_id) index also enforces it).
+  if (body.employee_id !== undefined) {
+    if (targetAccount.employee_id) {
+      return badRequest("Tài khoản này đã gắn nhân viên — không thể đổi.", 409);
+    }
+    const { data: emp } = await supabase
+      .from("employees")
+      .select("id")
+      .eq("id", body.employee_id)
+      .maybeSingle();
+    if (!emp) return badRequest("Nhân viên không tồn tại.", 400);
+    const { data: taken } = await supabase
+      .from("employee_accounts")
+      .select("id")
+      .eq("employee_id", body.employee_id)
+      .maybeSingle();
+    if (taken) return badRequest("Nhân viên này đã có tài khoản.", 409);
+    accountPatch.employee_id = body.employee_id;
+  }
+
   if (Object.keys(accountPatch).length > 0) {
     const { error } = await supabase
       .from("employee_accounts")
       .update(accountPatch)
       .eq("auth_user_id", authUserId);
-    if (error) return badRequest(`Không update employee_accounts: ${error.message}`, 500);
+    if (error) {
+      // Unique(employee_id) race: the employee got an account between our check and write.
+      if ((error as { code?: string }).code === "23505") {
+        return badRequest("Nhân viên này đã có tài khoản.", 409);
+      }
+      return badRequest(`Không update employee_accounts: ${error.message}`, 500);
+    }
   }
 
   // Update employees (name/position/hourly_rate)

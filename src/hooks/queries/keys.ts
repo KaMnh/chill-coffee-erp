@@ -80,4 +80,8 @@ export const queryKeys = {
 
   // Task 9: Owner anchor/gate panel (2026-06-25)
   shopAnchors: () => ["shop-anchors"] as const,
+
+  // Cấp/liên kết tài khoản cho nhân viên có sẵn (shift page)
+  accountedEmployeeIds: () => ["accounted-employee-ids"] as const,
+  unlinkedAccounts: () => ["unlinked-accounts"] as const,
 };

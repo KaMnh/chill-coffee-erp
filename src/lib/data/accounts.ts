@@ -16,7 +16,11 @@ export type CreateUserPayload = {
   position?: string;
   hourly_rate?: number;
   code?: string;
+  /** Link to an existing employee instead of creating a new one (avoids duplicates). */
+  employee_id?: string;
 };
+
+export type UnlinkedAccount = { auth_user_id: string; email: string; role: UserRole };
 
 /** Tạo user mới qua /api/users (owner/manager only). */
 export async function createUserAccount(supabase: SupabaseClient, payload: CreateUserPayload) {
@@ -43,6 +47,8 @@ export async function updateUserAccount(
     name?: string;
     position?: string;
     hourly_rate?: number;
+    /** Link this (currently unlinked) account to an existing employee. */
+    employee_id?: string;
   }
 ) {
   const headers = { ...(await authHeader(supabase)), "Content-Type": "application/json" };
@@ -131,4 +137,24 @@ export async function loadSettingsAccounts(supabase: SupabaseClient): Promise<Se
       sidebar_config: profileMap.get(row.auth_user_id as string) ?? null
     };
   });
+}
+
+/** employee_ids that already have a login account (owner/manager via RLS). */
+export async function loadAccountedEmployeeIds(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("employee_accounts")
+    .select("employee_id")
+    .not("employee_id", "is", null);
+  if (error) throw toAppError(error, "Không tải được liên kết tài khoản.");
+  return (data ?? [])
+    .map((r) => (r as { employee_id: string | null }).employee_id)
+    .filter((id): id is string => Boolean(id));
+}
+
+/** Active accounts not yet attached to any employee (for the "liên kết" picker). */
+export async function fetchUnlinkedAccounts(supabase: SupabaseClient): Promise<UnlinkedAccount[]> {
+  const res = await fetch("/api/users/unlinked", { headers: await authHeader(supabase) });
+  const json = (await res.json().catch(() => ({}))) as { status?: string; accounts?: UnlinkedAccount[]; error?: string };
+  if (!res.ok || json.status !== "ok") throw new Error(json.error ?? "Không tải được tài khoản chưa gắn.");
+  return json.accounts ?? [];
 }

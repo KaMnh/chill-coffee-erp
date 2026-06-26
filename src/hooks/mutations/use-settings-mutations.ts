@@ -115,6 +115,8 @@ export function useCreateUser(supabase: SupabaseClient | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.accountedEmployeeIds() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedAccounts() });
     }
   });
 }
@@ -127,6 +129,7 @@ export interface UpdateUserInput {
     name?: string;
     position?: string;
     hourly_rate?: number;
+    employee_id?: string;
   };
 }
 
@@ -140,6 +143,8 @@ export function useUpdateUser(supabase: SupabaseClient | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settingsAccounts() });
       queryClient.invalidateQueries({ queryKey: queryKeys.account() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.accountedEmployeeIds() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedAccounts() });
     }
   });
 }

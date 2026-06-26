@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useDeactivateUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
-import type { SettingsAccount } from "@/lib/types";
+import type { SettingsAccount, UserRole } from "@/lib/types";
 import { Reveal } from "@/components/ui/reveal";
 import { CreateAccountModal } from "./create-account-modal";
 import { EditAccountModal } from "./edit-account-modal";
@@ -24,11 +24,14 @@ import { EditAccountModal } from "./edit-account-modal";
 interface AccountsManagerCardProps {
   accounts: SettingsAccount[];
   currentUserAuthId: string;
+  /** Current user's role — drives the owner-only role ceiling in the modals. */
+  currentUserRole: UserRole;
 }
 
 export function AccountsManagerCard({
   accounts,
-  currentUserAuthId
+  currentUserAuthId,
+  currentUserRole
 }: AccountsManagerCardProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
@@ -167,7 +170,11 @@ export function AccountsManagerCard({
         </CardBody>
       </Card>
 
-      <CreateAccountModal open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateAccountModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        approverRole={currentUserRole}
+      />
 
       <EditAccountModal
         open={editing !== null}
@@ -176,6 +183,7 @@ export function AccountsManagerCard({
         }}
         account={editing}
         currentUserAuthId={currentUserAuthId}
+        approverRole={currentUserRole}
       />
 
       <Modal

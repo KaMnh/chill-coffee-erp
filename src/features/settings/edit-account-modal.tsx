@@ -24,13 +24,15 @@ import { useUpdateUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { SettingsAccount, UserRole } from "@/lib/types";
 
-const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer"];
+const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer", "employee_self_service"];
 
 interface EditAccountModalProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   account: SettingsAccount | null;
   currentUserAuthId: string;
+  /** The current user's role — owner-only ceiling: only an owner may grant/modify `owner`. */
+  approverRole: UserRole;
 }
 
 /**
@@ -46,7 +48,8 @@ export function EditAccountModal({
   open,
   onOpenChange,
   account,
-  currentUserAuthId
+  currentUserAuthId,
+  approverRole
 }: EditAccountModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
@@ -74,6 +77,16 @@ export function EditAccountModal({
 
   const isSelf = account.auth_user_id === currentUserAuthId;
   const isBusy = updateM.isPending;
+
+  // Owner-only ceiling (UI; server also enforces): a non-owner cannot grant `owner`
+  // nor modify an account that is currently `owner`.
+  const isOwnerApprover = approverRole === "owner";
+  const cannotModifyOwner = account.role === "owner" && !isOwnerApprover;
+  // Include `owner` in the options when the target IS owner (so the disabled select
+  // can still render the current value), otherwise hide it from non-owners.
+  const roleOptions =
+    isOwnerApprover || account.role === "owner" ? ROLES : ROLES.filter((r) => r !== "owner");
+  const roleStatusDisabled = isBusy || isSelf || cannotModifyOwner;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,13 +158,13 @@ export function EditAccountModal({
             <Select
               value={role}
               onValueChange={(v) => setRole(v as UserRole)}
-              disabled={isBusy || isSelf}
+              disabled={roleStatusDisabled}
             >
               <SelectTrigger id="edit-account-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => (
+                {roleOptions.map((r) => (
                   <SelectItem key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </SelectItem>
@@ -163,6 +176,11 @@ export function EditAccountModal({
                 Không thể tự đổi vai trò của chính mình.
               </p>
             )}
+            {cannotModifyOwner && !isSelf && (
+              <p className="text-xs text-muted">
+                Chỉ owner mới sửa được tài khoản owner.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -170,7 +188,7 @@ export function EditAccountModal({
             <Select
               value={status}
               onValueChange={(v) => setStatus(v as "active" | "disabled")}
-              disabled={isBusy || isSelf}
+              disabled={roleStatusDisabled}
             >
               <SelectTrigger id="edit-account-status" className="w-full">
                 <SelectValue />

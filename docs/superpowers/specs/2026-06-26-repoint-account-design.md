@@ -54,16 +54,16 @@ Vì không xoá NV nguồn, **không có nguy cơ** cascade mất `expense_histo
   `grant execute on function public.repoint_account(uuid, uuid, uuid) to service_role;`
 - **Thuật toán (1 transaction — toàn bộ thân hàm)**:
   1. `p_auth_user_id`/`p_target_employee_id`/`p_expected_source_employee_id` null → `raise … errcode 'P0001'`.
-  2. Load account theo `auth_user_id` (`id, employee_id`). Không có → `raise … errcode 'P0002'` ("Không tìm thấy tài khoản.").
+  2. **Lock row account**: `SELECT id, employee_id INTO v_acc … FROM employee_accounts WHERE auth_user_id = p_auth_user_id FOR UPDATE`. Không có → `raise … errcode 'P0002'` ("Không tìm thấy tài khoản."). (`FOR UPDATE` serialize mọi re-point đồng thời trên CÙNG account — chống TOCTOU, [B-NEW].)
   3. Account `employee_id IS NULL` → `raise … errcode 'P0001'` ("Tài khoản chưa gắn nhân viên — dùng chức năng liên kết."). (Re-point chỉ cho account ĐÃ gắn.)
-  4. `source_employee_id = account.employee_id`. **[NB-1] stale guard**: nếu `source_employee_id <> p_expected_source_employee_id` → `raise … errcode 'P0001'` ("Dữ liệu đã thay đổi — tải lại trang rồi thử lại.").
-  5. Nếu `source_employee_id = p_target_employee_id` → `raise … errcode 'P0001'` ("Tài khoản đã gắn đúng nhân viên này rồi.").
-  6. Load NV đích (`id, name, is_active`). Không tồn tại hoặc `is_active=false` → `raise … errcode 'P0002'` ("Nhân viên đích không tồn tại hoặc đã nghỉ.").
-  7. NV đích đã có account (`SELECT 1 FROM employee_accounts WHERE employee_id = p_target`) → `raise … errcode '23505'` ("Nhân viên đích đã có tài khoản.").
-  8. `UPDATE employee_accounts SET employee_id = p_target WHERE auth_user_id = p_auth_user_id`. (Unique partial index là backstop; nếu đua → 23505.)
-  9. `UPDATE employees SET is_active = false WHERE id = source_employee_id`.
-  10. **[B-3] Upsert profile** (KHỚP PATCH `[id]/route.ts:175` dùng upsert): `INSERT INTO profiles (id, display_name) VALUES (p_auth_user_id, <target.name>) ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name`. (Đảm bảo display_name = tên NV đích kể cả khi thiếu profile row → thoả acceptance §6.1.)
-  11. `return jsonb_build_object('auth_user_id', p_auth_user_id, 'employee_id', p_target, 'source_employee_id', source_employee_id, 'source_deactivated', true)`.
+  4. `source_employee_id = v_acc.employee_id`. Nếu `source_employee_id = p_target_employee_id` → `raise … errcode 'P0001'` ("Tài khoản đã gắn đúng nhân viên này rồi.").
+  5. Load NV đích (`id, name, is_active`). Không tồn tại hoặc `is_active=false` → `raise … errcode 'P0002'` ("Nhân viên đích không tồn tại hoặc đã nghỉ.").
+  6. NV đích đã có account (`SELECT 1 FROM employee_accounts WHERE employee_id = p_target`) → `raise … errcode '23505'` ("Nhân viên đích đã có tài khoản.").
+  7. **[B-NEW] Atomic conditional UPDATE** (stale guard [NB-1] + serialize trong 1 câu lệnh, KHÔNG đọc-rồi-ghi):
+     `UPDATE employee_accounts SET employee_id = p_target WHERE auth_user_id = p_auth_user_id AND employee_id = p_expected_source_employee_id;` → nếu `NOT FOUND` (`GET DIAGNOSTICS` / `ROW_COUNT = 0`) → `raise … errcode 'P0001'` ("Dữ liệu đã thay đổi — tải lại trang rồi thử lại."). (Unique partial index `employee_accounts_one_account_per_employee` là backstop cho đua 2 account→cùng target → 23505.)
+  8. `UPDATE employees SET is_active = false WHERE id = source_employee_id`.
+  9. **[B-3] Upsert profile** (KHỚP PATCH `[id]/route.ts:175` dùng upsert): `INSERT INTO profiles (id, display_name) VALUES (p_auth_user_id, <target.name>) ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name`. (Đảm bảo display_name = tên NV đích kể cả khi thiếu profile row → thoả acceptance §6.1.)
+  10. `return jsonb_build_object('auth_user_id', p_auth_user_id, 'employee_id', p_target, 'source_employee_id', source_employee_id, 'source_deactivated', true)`.
 - **[B-1] Triple-write** (lock-down phải sống sót cả DB sạch lẫn restore-replay):
   - `database/002_functions.sql`: `create or replace function` + `revoke/grant` (canonical).
   - `database/003_rls.sql`: **re-assert** `revoke … from public, anon, authenticated; grant … to service_role;` cho `repoint_account(uuid,uuid,uuid)` **ngay sau** blanket grant ở `003_rls.sql:57` (cạnh khối check_in_self/fresh_anchor_ips/record_shop_anchor_heartbeat ở dòng 63-71). **Bắt buộc** — nếu thiếu, blanket grant ở 003 sẽ cấp lại execute cho `authenticated` trên DB sạch (lỗ hổng: client gọi thẳng RPC service-definer).
@@ -126,7 +126,8 @@ Mẫu theo `database/tests/310_self_checkin.sql` (fixtures auth.users/employees/
 6. Account unlinked (employee_id NULL) → throws (P0001).
 7. target == source → throws (P0001).
 8. **Stale source**: `p_expected_source` ≠ employee_id hiện tại → throws (P0001) ([NB-1]).
-9. Grant ([B-1]): `has_function_privilege('service_role', 'public.repoint_account(uuid,uuid,uuid)', 'execute')` = true; `... 'authenticated' ...` = false. (Throwaway DB đã áp 001→002→003 → đúng trạng thái canonical sau blanket grant.)
+9. Grant ([B-1]): `has_function_privilege('service_role', 'public.repoint_account(uuid,uuid,uuid)', 'execute')` = true; `... 'authenticated' ...` = false.
+   - **[NB-NEW] Caveat thứ tự apply**: throwaway DB áp 001→002→003→**migrations**, mà migration cũng có `revoke/grant` → test này verify trạng thái *hiệu lực cuối cùng* (đúng cái app chạy), KHÔNG phân biệt được "lock-down đến từ 003" hay "từ migration". Phần re-assert ở `003_rls.sql` (canonical, cho DB sạch KHÔNG có migration trong tương lai) được đảm bảo bằng: (a) §8 liệt kê sửa `003_rls.sql`; (b) code review đối chiếu khối dòng 63-71. Ghi rõ caveat này trong comment đầu file test.
 10. Unique index `employee_accounts_one_account_per_employee` vẫn còn hiệu lực — thử cấp TK thứ 2 cho Y → lỗi 23505.
 
 > **Số plan**: cập nhật `select plan(N)` đúng số assert. Đăng ký file vào runner nếu cần (kiểm `scripts/pgtap-run.mjs` / `tools/pgtap-local.mjs` — file mới trong `database/tests/` thường tự được iterate; xác nhận khi implement).
@@ -182,7 +183,8 @@ Mẫu theo `database/tests/310_self_checkin.sql` (fixtures auth.users/employees/
 - [ ] TDD: pgTAP + Vitest xanh; có test cho mọi nhánh. (§6, §7)
 - [ ] **Triple-write RPC lock-down (002 + 003 + migration)** — re-assert revoke/grant sau blanket grant 003 ([B-1]). (§4.1, §8)
 - [ ] **Upsert profile** (khớp PATCH), không UPDATE-only ([B-3]). (§4.1 b10)
-- [ ] **Stale-source guard** `p_expected_source_employee_id` ([NB-1]). (§4.1 b4, §4.2, §4.3)
+- [ ] **Stale-source guard** `p_expected_source_employee_id` ([NB-1]). (§4.1 b7, §4.2, §4.3)
+- [ ] **Concurrency-safe**: `FOR UPDATE` + atomic conditional UPDATE (không TOCTOU) ([B-NEW]). (§4.1 b2, b7)
 - [ ] **Helper thuần + Vitest** cho mapper/validate/self ([B-2]). (§4.2, §7.2)
 - [ ] **pgTAP assert cả 3 bảng con** giữ nguyên ([NB-2]). (§7.1 #2)
 - [ ] Base off origin/main, PR vào main, tag vX.Y.Z khi xong. (header)
@@ -206,6 +208,11 @@ Spec v1 bị Codex **REJECT**. Đã xác minh từng finding (đúng cả 5) và
 - **[NB-1]** Confirm không bind NV nguồn (stale UI). → **Đã thêm** `p_expected_source_employee_id` + guard (§4.1 b4, §4.2, §4.3); pgTAP §7.1 #8.
 - **[NB-2]** pgTAP chỉ kiểm 1 bảng con. → **Đã mở rộng** kiểm cả `shift_assignments`+`shift_payroll_records`+`expense_history_permissions` (§7.1 #2).
 
-**Còn lại để Codex re-review xác nhận:**
-- "Luôn deactivate NV nguồn" khi NV nguồn là NV thật — user đã chấp nhận; UI có dòng cảnh báo rõ (§4.3). Có cần thêm gì không?
-- Đặt tên migration `2026-06-26-repoint-account.sql` so thứ tự áp với `2026-06-26-anchor-heartbeat-token-only.sql` (alphabetical: `anchor` < `repoint` → repoint áp sau, OK) — xác nhận runner iterate theo tên.
+### Codex re-review v2 (resumed thread) — REJECT với 1 finding blocking MỚI, đã sửa:
+
+- **[B-NEW] (blocking)** Stale guard read-then-write (TOCTOU) → 2 concurrent re-point cùng account đều pass rồi UPDATE nối tiếp. → **Đã sửa**: (a) `SELECT … FOR UPDATE` lock row account (§4.1 b2); (b) atomic conditional `UPDATE … WHERE auth_user_id=… AND employee_id = p_expected_source_employee_id`, `NOT FOUND` → P0001 (§4.1 b7). Bỏ hẳn bước đọc-rồi-so-sánh riêng.
+- **[NB-NEW]** Test grant #9 có thể bị migration che (không phân biệt nguồn lock-down). → **Đã ghi caveat** + dựa code review cho 003 reassert (§7.1 #9).
+
+**Codex đã verified đúng:** chữ ký 3-tham-số nhất quán; profile upsert trong security-definer OK (RLS `profiles` không forced, có precedent `002_functions.sql:1841-1855`, không cần grant thêm); thứ tự migration `anchor` < `repoint` OK; toàn bộ B-1..NB-2 v1 đã address đúng.
+
+**Lưu ý khi implement (Codex nhắc):** `src/lib/repoint-account.ts` phải KHÔNG import server-only (giữ pure để Vitest chạy) — enforce lúc viết code.

@@ -24,12 +24,14 @@ import { useCreateUser } from "@/hooks/mutations/use-settings-mutations";
 import { ROLE_LABELS } from "@/features/navigation/navigation";
 import type { UserRole } from "@/lib/types";
 
-const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer"];
+const ROLES: UserRole[] = ["owner", "manager", "staff_operator", "employee_viewer", "employee_self_service"];
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
 interface CreateAccountModalProps {
   open: boolean;
   onOpenChange(open: boolean): void;
+  /** The current user's role — owner-only role ceiling: only an owner may grant `owner`. */
+  approverRole: UserRole;
 }
 
 /**
@@ -39,10 +41,14 @@ interface CreateAccountModalProps {
  * password ≥8, name required, role enum, hourly_rate 0..10_000_000).
  * Showing inline errors avoids a round-trip for obvious typos.
  */
-export function CreateAccountModal({ open, onOpenChange }: CreateAccountModalProps) {
+export function CreateAccountModal({ open, onOpenChange, approverRole }: CreateAccountModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
   const createM = useCreateUser(supabase);
+
+  // Owner-only role ceiling (UI layer; server enforces it too in /api/users): a
+  // non-owner cannot grant the `owner` role, so hide it from the dropdown.
+  const roleOptions = approverRole === "owner" ? ROLES : ROLES.filter((r) => r !== "owner");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -169,7 +175,7 @@ export function CreateAccountModal({ open, onOpenChange }: CreateAccountModalPro
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => (
+                {roleOptions.map((r) => (
                   <SelectItem key={r} value={r}>
                     {ROLE_LABELS[r]}
                   </SelectItem>

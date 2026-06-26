@@ -35,6 +35,8 @@ export type SettingsAccount = {
   auth_user_id: string;
   role: UserRole;
   status: string;
+  /** null = account not yet attached to any employee (linkable from Settings/shift page). */
+  employee_id: string | null;
   employee_name: string | null;
   employee_position: string | null;
   sidebar_config: string[] | null;

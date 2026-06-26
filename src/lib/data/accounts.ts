@@ -111,7 +111,7 @@ export async function loadCurrentAccount(supabase: SupabaseClient): Promise<Acco
 export async function loadSettingsAccounts(supabase: SupabaseClient): Promise<SettingsAccount[]> {
   const { data, error } = await supabase
     .from("employee_accounts")
-    .select("id, auth_user_id, role, status, employees(name, position)")
+    .select("id, auth_user_id, employee_id, role, status, employees(name, position)")
     .order("role", { ascending: true });
   if (error) throw toAppError(error, "Không tải được danh sách tài khoản.");
 
@@ -132,6 +132,7 @@ export async function loadSettingsAccounts(supabase: SupabaseClient): Promise<Se
       auth_user_id: row.auth_user_id as string,
       role: row.role as SettingsAccount["role"],
       status: row.status as string,
+      employee_id: (row.employee_id as string | null) ?? null,
       employee_name: employee?.name ?? null,
       employee_position: employee?.position ?? null,
       sidebar_config: profileMap.get(row.auth_user_id as string) ?? null

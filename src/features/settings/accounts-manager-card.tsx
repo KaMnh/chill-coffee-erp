@@ -26,12 +26,15 @@ interface AccountsManagerCardProps {
   currentUserAuthId: string;
   /** Current user's role — drives the owner-only role ceiling in the modals. */
   currentUserRole: UserRole;
+  /** Active employees with no account yet — for the create/edit "link" pickers. */
+  unlinkedEmployees: { id: string; name: string }[];
 }
 
 export function AccountsManagerCard({
   accounts,
   currentUserAuthId,
-  currentUserRole
+  currentUserRole,
+  unlinkedEmployees
 }: AccountsManagerCardProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
@@ -115,13 +118,22 @@ export function AccountsManagerCard({
                       >
                         <td className="py-3 pr-4">
                           <p className="text-sm text-ink">
-                            {acc.employee_name ?? "(chưa có tên)"}
+                            {acc.employee_name ?? "(chưa gắn nhân viên)"}
                             {isSelf && (
                               <span className="ml-2 text-xs text-muted">(bạn)</span>
                             )}
                           </p>
                           {acc.employee_position && (
                             <p className="text-xs text-muted">{acc.employee_position}</p>
+                          )}
+                          {!acc.employee_id && (
+                            <button
+                              type="button"
+                              className="mt-0.5 text-xs text-warning underline-offset-2 hover:underline"
+                              onClick={() => setEditing(acc)}
+                            >
+                              Chưa gắn nhân viên — gắn ngay
+                            </button>
                           )}
                         </td>
                         <td className="py-3 px-2">
@@ -174,6 +186,7 @@ export function AccountsManagerCard({
         open={createOpen}
         onOpenChange={setCreateOpen}
         approverRole={currentUserRole}
+        unlinkedEmployees={unlinkedEmployees}
       />
 
       <EditAccountModal
@@ -184,6 +197,7 @@ export function AccountsManagerCard({
         account={editing}
         currentUserAuthId={currentUserAuthId}
         approverRole={currentUserRole}
+        unlinkedEmployees={unlinkedEmployees}
       />
 
       <Modal

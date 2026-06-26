@@ -33,6 +33,8 @@ interface EditAccountModalProps {
   currentUserAuthId: string;
   /** The current user's role — owner-only ceiling: only an owner may grant/modify `owner`. */
   approverRole: UserRole;
+  /** Active employees with no account yet — for linking an UNLINKED account. */
+  unlinkedEmployees: { id: string; name: string }[];
 }
 
 /**
@@ -49,7 +51,8 @@ export function EditAccountModal({
   onOpenChange,
   account,
   currentUserAuthId,
-  approverRole
+  approverRole,
+  unlinkedEmployees
 }: EditAccountModalProps) {
   const supabase = useSupabase();
   const { toast } = useToast();
@@ -60,6 +63,7 @@ export function EditAccountModal({
   const [name, setName] = useState("");
   const [position, setPosition] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
+  const [linkEmployeeId, setLinkEmployeeId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // Initialise state when modal opens with a different account.
@@ -70,6 +74,7 @@ export function EditAccountModal({
     setName(account.employee_name ?? "");
     setPosition(account.employee_position ?? "");
     setHourlyRate(""); // backend doesn't return hourly_rate in SettingsAccount; leave blank → unchanged
+    setLinkEmployeeId("");
     setError(null);
   }, [open, account]);
 
@@ -77,6 +82,8 @@ export function EditAccountModal({
 
   const isSelf = account.auth_user_id === currentUserAuthId;
   const isBusy = updateM.isPending;
+  // An account with no employee can only be LINKED here (no name/position/rate to edit).
+  const isUnlinked = !account.employee_id;
 
   // Owner-only ceiling (UI; server also enforces): a non-owner cannot grant `owner`
   // nor modify an account that is currently `owner`.
@@ -92,36 +99,44 @@ export function EditAccountModal({
     event.preventDefault();
     setError(null);
 
-    if (!name.trim()) {
-      setError("Họ và tên bắt buộc.");
-      return;
-    }
-    const rateStr = hourlyRate.trim();
-    const rateNum = rateStr === "" ? undefined : Number(rateStr);
-    if (rateNum !== undefined && (!Number.isFinite(rateNum) || rateNum < 0 || rateNum > 10_000_000)) {
-      setError("Lương theo giờ phải nằm trong 0–10.000.000.");
-      return;
-    }
+    if (!account) return;
 
-    // Build patch with only the changed fields. Skip role for self.
+    // Build patch with only the changed fields.
     const patch: {
       role?: UserRole;
       status?: "active" | "disabled";
       name?: string;
       position?: string;
       hourly_rate?: number;
+      employee_id?: string;
     } = {};
 
-    if (!account) return;
+    // role/status apply to any account (skip role for self).
     if (!isSelf && role !== account.role) patch.role = role;
     if (!isSelf && status !== (account.status === "disabled" ? "disabled" : "active")) {
       patch.status = status;
     }
-    if (name.trim() !== (account.employee_name ?? "")) patch.name = name.trim();
-    if (position.trim() !== (account.employee_position ?? "")) {
-      patch.position = position.trim();
+
+    if (isUnlinked) {
+      // No employee attached → the only employee action is linking to an existing one.
+      if (linkEmployeeId) patch.employee_id = linkEmployeeId;
+    } else {
+      if (!name.trim()) {
+        setError("Họ và tên bắt buộc.");
+        return;
+      }
+      const rateStr = hourlyRate.trim();
+      const rateNum = rateStr === "" ? undefined : Number(rateStr);
+      if (rateNum !== undefined && (!Number.isFinite(rateNum) || rateNum < 0 || rateNum > 10_000_000)) {
+        setError("Lương theo giờ phải nằm trong 0–10.000.000.");
+        return;
+      }
+      if (name.trim() !== (account.employee_name ?? "")) patch.name = name.trim();
+      if (position.trim() !== (account.employee_position ?? "")) {
+        patch.position = position.trim();
+      }
+      if (rateNum !== undefined) patch.hourly_rate = rateNum;
     }
-    if (rateNum !== undefined) patch.hourly_rate = rateNum;
 
     if (Object.keys(patch).length === 0) {
       onOpenChange(false);
@@ -142,7 +157,7 @@ export function EditAccountModal({
       <ModalContent>
         <ModalTitle>Sửa tài khoản</ModalTitle>
         <ModalDescription>
-          {account.employee_name ?? "(chưa có tên)"}
+          {account.employee_name ?? "(chưa gắn nhân viên)"}
           {isSelf && " — đây là bạn"}
         </ModalDescription>
 
@@ -200,34 +215,70 @@ export function EditAccountModal({
             </Select>
           </div>
 
-          <TextField
-            label="Họ và tên"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            disabled={isBusy}
-          />
-          <TextField
-            label="Vị trí"
-            type="text"
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            disabled={isBusy}
-            placeholder="Barista"
-          />
-          <TextField
-            label="Lương theo giờ (VND) — bỏ trống = không đổi"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={10_000_000}
-            step={1000}
-            value={hourlyRate}
-            onChange={(e) => setHourlyRate(e.target.value)}
-            disabled={isBusy}
-            placeholder=""
-          />
+          {isUnlinked ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-account-link" className="text-sm text-ink-2">
+                Gắn vào nhân viên có sẵn
+              </label>
+              {unlinkedEmployees.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Không có nhân viên nào chưa có tài khoản để gắn.
+                </p>
+              ) : (
+                <Select
+                  value={linkEmployeeId || "__none__"}
+                  onValueChange={(v) => setLinkEmployeeId(v === "__none__" ? "" : v)}
+                  disabled={isBusy}
+                >
+                  <SelectTrigger id="edit-account-link" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Không gắn —</SelectItem>
+                    {unlinkedEmployees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-muted">
+                Tài khoản này chưa gắn nhân viên. Chọn một nhân viên (chưa có tài khoản) để liên kết.
+              </p>
+            </div>
+          ) : (
+            <>
+              <TextField
+                label="Họ và tên"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={isBusy}
+              />
+              <TextField
+                label="Vị trí"
+                type="text"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                disabled={isBusy}
+                placeholder="Barista"
+              />
+              <TextField
+                label="Lương theo giờ (VND) — bỏ trống = không đổi"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={10_000_000}
+                step={1000}
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                disabled={isBusy}
+                placeholder=""
+              />
+            </>
+          )}
 
           <ModalActions>
             <Button

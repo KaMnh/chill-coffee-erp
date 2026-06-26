@@ -82,6 +82,19 @@ app container by `compose.yaml`.
 | `CHECKIN_TRUSTED_IP_HEADER` | **Behind Cloudflare** | _(empty)_ | Set to `cf-connecting-ip` behind Cloudflare. When set it is the ONLY IP source — a missing/invalid value → request **rejected** (fail-closed), no `x-forwarded-for` fallback. Leave empty only for a plain `nginx → app` (no platform proxy). |
 | `CHECKIN_RATE_MAX` | No | `10` | Max check-in attempts per window per process. |
 | `CHECKIN_RATE_WINDOW_MS` | No | `60000` | Rate-limit window in milliseconds (default: 60 s). |
+| `CHECKIN_IPV6_PREFIX64` | No | `true` | Match IPv6 by **/64** (shop network). IPv4 always exact. `false` = exact IPv6 (breaks on host rotation). |
+| `CHECKIN_DEBUG` | No | `false` | Log one structured line per check-in IP resolution (`cfConnectingIp`, `resolvedClientIp`, `normalizedClientIp`, `matchedIpRange`, `ipVersion`, `checkinAllowed`). Logs visitor IP (PII) — enable only while diagnosing. |
+
+### IP matching (how the gate compares)
+
+The gate is **CIDR/byte-based**, never raw-string. Every IP (client + anchor) is
+normalized first: IPv4-mapped IPv6 like `::ffff:1.2.3.4` collapses to IPv4, zone
+ids/brackets are stripped. Each anchor entry is treated as a range — a bare IPv4 →
+`/32`, a bare IPv6 → `/64` (or `/128` if `CHECKIN_IPV6_PREFIX64=false`); explicit
+CIDR (`113.161.5.0/24`, `2402:800:abcd::/48`) is also honoured. Matching is
+same-family only (an IPv4 client never matches an IPv6 range and vice-versa), so if
+the anchor was recorded on one family and the employee connects on the other,
+re-anchor on the family staff actually use (or disable IPv6 on shop Wi-Fi).
 
 > **Rate-limiter scope:** the limiter is in-process. It resets on container
 > restart and is not shared across multiple replicas if you scale horizontally.

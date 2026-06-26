@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseClientIp, ipEquals, isIpAllowed } from "@/lib/ip-allowlist";
+import { parseClientIp, ipEquals, isIpAllowed, matchClientIp, isValidIp } from "@/lib/ip-allowlist";
 const H = (h: Record<string, string>) => new Headers(h);
 describe("parseClientIp", () => {
   it("right-most hop, one proxy (ignores spoofed left)", () => { expect(parseClientIp(H({ "x-forwarded-for": "1.2.3.4, 9.9.9.9" }), { trustedProxyCount: 1 })).toBe("9.9.9.9"); });
@@ -52,5 +52,51 @@ describe("isIpAllowed", () => {
   it("IPv4 KHÔNG bị /64 ảnh hưởng (vẫn exact)", () => {
     expect(isIpAllowed("203.0.113.7", ["203.0.113.7"], { ipv6Prefix64: true })).toBe(true);
     expect(isIpAllowed("203.0.113.8", ["203.0.113.7"], { ipv6Prefix64: true })).toBe(false);
+  });
+});
+
+describe("matchClientIp — CIDR/IPv4/IPv6/IPv4-mapped (yêu cầu Cloudflare)", () => {
+  it("IPv4 match /32 (whitelist IP đơn lẻ vẫn chạy)", () => {
+    const r = matchClientIp("113.161.5.10", ["113.161.5.10"]);
+    expect(r).toMatchObject({ allowed: true, version: 4, normalized: "113.161.5.10", matchedRange: "113.161.5.10/32" });
+  });
+  it("IPv4 match theo CIDR /24", () => {
+    expect(matchClientIp("113.161.5.200", ["113.161.5.0/24"])).toMatchObject({ allowed: true, matchedRange: "113.161.5.0/24" });
+    expect(matchClientIp("113.161.6.1", ["113.161.5.0/24"]).allowed).toBe(false);
+  });
+  it("IPv6 match /64 (host trong /64 xoay vẫn khớp); matchedRange = network", () => {
+    const r = matchClientIp("2402:800:abcd:1:aaaa:bbbb:cccc:dddd", ["2402:800:abcd:1::1"], { ipv6Prefix64: true });
+    expect(r).toMatchObject({ allowed: true, version: 6, matchedRange: "2402:800:abcd:1::/64" });
+  });
+  it("IPv6 KHÔNG match (khác /64)", () => {
+    expect(matchClientIp("2402:800:ffff:1::5", ["2402:800:abcd:1::1"], { ipv6Prefix64: true }).allowed).toBe(false);
+  });
+  it("IPv6 match theo CIDR /48 tường minh", () => {
+    expect(matchClientIp("2402:800:abcd:beef::1", ["2402:800:abcd::/48"]).allowed).toBe(true);
+    expect(matchClientIp("2402:800:abce::1", ["2402:800:abcd::/48"]).allowed).toBe(false);
+  });
+  it("IPv4-mapped IPv6 (::ffff:1.2.3.4) normalize về IPv4 và khớp whitelist IPv4", () => {
+    const r = matchClientIp("::ffff:113.161.5.10", ["113.161.5.10"]);
+    expect(r).toMatchObject({ allowed: true, version: 4, normalized: "113.161.5.10", matchedRange: "113.161.5.10/32" });
+  });
+  it("Khác họ (IPv4 client vs IPv6 range, và ngược lại) → KHÔNG match", () => {
+    expect(matchClientIp("113.161.5.10", ["2402:800:abcd::/48"]).allowed).toBe(false);
+    expect(matchClientIp("2402:800:abcd::1", ["113.161.5.0/24"]).allowed).toBe(false);
+  });
+  it("IP không hợp lệ → fallback an toàn (allowed=false, không throw)", () => {
+    expect(matchClientIp("garbage", ["113.161.5.10"])).toMatchObject({ allowed: false, version: null, normalized: null });
+    expect(matchClientIp(null, ["113.161.5.10"]).allowed).toBe(false);
+    expect(matchClientIp("113.161.5.10", ["khong-phai-cidr", "999.1.1.1/33"]).allowed).toBe(false);
+  });
+});
+
+describe("isValidIp (incl IPv4-mapped)", () => {
+  it("nhận IPv4, IPv6, IPv4-mapped; loại rác", () => {
+    expect(isValidIp("113.161.5.10")).toBe(true);
+    expect(isValidIp("2402:800:abcd::1")).toBe(true);
+    expect(isValidIp("::ffff:113.161.5.10")).toBe(true);
+    expect(isValidIp("not-an-ip")).toBe(false);
+    expect(isValidIp("999.1.1.1")).toBe(false);
+    expect(isValidIp(null)).toBe(false);
   });
 });

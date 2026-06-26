@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceRoleClient, requireAuth } from "@/lib/supabase/server";
-import { parseClientIp, isIpAllowed } from "@/lib/ip-allowlist";
+import { parseClientIp, matchClientIp } from "@/lib/ip-allowlist";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { CHECKIN_ALLOWED_ROLES } from "@/lib/api-roles";
 
@@ -13,6 +13,9 @@ const TRUSTED_PROXY_COUNT = Math.max(1, Number(process.env.CHECKIN_TRUSTED_PROXY
 // xoay theo thiết bị / SLAAC privacy, nhưng /64 = mạng quán là cố định. IPv4 không
 // bị ảnh hưởng (luôn exact). Đặt CHECKIN_IPV6_PREFIX64=false để buộc exact IPv6.
 const IPV6_PREFIX64 = process.env.CHECKIN_IPV6_PREFIX64 !== "false";
+const CF_IP_HEADER = process.env.CHECKIN_TRUSTED_IP_HEADER || null;
+// Bật CHECKIN_DEBUG=true để log chẩn đoán IP check-in. PII (IP) — chỉ bật khi cần.
+const CHECKIN_DEBUG = process.env.CHECKIN_DEBUG === "true";
 function safeEquals(a: string, b: string) { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; }
 
 export async function POST(req: NextRequest) {
@@ -51,11 +54,22 @@ export async function POST(req: NextRequest) {
   const allow = ((anchors as string[] | null) ?? []).filter(Boolean);
   if (allow.length === 0) return NextResponse.json({ status: "error", error: "Chưa có thiết bị quán hoạt động." }, { status: 503 });
 
-  const ip = parseClientIp(req.headers, { trustedProxyCount: TRUSTED_PROXY_COUNT, trustedHeader: process.env.CHECKIN_TRUSTED_IP_HEADER || null });
-  // Distinct from a wrong-IP reject: a NULL ip means we couldn't resolve a real
-  // client IP (missing/invalid trusted header → fail-closed, or misconfigured proxy).
+  const ip = parseClientIp(req.headers, { trustedProxyCount: TRUSTED_PROXY_COUNT, trustedHeader: CF_IP_HEADER });
+  const match = matchClientIp(ip, allow, { ipv6Prefix64: IPV6_PREFIX64 });
+  if (CHECKIN_DEBUG) {
+    console.info("[checkin]", JSON.stringify({
+      cfConnectingIp: CF_IP_HEADER ? req.headers.get(CF_IP_HEADER) : null,
+      resolvedClientIp: ip,
+      normalizedClientIp: match.normalized,
+      matchedIpRange: match.matchedRange,
+      ipVersion: match.version,
+      checkinAllowed: match.allowed,
+    }));
+  }
+  // NULL ip = không resolve được real client IP (thiếu/không hợp lệ trusted header
+  // → fail-closed, hoặc proxy sai). Phân biệt với reject sai-IP (403).
   if (!ip) return NextResponse.json({ status: "error", error: "Không xác định được IP thật của bạn (kiểm tra cấu hình proxy/Cloudflare)." }, { status: 400 });
-  if (!isIpAllowed(ip, allow, { ipv6Prefix64: IPV6_PREFIX64 })) return NextResponse.json({ status: "error", error: rejectMessage }, { status: 403 });
+  if (!match.allowed) return NextResponse.json({ status: "error", error: rejectMessage }, { status: 403 });
 
   // (S1) rate-limit only AFTER auth + config + IP gate pass (matches spec §6 order; the write is what we throttle).
   const now = Date.now();

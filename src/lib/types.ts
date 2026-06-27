@@ -585,12 +585,21 @@ export interface CheckinNetworkConfig {
   enabled: boolean;
   reject_message: string;
   grace_hours: number;
+  /** Cho phép nhân viên TỰ ra ca (Phase 2a). Độc lập với `enabled` (tự vào ca). */
+  self_checkout_enabled?: boolean;
 }
 
 export interface MyCheckinStatus {
   employee_name: string;
   checked_in_today: boolean;
   check_in_at: string | null;
+  /** Ca đang mở hôm nay (null nếu chưa vào). */
+  shift_assignment_id?: string | null;
+  checked_out_today?: boolean;
+  check_out_at?: string | null;
+  /** Owner đã bật tự ra ca chưa → màn "Chấm công" hiện nút "Ra ca". */
+  self_checkout_enabled?: boolean;
 }
 
 export type CheckinResult = { employee_name: string; check_in_at: string; already_checked_in: boolean };
+export type CheckoutResult = { employee_name: string; check_out_at: string; total_pay: number; already_checked_out: boolean };

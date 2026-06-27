@@ -27,6 +27,7 @@ const DEFAULT_CONFIG: CheckinNetworkConfig = {
   enabled: false,
   reject_message: "Chỉ chấm công được khi ở tại quán (nối wifi quán).",
   grace_hours: 12,
+  self_checkout_enabled: false,
 };
 
 /** SHA-256 hex of a string via Web Crypto — must match the heartbeat route's hash. */
@@ -76,6 +77,7 @@ export function CheckinConfigForm() {
         reject_message: value?.reject_message ?? DEFAULT_CONFIG.reject_message,
         grace_hours:
           typeof value?.grace_hours === "number" ? value.grace_hours : DEFAULT_CONFIG.grace_hours,
+        self_checkout_enabled: value?.self_checkout_enabled ?? false,
       };
     },
     enabled: !!supabase,
@@ -85,12 +87,14 @@ export function CheckinConfigForm() {
   const [enabled, setEnabled] = useState(DEFAULT_CONFIG.enabled);
   const [rejectMessage, setRejectMessage] = useState(DEFAULT_CONFIG.reject_message);
   const [graceHours, setGraceHours] = useState(String(DEFAULT_CONFIG.grace_hours));
+  const [selfCheckout, setSelfCheckout] = useState(false);
 
   useEffect(() => {
     if (!configQuery.data) return;
     setEnabled(configQuery.data.enabled);
     setRejectMessage(configQuery.data.reject_message);
     setGraceHours(String(configQuery.data.grace_hours));
+    setSelfCheckout(configQuery.data.self_checkout_enabled ?? false);
   }, [configQuery.data]);
 
   // Anchor marking state.
@@ -134,7 +138,8 @@ export function CheckinConfigForm() {
   const dirty =
     enabled !== loadedConfig.enabled ||
     rejectMessage !== loadedConfig.reject_message ||
-    graceNum !== loadedConfig.grace_hours;
+    graceNum !== loadedConfig.grace_hours ||
+    selfCheckout !== (loadedConfig.self_checkout_enabled ?? false);
 
   async function handleMarkDevice() {
     if (!supabase || marking) return;
@@ -207,6 +212,7 @@ export function CheckinConfigForm() {
         enabled,
         reject_message: rejectMessage.trim() || DEFAULT_CONFIG.reject_message,
         grace_hours: graceNum,
+        self_checkout_enabled: selfCheckout,
       });
       toast({ semantic: "success", message: "Đã lưu cấu hình chấm công." });
     } catch (err) {
@@ -354,11 +360,23 @@ export function CheckinConfigForm() {
           ) : (
             <>
               <Switch
-                label={enabled ? "Cổng đang bật" : "Cổng đang tắt"}
+                label={enabled ? "Tự vào ca: đang bật" : "Tự vào ca: đang tắt"}
                 checked={enabled}
                 onCheckedChange={(next) => setEnabled(next)}
                 disabled={!canEnable && !enabled}
               />
+              <div className="space-y-1">
+                <Switch
+                  label={selfCheckout ? "Tự ra ca: đang bật" : "Tự ra ca: đang tắt"}
+                  checked={selfCheckout}
+                  onCheckedChange={(next) => setSelfCheckout(next)}
+                  disabled={!canEnable && !selfCheckout}
+                />
+                <p className="text-xs text-muted">
+                  Cho phép nhân viên tự bấm &quot;Ra ca&quot; trên điện thoại (cùng cổng IP). Ra ca
+                  tự chốt lương lượt đó; chủ/quản lý vẫn sửa được sau.
+                </p>
+              </div>
               <TextField
                 label="Thông báo khi bị chặn (sai IP)"
                 value={rejectMessage}

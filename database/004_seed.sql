@@ -113,5 +113,5 @@ on conflict (key) do update
 --    enabled:false = tính năng TẮT (503) cho tới khi owner cấu hình + có anchor IP.
 -- -----------------------------------------------------------------------------
 insert into public.app_settings (key, value, is_public) values
-  ('checkin_network', '{"enabled": false, "reject_message": "Chỉ chấm công được khi ở tại quán (nối wifi quán).", "grace_hours": 12}'::jsonb, false)
+  ('checkin_network', '{"enabled": false, "reject_message": "Chỉ chấm công được khi ở tại quán (nối wifi quán).", "grace_hours": 12, "self_checkout_enabled": false}'::jsonb, false)
 on conflict (key) do nothing;

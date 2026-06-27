@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShopAnchor, CheckinNetworkConfig, MyCheckinStatus } from "@/lib/types";
-import type { CheckinResult } from "@/lib/types";
-export type { CheckinResult } from "@/lib/types";
+import type { CheckinResult, CheckoutResult } from "@/lib/types";
+export type { CheckinResult, CheckoutResult } from "@/lib/types";
 import { toAppError } from "./_common";
 
 export async function submitCheckin(authHeaders: Record<string, string>): Promise<CheckinResult> {
@@ -10,6 +10,14 @@ export async function submitCheckin(authHeaders: Record<string, string>): Promis
   const body = (await res.json().catch(() => ({}))) as Partial<CheckinResult> & { error?: string };
   if (!res.ok) throw new Error(body.error || "Không chấm công được.");
   return body as CheckinResult;
+}
+
+export async function submitCheckout(authHeaders: Record<string, string>): Promise<CheckoutResult> {
+  if (!authHeaders.Authorization) throw new Error("Phiên đăng nhập hết hạn. Hãy đăng nhập lại.");
+  const res = await fetch("/api/checkout", { method: "POST", headers: { ...authHeaders } });
+  const body = (await res.json().catch(() => ({}))) as Partial<CheckoutResult> & { error?: string };
+  if (!res.ok) throw new Error(body.error || "Không ra ca được.");
+  return body as CheckoutResult;
 }
 
 export async function getMyCheckinStatus(supabase: SupabaseClient): Promise<MyCheckinStatus> {

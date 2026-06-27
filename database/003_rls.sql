@@ -62,6 +62,8 @@ grant execute on all functions in schema public to anon, authenticated, service_
 -- (fresh_anchor_ips). Restore endpoint replay khối 003 này nên phải giữ REVOKE tại đây.
 revoke execute on function public.check_in_self(uuid, inet, text) from public, anon, authenticated;
 grant execute on function public.check_in_self(uuid, inet, text) to service_role;
+revoke execute on function public.check_out_self(uuid, inet, text) from public, anon, authenticated;
+grant execute on function public.check_out_self(uuid, inet, text) to service_role;
 revoke execute on function public.fresh_anchor_ips(numeric) from public, anon, authenticated;
 grant execute on function public.fresh_anchor_ips(numeric) to service_role;
 -- record_shop_anchor_heartbeat (2026-06-26): service-role-only. The heartbeat route

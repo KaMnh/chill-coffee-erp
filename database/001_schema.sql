@@ -186,6 +186,9 @@ create index if not exists shift_payroll_records_date_idx on public.shift_payrol
 -- Self-check-in (2026-06-25): dấu IP + thiết bị cho mỗi check-in.
 alter table public.shift_assignments add column if not exists check_in_ip inet;
 alter table public.shift_assignments add column if not exists check_in_user_agent text;
+-- Self-checkout (2026-06-26): dấu IP + thiết bị cho mỗi lượt TỰ ra ca.
+alter table public.shift_assignments add column if not exists check_out_ip inet;
+alter table public.shift_assignments add column if not exists check_out_user_agent text;
 
 -- (c) FAIL-FAST preflight + partial unique index trên ca đang mở.
 do $$

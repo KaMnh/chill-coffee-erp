@@ -241,3 +241,49 @@ drop policy if exists shifts_staff_write on public.shift_assignments;
 drop policy if exists shifts_staff_update on public.shift_assignments;
 drop policy if exists payroll_staff_write on public.shift_payroll_records;
 drop policy if exists payroll_staff_update on public.shift_payroll_records;
+
+-- ---------------------------------------------------------------------------
+-- STEP 5 — _audit_attendance_change() + 2 trigger (Codex #2).
+-- audit_payroll chuyển từ _audit_row_change → _audit_attendance_change (replace
+-- in-place). audit_shift_assignments là trigger MỚI. 7 audit_* trigger khác +
+-- _audit_row_change GIỮ NGUYÊN.
+-- ---------------------------------------------------------------------------
+create or replace function public._audit_attendance_change()
+returns trigger language plpgsql security definer
+set search_path = public, auth
+as $$
+declare
+  v_new jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  v_old jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  v_actor uuid;
+  v_role text;
+begin
+  v_actor := coalesce(
+    auth.uid(),
+    (v_new->>'updated_by')::uuid, (v_new->>'edited_by')::uuid, (v_new->>'created_by')::uuid,
+    (v_old->>'updated_by')::uuid, (v_old->>'created_by')::uuid
+  );
+  v_role := coalesce(
+    (select role from public.employee_accounts where auth_user_id = v_actor and status = 'active' limit 1),
+    public.app_role()
+  );
+  insert into public.audit_log(actor_user_id, actor_role, action, entity_type, entity_id, diff_json)
+  values (
+    v_actor, v_role,
+    tg_table_name || '.' || lower(tg_op), tg_table_name,
+    coalesce((v_new->>'id')::uuid, (v_old->>'id')::uuid),
+    case tg_op
+      when 'UPDATE' then jsonb_build_object('before', v_old, 'after', v_new)
+      when 'INSERT' then jsonb_build_object('after', v_new)
+      else jsonb_build_object('before', v_old) end
+  );
+  return coalesce(new, old);
+end; $$;
+
+drop trigger if exists audit_shift_assignments on public.shift_assignments;
+create trigger audit_shift_assignments after insert or update or delete on public.shift_assignments
+  for each row execute function public._audit_attendance_change();
+
+drop trigger if exists audit_payroll on public.shift_payroll_records;
+create trigger audit_payroll after insert or update or delete on public.shift_payroll_records
+  for each row execute function public._audit_attendance_change();

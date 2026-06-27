@@ -47,6 +47,9 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   const payrollQuery = usePayrollQuery(supabase, businessDate, true);
 
   const canManage = role === "owner" || role === "manager";
+  // Phase 2b: chấm công/sửa lương thủ công khóa về owner-only (nhân viên tự
+  // vào/ra ca ở màn Chấm công). Quản lý/NV vẫn XEM trang ca + quản lý hồ sơ NV.
+  const isOwner = role === "owner";
 
   // Account linking (owner/manager only): which employees have a login + the
   // pool of unlinked accounts for the "liên kết" picker.
@@ -138,6 +141,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
         employees={employees}
         shiftByEmployee={shiftByEmployee}
         canManage={canManage}
+        isOwner={isOwner}
         accountedEmployeeIds={accountedEmployeeIds}
         onCheckIn={setCheckInTarget}
         onCheckOut={setCheckOutTarget}
@@ -146,7 +150,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
       />
       <PayrollHistoryCard
         payroll={payroll}
-        canManage={canManage}
+        canEdit={isOwner}
         onEditRow={setEditingPayroll}
       />
       {/* Modals */}

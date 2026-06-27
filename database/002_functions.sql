@@ -51,6 +51,11 @@ security definer
 set search_path = public, auth
 as $$ select public.app_role() in ('owner','manager','staff_operator'); $$;
 
+create or replace function public.app_is_owner()
+returns boolean language sql stable security definer
+set search_path = public, auth
+as $$ select public.app_role() = 'owner'; $$;
+
 create or replace view public.daily_product_summary_view
 with (security_invoker = true) as
 select

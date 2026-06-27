@@ -527,7 +527,7 @@ declare
   v_check_in timestamptz := coalesce((p_payload->>'check_in_at')::timestamptz, now());
   v_id uuid;
 begin
-  if not public.app_is_staff_or_above() then raise exception 'Bạn không có quyền vào ca.'; end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được vào ca hộ. Nhân viên tự vào ca ở màn Chấm công.'; end if;
 
   -- Validate giờ vào ca trong cùng business_date (chống bypass frontend).
   -- DB session timezone = 'Asia/Ho_Chi_Minh' (set globally) → ::date cast tự
@@ -578,7 +578,7 @@ declare
   v_total numeric(14,2);
   v_payroll_id uuid;
 begin
-  if not public.app_is_staff_or_above() then raise exception 'Bạn không có quyền ra ca.'; end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được ra ca hộ. Nhân viên tự ra ca ở màn Chấm công.'; end if;
   if v_out < v_in then raise exception 'Giờ ra không được nhỏ hơn giờ vào.'; end if;
   select hourly_rate into v_rate from public.employees where id = v_employee;
   v_minutes := greatest(0, round(extract(epoch from (v_out - v_in)) / 60)::integer);
@@ -619,9 +619,7 @@ declare
   v_total numeric(14,2);
   v_note text;
 begin
-  if not public.app_is_owner_manager() then
-    raise exception 'Chỉ chủ quán hoặc quản lý được sửa lượt lương đã chốt.';
-  end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được sửa lượt lương đã chốt.'; end if;
 
   select * into v_record
   from public.shift_payroll_records

@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TRUSTED_PROXY_COUNT = Math.max(1, Number(process.env.CHECKIN_TRUSTED_PROXY_COUNT ?? 1));
+const CF_IP_HEADER = process.env.CHECKIN_TRUSTED_IP_HEADER || null;
+// Bật CHECKIN_DEBUG=true để log IP server nhận được khi ghi anchor (PII — tắt sau khi xong).
+const CHECKIN_DEBUG = process.env.CHECKIN_DEBUG === "true";
 
 // Heartbeat is authenticated by the DEVICE TOKEN alone — NOT an owner session — so
 // the always-on shop anchor device keeps its IP fresh under any logged-in session
@@ -48,12 +51,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "error", error: "Thiếu anchor_id hoặc device_token." }, { status: 400 });
   }
 
-  const ip = parseClientIp(req.headers, {
-    trustedProxyCount: TRUSTED_PROXY_COUNT,
-    trustedHeader: process.env.CHECKIN_TRUSTED_IP_HEADER || null,
-  });
+  const ip = parseClientIp(req.headers, { trustedProxyCount: TRUSTED_PROXY_COUNT, trustedHeader: CF_IP_HEADER });
+  if (CHECKIN_DEBUG) {
+    console.info("[heartbeat]", JSON.stringify({
+      cfConnectingIp: CF_IP_HEADER ? req.headers.get(CF_IP_HEADER) : null,
+      xForwardedFor: req.headers.get("x-forwarded-for"),
+      resolvedClientIp: ip,
+      anchorId,
+    }));
+  }
   if (!ip) {
-    return NextResponse.json({ status: "error", error: "Không xác định được IP thật của thiết bị (kiểm tra proxy)." }, { status: 400 });
+    return NextResponse.json({ status: "error", error: "Không xác định được IP thật của thiết bị (proxy/Cloudflare chưa chuyển IP thật — cf-connecting-ip / x-forwarded-for)." }, { status: 400 });
   }
 
   // Rate-limit by SOURCE IP (not the attacker-controllable anchor_id) BEFORE the DB

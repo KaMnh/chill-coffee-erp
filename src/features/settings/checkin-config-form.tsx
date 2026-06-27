@@ -148,13 +148,27 @@ export function CheckinConfigForm() {
       window.localStorage.setItem("checkin:anchorId", id);
       window.localStorage.setItem("checkin:anchorToken", token);
       // Fire one heartbeat immediately to populate current_public_ip (token-only).
+      // SURFACE the error: a swallowed failure here leaves the anchor stuck at
+      // "Chưa có IP" with no clue why (proxy không chuyển IP thật / thiếu
+      // x-checkin-proxy-secret / không sau Cloudflare). Show the real reason.
+      let hbError: string | null = null;
       try {
         await sendAnchorHeartbeat(id, token);
-      } catch {
-        // The anchor row exists; IP just won't show until the next heartbeat.
+      } catch (e) {
+        hbError = e instanceof Error ? e.message : "Không ghi được IP.";
       }
       await anchorsQuery.refetch();
-      toast({ semantic: "success", message: "Đã đánh dấu thiết bị này là máy quán." });
+      if (hbError) {
+        toast({
+          semantic: "warning",
+          message:
+            `Đã tạo máy quán nhưng CHƯA ghi được IP: ${hbError}. ` +
+            `Kiểm tra reverse-proxy/Cloudflare có chuyển IP thật (cf-connecting-ip) + header ` +
+            `x-checkin-proxy-secret tới app. Xem dòng "IP server thấy" phía trên: nếu là "—" thì proxy chưa đặt IP thật.`,
+        });
+      } else {
+        toast({ semantic: "success", message: "Đã đánh dấu thiết bị này là máy quán." });
+      }
     } catch (err) {
       toast({
         semantic: "danger",

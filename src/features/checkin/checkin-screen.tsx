@@ -71,6 +71,13 @@ export function CheckinScreen() {
               </p>
             </>
           )}
+          <Button
+            variant="secondary"
+            onClick={() => setDone(null)}
+            className="w-full"
+          >
+            {done.type === "out" ? "Vào ca lượt mới" : "Quay lại"}
+          </Button>
         </div>
       </main>
     );
@@ -87,10 +94,17 @@ export function CheckinScreen() {
           </AlertBanner>
         )}
 
-        {!inShift && !outToday && (
-          <Button variant="primary" loading={busy} onClick={() => run("in")} className="w-full py-3 text-lg">
-            Vào ca
-          </Button>
+        {!inShift && (
+          <>
+            {outToday && (
+              <p className="text-emerald-600 font-medium">
+                Bạn đã ra ca lượt trước — có thể vào ca mới.
+              </p>
+            )}
+            <Button variant="primary" loading={busy} onClick={() => run("in")} className="w-full py-3 text-lg">
+              {outToday ? "Vào ca lượt mới" : "Vào ca"}
+            </Button>
+          </>
         )}
 
         {inShift && (
@@ -105,8 +119,6 @@ export function CheckinScreen() {
             )}
           </>
         )}
-
-        {!inShift && outToday && <p className="text-emerald-600 font-medium">Bạn đã ra ca hôm nay.</p>}
 
         <p className="text-xs text-muted">
           Khi chấm công, hệ thống ghi lại thời điểm, IP và thiết bị của bạn.

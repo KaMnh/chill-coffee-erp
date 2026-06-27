@@ -18,8 +18,8 @@ Intended outcome: sau Phase 2b, manager/staff_operator **không** còn nút Vào
 **In:**
 1. Helper `app_is_owner()` (mirror `app_is_owner_manager`).
 2. Siết guard RPC: `check_in_employee`, `check_out_employee`, `edit_shift_payroll_record` → **owner-only**.
-3. RLS hardening: `shift_assignments` (insert/update) + `shift_payroll_records` (insert/update) → **owner-only**; **GIỮ** read = `app_is_staff_or_above()`.
-4. Audit trigger `audit_shift_assignments` (reuse `_audit_row_change()`).
+3. RLS hardening: **BỎ HẲN** policy WRITE (insert/update) trên `shift_assignments` + `shift_payroll_records` → KHÔNG role `authenticated` nào ghi trực tiếp (mọi write qua security-definer RPC, bypass RLS); **GIỮ** read = `app_is_staff_or_above()`. *(Codex #1: owner direct-write cũng lách guard cash-close-final → chặn TẤT CẢ direct write, không chỉ non-owner.)*
+4. Audit attendance: trigger riêng `_audit_attendance_change()` cho `shift_assignments` (mới) + `shift_payroll_records` (thay `audit_payroll`) — coalesce actor để audit-by-actor dùng được cho cả write tự phục vụ. *(Codex #2.)*
 5. UI: gate nút Vào ca/Ra ca/Sửa lương ở trang ca về `role === "owner"`; non-owner thấy read-only + hướng dẫn dùng màn Chấm công.
 6. pgTAP + Vitest.
 
@@ -35,9 +35,9 @@ Intended outcome: sau Phase 2b, manager/staff_operator **không** còn nút Vào
 | `check_in_employee` (RPC) | `app_is_staff_or_above()` (002:525) | **owner-only** |
 | `check_out_employee` (RPC) | `app_is_staff_or_above()` (002:576) | **owner-only** |
 | `edit_shift_payroll_record` (RPC) | `app_is_owner_manager()` (002:617) | **owner-only** |
-| RLS `shift_assignments` insert/update (003:160,162) | `app_is_staff_or_above()` | **owner-only** |
-| RLS `shift_payroll_records` insert (003:167) | `app_is_staff_or_above()` | **owner-only** |
-| RLS `shift_payroll_records` update (003:169) | `app_is_owner_manager()` | **owner-only** |
+| RLS `shift_assignments` insert/update (003:160,162) | `app_is_staff_or_above()` | **BỎ policy (no direct write)** |
+| RLS `shift_payroll_records` insert (003:167) | `app_is_staff_or_above()` | **BỎ policy (no direct write)** |
+| RLS `shift_payroll_records` update (003:169) | `app_is_owner_manager()` | **BỎ policy (no direct write)** |
 | RLS reads `shifts_staff_read` (003:158) / `payroll_staff_read` (003:165) | `app_is_staff_or_above()` | **GIỮ NGUYÊN** |
 | self check-in/out (`check_in_self`/`check_out_self`) | service-role-only | **GIỮ NGUYÊN** (không liên quan RLS) |
 
@@ -52,7 +52,7 @@ returns boolean language sql stable security definer
 set search_path = public, auth
 as $$ select public.app_role() = 'owner'; $$;
 ```
-Dùng cho RPC guard + RLS policy (đồng nhất, dễ test qua `has_function_privilege` không cần — test qua hành vi). Codebase hiện dùng inline `app_role() <> 'owner'` ở ~17 chỗ; helper này gom lại cho 3 RPC + 4 policy của Phase 2b. (Không refactor các chỗ cũ — out of scope.)
+Dùng cho guard của 3 RPC manual (1.2). **RLS KHÔNG dùng helper này** — Phase 2b bỏ hẳn write policy (1.3), không tạo policy owner-only. Codebase hiện dùng inline `app_role() <> 'owner'` ~17 chỗ; helper gom lại cho 3 RPC. (Không refactor chỗ cũ — out of scope.)
 
 ### 1.2 Siết guard 3 RPC (002_functions.sql, dual-write canonical)
 - `check_in_employee` (002:525): đổi
@@ -67,48 +67,76 @@ Dùng cho RPC guard + RLS policy (đồng nhất, dễ test qua `has_function_pr
 
 Các phần còn lại của 3 hàm (validate giờ, idempotency, cash-close-final guard ở `edit_shift_payroll_record` 002:634-639, payroll/cash write) **GIỮ NGUYÊN**.
 
-### 1.3 RLS hardening (003_rls.sql, dual-write canonical) — bịt lỗ direct INSERT
-Đổi 3 policy WRITE sang owner-only; **giữ** 2 policy READ:
+### 1.3 RLS hardening (003_rls.sql, dual-write canonical) — chặn MỌI direct write
+**Codex #1:** policy owner-only vẫn cho owner `supabase.from('shift_payroll_records').update(...)` thẳng → lách guard cash-close-final trong `edit_shift_payroll_record` (sửa lương ngày đã chốt két mà KHÔNG regenerate `cash_drawer_events`/`cash_close_reports`). Vì **mọi** write hợp lệ đã đi qua security-definer RPC (bypass RLS — xem §7.1), nên **bỏ hẳn** policy WRITE cho `authenticated`; không tạo policy thay thế:
 ```sql
--- shift_assignments: chỉ owner ghi/sửa; staff_or_above vẫn đọc.
+-- BỎ direct write cho mọi role authenticated. Write chỉ qua security-definer RPC.
 drop policy if exists shifts_staff_write on public.shift_assignments;
-create policy shifts_staff_write on public.shift_assignments
-  for insert to authenticated with check (public.app_is_owner());
 drop policy if exists shifts_staff_update on public.shift_assignments;
-create policy shifts_staff_update on public.shift_assignments
-  for update to authenticated using (public.app_is_owner()) with check (public.app_is_owner());
-
--- shift_payroll_records: chỉ owner ghi/sửa; staff_or_above vẫn đọc.
 drop policy if exists payroll_staff_write on public.shift_payroll_records;
-create policy payroll_staff_write on public.shift_payroll_records
-  for insert to authenticated with check (public.app_is_owner());
 drop policy if exists payroll_staff_update on public.shift_payroll_records;
-create policy payroll_staff_update on public.shift_payroll_records
-  for update to authenticated using (public.app_is_owner()) with check (public.app_is_owner());
+-- GIỮ NGUYÊN read: shifts_staff_read (003:158) + payroll_staff_read (003:165) = app_is_staff_or_above().
 ```
-(`shifts_staff_read` 003:158 và `payroll_staff_read` 003:165 **không đổi** → manager/operator vẫn xem trang ca.)
+Sau khi bỏ: bảng vẫn `enable row level security` (003:21-22) nhưng KHÔNG còn policy insert/update cho `authenticated` → RLS deny mọi direct insert/update/delete từ client (owner lẫn non-owner). RPC `security definer` chạy dưới owner-of-function (bypass RLS) nên KHÔNG bị ảnh hưởng — đây là đường ghi duy nhất, giữ nguyên các invariant (final-close guard, atomic transition, payroll↔cash đồng bộ).
 
-> **Codex finding (Phase 2a §10) đã địa chỉ ở đây:** trước 2b, một staff_operator có thể `supabase.from('shift_payroll_records').insert(...)` thẳng (policy `payroll_staff_write` = staff_or_above), bịa lương bỏ qua `check_out_employee`/`edit_shift_payroll_record`. Sau 2b: chỉ owner. Note delete: không có policy DELETE riêng → DELETE mặc định bị RLS chặn (không thay đổi).
+> **Verify khi implement:** xác nhận data layer (`src/lib/data/shifts.ts`) chỉ ghi qua RPC (`check_in_employee`/`check_out_employee`/`edit_shift_payroll_record`) + read qua `.from().select()`; KHÔNG có `.from('shift_assignments'|'shift_payroll_records').insert/update/delete()` trực tiếp ở client. (grep đã xác nhận tại thời điểm viết.) Các pgTAP fixture insert thẳng chạy như superuser (bypass RLS) → không vỡ.
 
-### 1.4 Audit trigger `shift_assignments` (002, cạnh `audit_payroll` 002:1771)
-`shift_payroll_records` đã có `audit_payroll` (002:1772). Thêm cho `shift_assignments` (chưa có):
+### 1.4 Audit attendance: `_audit_attendance_change()` cho cả 2 bảng (002, cạnh `_audit_row_change` 002:1744)
+**Codex #2:** `_audit_row_change()` (002:1744) dùng `auth.uid()` + `app_role()`. Với write tự phục vụ (gọi qua service role: `check_in_self`/`check_out_self`/`check_out_self`) `auth.uid()` NULL → `actor_user_id` NULL (hỏng index `audit_log_actor_idx`) và `actor_role`='anonymous'. Dùng trigger riêng coalesce actor từ row + snapshot role tại thời điểm ghi:
 ```sql
-drop trigger if exists audit_shift_assignments on public.shift_assignments;
-create trigger audit_shift_assignments
-  after insert or update or delete on public.shift_assignments
-  for each row execute function public._audit_row_change();
-```
-Reuse `_audit_row_change()` (002:1744) — ghi `audit_log(action='shift_assignments.{op}', entity_id, diff_json={before,after}, actor_user_id=auth.uid(), actor_role=app_role())`.
+create or replace function public._audit_attendance_change()
+returns trigger language plpgsql security definer
+set search_path = public, auth
+as $$
+declare
+  v_new jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  v_old jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  v_actor uuid;
+  v_role text;
+begin
+  -- auth.uid() (owner manual qua session) → else actor lưu trên row (self-service set updated_by/created_by/edited_by = p_auth_user_id).
+  v_actor := coalesce(
+    auth.uid(),
+    (v_new->>'updated_by')::uuid, (v_new->>'edited_by')::uuid, (v_new->>'created_by')::uuid,
+    (v_old->>'updated_by')::uuid, (v_old->>'created_by')::uuid
+  );
+  -- Snapshot role tại thời điểm ghi (employee_accounts không bị RLS vì definer).
+  v_role := coalesce(
+    (select role from public.employee_accounts where auth_user_id = v_actor and status = 'active' limit 1),
+    public.app_role()
+  );
+  insert into public.audit_log(actor_user_id, actor_role, action, entity_type, entity_id, diff_json)
+  values (
+    v_actor, v_role,
+    tg_table_name || '.' || lower(tg_op), tg_table_name,
+    coalesce((v_new->>'id')::uuid, (v_old->>'id')::uuid),
+    case tg_op
+      when 'UPDATE' then jsonb_build_object('before', v_old, 'after', v_new)
+      when 'INSERT' then jsonb_build_object('after', v_new)
+      else jsonb_build_object('before', v_old) end
+  );
+  return coalesce(new, old);
+end; $$;
 
-> **Giới hạn đã biết (ghi trong spec để Codex không coi là bug):** self check-in/out gọi qua **service role** → `auth.uid()` NULL → `audit_log.actor_user_id` NULL cho các write tự phục vụ. **Actor thật vẫn truy được** từ `diff_json->'after'->>'updated_by'` (self-checkin set `created_by/updated_by = p_auth_user_id`; self-checkout set `updated_by = p_auth_user_id`). Owner manual edit (qua session) → `auth.uid()` = owner, đầy đủ. Chấp nhận trade-off này (không đổi chữ ký RPC để nhồi actor vào trigger).
+-- shift_assignments: MỚI (chưa có audit trigger).
+drop trigger if exists audit_shift_assignments on public.shift_assignments;
+create trigger audit_shift_assignments after insert or update or delete on public.shift_assignments
+  for each row execute function public._audit_attendance_change();
+
+-- shift_payroll_records: THAY audit_payroll (002:1772) để bắt actor cho lương tự-ra-ca.
+drop trigger if exists audit_payroll on public.shift_payroll_records;
+create trigger audit_payroll after insert or update or delete on public.shift_payroll_records
+  for each row execute function public._audit_attendance_change();
+```
+Kết quả: self check-in/out → `actor_user_id = p_auth_user_id`, `actor_role` = role NV (không null/anonymous); owner manual → `auth.uid()` = owner. Audit-by-actor (`audit_log_actor_idx`) dùng được cho mọi đường ghi. `_audit_row_change()` cũ giữ nguyên cho 7 bảng còn lại (chỉ chuyển 2 bảng attendance sang hàm mới).
 
 ### 1.5 Migration `database/migrations/2026-06-27-attendance-lockdown.sql`
 Byte-identical với phần đổi ở 002/003:
 1. `create or replace function public.app_is_owner()...` (1.1).
-2. `create or replace function public.check_in_employee/check_out_employee/edit_shift_payroll_record...` — **dán full thân hàm hiện tại với 1 dòng guard đã đổi** (vì migration phải tự đứng được; copy nguyên từ 002 sau khi sửa).
-3. 4 `drop policy ... / create policy ...` (1.3).
-4. `drop trigger ... / create trigger audit_shift_assignments ...` (1.4).
-Idempotent: `create or replace`, `drop ... if exists` + `create policy`. Không data-fix (không đổi dữ liệu cũ).
+2. `create or replace function public.check_in_employee/check_out_employee/edit_shift_payroll_record...` — **dán full thân hàm hiện tại với 1 dòng guard đã đổi** (migration phải tự đứng được; copy nguyên từ 002 sau khi sửa).
+3. 4 `drop policy if exists ...` (1.3) — **KHÔNG** tạo lại policy write.
+4. `create or replace function public._audit_attendance_change()...` + `drop/create trigger audit_shift_assignments` (shift_assignments) + `drop/create trigger audit_payroll` trỏ sang hàm mới (shift_payroll_records) (1.4).
+Idempotent: `create or replace`, `drop policy if exists`, `drop trigger if exists`. Không data-fix (không đổi dữ liệu cũ).
 
 ---
 
@@ -140,12 +168,15 @@ Idempotent: `create or replace`, `drop ... if exists` + `create policy`. Không 
 ## 5. Acceptance criteria + Test plan
 **pgTAP** `database/tests/340_attendance_lockdown.sql` (chạy trên throwaway `chill_pgtap`, KHÔNG `supabase-db` dev — xem [[pgtap-run-on-clean-db]]; `tools/pgtap-local.mjs --reset --all`):
 - **RPC guard:** giả lập caller `manager` và `staff_operator` (set `request.jwt.claims`) → `check_in_employee`/`check_out_employee`/`edit_shift_payroll_record` đều `throws_like '%Chỉ chủ quán%'`. Caller `owner` → `lives_ok`.
-- **RLS owner-only (direct, `set local role authenticated` + claims):**
-  - manager/operator: `insert`/`update` thẳng `shift_assignments` và `shift_payroll_records` → **0 rows hoặc lỗi RLS** (dùng `throws_ok`/`is (count) 0` theo pattern 310 `set local role`).
-  - owner: insert/update qua RLS → thành công.
-  - read: manager/operator vẫn `select` được (đối chứng read không bị siết).
-- **self check-in/out KHÔNG vỡ:** với `self_checkout_enabled`, gọi `check_out_self`(employee) như service role → đóng ca + lương OK **dù** RLS shift_assignments/payroll giờ là owner-only (chứng minh security-definer bypass). Tương tự `check_in_self` tạo được `shift_assignments`.
-- **Audit trigger:** sau 1 `update` `shift_assignments` (qua owner) → có row `audit_log` `action='shift_assignments.update'`, `entity_id` đúng, `diff_json ? 'before'`. Sau self-checkout → `audit_log` có `shift_assignments.update` với `diff_json->'after'->>'updated_by'` = p_auth_user_id (actor truy được dù actor_user_id null).
+- **RLS no-direct-write (direct, `set local role authenticated` + claims):** dùng pattern 310 (`pg_temp.act_as` + `set local role authenticated`, `reset role` sau).
+  - **owner** (cũng vậy): `insert`/`update` thẳng `shift_assignments` và `shift_payroll_records` → **0 rows** (RLS deny — không còn write policy). Dùng `is((with x as (insert ... returning 1) select count(*) from x), 0)` hoặc `throws_ok` nếu policy raise. *(Khẳng định Codex #1: owner KHÔNG bypass được qua direct PostgREST.)*
+  - **manager/operator**: tương tự → 0 rows.
+  - **read**: manager/operator vẫn `select count(*) > 0` từ 2 bảng (read không bị siết).
+- **self check-in/out KHÔNG vỡ:** gọi `check_in_self`/`check_out_self` (với `self_checkout_enabled`) như service role → tạo/đóng `shift_assignments` + lương OK **dù** đã bỏ write policy (chứng minh security-definer bypass RLS). Đây là điều kiện sống còn — nếu test này đỏ, lockdown sai.
+- **Audit actor (Codex #2):**
+  - owner manual `update` `shift_assignments` (qua session, `act_as` owner) → `audit_log` `action='shift_assignments.update'`, `actor_user_id` = owner uid, `actor_role`='owner', `diff_json ? 'before'`.
+  - **self check-in** → `audit_log` `action='shift_assignments.insert'` có `actor_user_id = p_auth_user_id` (KHÔNG null) + `actor_role` = role NV (KHÔNG 'anonymous').
+  - **self check-out** → `audit_log` cho `shift_assignments.update` **và** `shift_payroll_records.insert` đều có `actor_user_id = p_auth_user_id`. *(Khẳng định trigger mới + audit_payroll trỏ sang hàm mới.)*
 - created_at tie-break khi đụng số dư: đóng dấu tăng dần (xem [[pgtap-created-at-frozen-tiebreak]]).
 
 **Vitest:**
@@ -157,20 +188,20 @@ Idempotent: `create or replace`, `drop ... if exists` + `create policy`. Không 
 ## 6. Coverage checklist (đối chiếu yêu cầu user)
 - [ ] `check_in_employee` + `check_out_employee` → owner-only (manual chấm công khóa về owner).
 - [ ] `edit_shift_payroll_record` (điều chỉnh thời gian/ lương ra vào ca) → owner-only.
-- [ ] RLS `shift_assignments` + `shift_payroll_records` WRITE → owner-only; READ giữ cho operator/manager.
-- [ ] Bịt lỗ direct PostgREST INSERT payroll (Codex Phase 2a finding [high]).
-- [ ] Audit trigger `shift_assignments`.
+- [ ] RLS: BỎ direct WRITE cho **mọi** authenticated (write chỉ qua RPC); READ giữ cho operator/manager. (Codex #1)
+- [ ] Bịt lỗ direct PostgREST INSERT/UPDATE payroll — gồm cả owner (Codex Phase 2a [high] + Phase 2b #1).
+- [ ] Audit attendance actor-indexable: self check-in/out → `actor_user_id = p_auth_user_id` (Codex #2); trigger cho `shift_assignments` + `shift_payroll_records`.
 - [ ] self check-in/out (Phase 1/2a) KHÔNG vỡ — chứng minh bằng pgTAP.
 - [ ] UI: ẩn nút ghi cho non-owner, giữ read + nhắc dùng màn Chấm công.
 - [ ] Helper `app_is_owner()` + dual-write 002/003 + migration + pgTAP/Vitest theo Test plan.
 
 ## 7. Risks / safety notes (cho Codex thẩm định)
-1. **RLS owner-only có vỡ self check-in/out không?** KHÔNG. `check_in_self` (002:4479) và `check_out_self` (002:4614) là `security definer` → chạy dưới quyền owner-of-function (bypass RLS), lại được gọi bằng **service role**. RLS `authenticated` owner-only không áp vào chúng. pgTAP §5 chứng minh.
+1. **Bỏ write policy có vỡ self check-in/out không?** KHÔNG. `check_in_self` (002:4479) + `check_out_self` (002:4614) là `security definer` → chạy dưới owner-of-function (bypass RLS), lại gọi bằng **service role**; không policy write nào áp vào. `check_in_employee`/`check_out_employee`/`edit_shift_payroll_record` cũng `security definer` → owner manual write vẫn qua RPC, không cần policy. pgTAP §5 (self check-in/out vẫn xanh + direct write deny) chứng minh.
 2. **Coupling vận hành — quan trọng:** sau 2b, luồng đóng ca BÌNH THƯỜNG phụ thuộc **self-checkout (Phase 2a) đã bật** (`self_checkout_enabled=true`). Nếu owner để TẮT, **mọi** ca phải do owner đóng tay → nghẽn. **Khuyến nghị:** bật self_checkout trước/đồng thời rollout 2b; hoặc nêu rõ cho user rằng tắt self_checkout sau 2b nghĩa là owner gánh toàn bộ đóng ca. (Không chặn kỹ thuật, là quyết định vận hành.)
 3. **Nhân viên không có app account** không tự chấm công → owner chấm hộ (chỉ owner). Chấp nhận; nêu để user biết.
 4. **Migration ordering:** 003 có `grant execute on all functions ... to authenticated` (003:57) rồi re-revoke các self-RPC (003:63-66). `app_is_owner()` mới sẽ nhận grant blanket đó (OK, helper không nhạy cảm). 3 RPC manual vẫn `authenticated`-callable (đúng — guard nội bộ tự chặn non-owner). Không cần revoke 3 RPC manual.
 5. **Backward-compat dữ liệu:** không drop cột, không sửa dữ liệu cũ; chỉ siết quyền + thêm trigger. Ca/lương lịch sử nguyên vẹn.
-6. **Audit volume:** trigger ghi mọi insert/update/delete `shift_assignments` (gồm `set_updated_at` trigger 001:162 chạy before-update không tạo thêm row audit; `_audit_row_change` after-update ghi 1 row/lần). Tần suất hợp lý (mỗi vào/ra ca vài row). Không cần thêm index ngoài `audit_log_entity_idx` (001:478).
+6. **Audit volume:** `_audit_attendance_change` after-trigger ghi 1 row/insert-update-delete trên `shift_assignments` + `shift_payroll_records` (`set_updated_at` before-trigger 001:162 không tạo row audit). Tần suất hợp lý (mỗi vào/ra ca vài row). Có sẵn `audit_log_entity_idx` (001:478) + `audit_log_actor_idx` (001:479) — finding #2 làm actor index thực sự hữu dụng.
 
 ## 8. Files (đại diện)
 **DB:** `database/migrations/2026-06-27-attendance-lockdown.sql`, `database/002_functions.sql`, `database/003_rls.sql`, `database/tests/340_attendance_lockdown.sql`.
@@ -183,8 +214,8 @@ Idempotent: `create or replace`, `drop ... if exists` + `create policy`. Không 
 1. **(test trước)** Viết `340_attendance_lockdown.sql` — RPC guard reject manager/operator; RLS direct write reject; self check-in/out vẫn OK; audit row xuất hiện. Chạy `--reset --all` → **đỏ** (chưa siết).
 2. `app_is_owner()` vào 002 + migration.
 3. Siết 3 guard RPC (002 + migration full-body copy).
-4. 4 policy owner-only (003 + migration).
-5. `audit_shift_assignments` trigger (002 + migration).
+4. BỎ 4 write policy (003 + migration) — KHÔNG tạo lại.
+5. `_audit_attendance_change()` + trigger `audit_shift_assignments` (mới) + trỏ `audit_payroll` sang hàm mới (002 + migration).
 6. Chạy pgTAP → **xanh** (340 + không regress 310/330 + full suite).
 7. UI gate `isOwner` (shifts-view + modals).
 8. `tsc` + `npm run test:run` + `npm run build` (khi 3009 tắt). 

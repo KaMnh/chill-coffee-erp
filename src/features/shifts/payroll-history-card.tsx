@@ -12,15 +12,15 @@ import type { PayrollRecord } from "@/lib/types";
 
 interface PayrollHistoryCardProps {
   payroll: ReadonlyArray<PayrollRecord>;
-  canManage: boolean;
+  canEdit: boolean;
   onEditRow(payroll: PayrollRecord): void;
 }
 
 /**
  * List of today's payroll records. Pure prop-driven (no own queries).
  *
- * Rows clickable for owner/manager only — staff_operator sees static
- * rows. Pattern matches ExpenseHistoryCard (3B.1).
+ * Rows clickable for owner only (Phase 2b — sửa lương khóa về chủ quán);
+ * quản lý/NV xem tĩnh. Pattern matches ExpenseHistoryCard (3B.1).
  *
  * Row shows: employee name (truncate), duration + allowance + edited
  * badge if edited_at, total_pay right-aligned.
@@ -31,7 +31,7 @@ interface PayrollHistoryCardProps {
  */
 export function PayrollHistoryCard({
   payroll,
-  canManage,
+  canEdit,
   onEditRow,
 }: PayrollHistoryCardProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function PayrollHistoryCard({
   }, [editingId, editing]);
 
   function open(p: PayrollRecord) {
-    if (!canManage) return;
+    if (!canEdit) return;
     setEditingId(p.id);
     onEditRow(p);
   }
@@ -76,9 +76,9 @@ export function PayrollHistoryCard({
               {payroll.map((row) => (
               <li
                 key={row.id}
-                onClick={canManage ? () => open(row) : undefined}
+                onClick={canEdit ? () => open(row) : undefined}
                 onKeyDown={
-                  canManage
+                  canEdit
                     ? (event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
@@ -87,12 +87,12 @@ export function PayrollHistoryCard({
                       }
                     : undefined
                 }
-                tabIndex={canManage ? 0 : undefined}
-                role={canManage ? "button" : undefined}
-                aria-label={canManage ? `Sửa lượt lương ${row.employee_name ?? ""}` : undefined}
+                tabIndex={canEdit ? 0 : undefined}
+                role={canEdit ? "button" : undefined}
+                aria-label={canEdit ? `Sửa lượt lương ${row.employee_name ?? ""}` : undefined}
                 className={cn(
                   "flex items-center justify-between gap-3 py-3 px-2 -mx-2 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong",
-                  canManage && "cursor-pointer hover:bg-surface-muted"
+                  canEdit && "cursor-pointer hover:bg-surface-muted"
                 )}
               >
                 <div className="min-w-0">

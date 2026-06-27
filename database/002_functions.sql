@@ -51,6 +51,11 @@ security definer
 set search_path = public, auth
 as $$ select public.app_role() in ('owner','manager','staff_operator'); $$;
 
+create or replace function public.app_is_owner()
+returns boolean language sql stable security definer
+set search_path = public, auth
+as $$ select public.app_role() = 'owner'; $$;
+
 create or replace view public.daily_product_summary_view
 with (security_invoker = true) as
 select
@@ -522,7 +527,7 @@ declare
   v_check_in timestamptz := coalesce((p_payload->>'check_in_at')::timestamptz, now());
   v_id uuid;
 begin
-  if not public.app_is_staff_or_above() then raise exception 'Bạn không có quyền vào ca.'; end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được vào ca hộ. Nhân viên tự vào ca ở màn Chấm công.'; end if;
 
   -- Validate giờ vào ca trong cùng business_date (chống bypass frontend).
   -- DB session timezone = 'Asia/Ho_Chi_Minh' (set globally) → ::date cast tự
@@ -573,7 +578,7 @@ declare
   v_total numeric(14,2);
   v_payroll_id uuid;
 begin
-  if not public.app_is_staff_or_above() then raise exception 'Bạn không có quyền ra ca.'; end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được ra ca hộ. Nhân viên tự ra ca ở màn Chấm công.'; end if;
   if v_out < v_in then raise exception 'Giờ ra không được nhỏ hơn giờ vào.'; end if;
   select hourly_rate into v_rate from public.employees where id = v_employee;
   v_minutes := greatest(0, round(extract(epoch from (v_out - v_in)) / 60)::integer);
@@ -614,9 +619,7 @@ declare
   v_total numeric(14,2);
   v_note text;
 begin
-  if not public.app_is_owner_manager() then
-    raise exception 'Chỉ chủ quán hoặc quản lý được sửa lượt lương đã chốt.';
-  end if;
+  if not public.app_is_owner() then raise exception 'Chỉ chủ quán được sửa lượt lương đã chốt.'; end if;
 
   select * into v_record
   from public.shift_payroll_records
@@ -1768,10 +1771,48 @@ begin
 end;
 $$;
 
+-- Attendance audit (Phase 2b, Codex #2): self check-in/out chạy bằng service_role
+-- (auth.uid() null) → coalesce actor từ updated_by/edited_by/created_by để audit
+-- không bao giờ null actor; role tra từ employee_accounts của actor đó.
+create or replace function public._audit_attendance_change()
+returns trigger language plpgsql security definer
+set search_path = public, auth
+as $$
+declare
+  v_new jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  v_old jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  v_actor uuid;
+  v_role text;
+begin
+  v_actor := coalesce(
+    auth.uid(),
+    (v_new->>'updated_by')::uuid, (v_new->>'edited_by')::uuid, (v_new->>'created_by')::uuid,
+    (v_old->>'updated_by')::uuid, (v_old->>'created_by')::uuid
+  );
+  v_role := coalesce(
+    (select role from public.employee_accounts where auth_user_id = v_actor and status = 'active' limit 1),
+    public.app_role()
+  );
+  insert into public.audit_log(actor_user_id, actor_role, action, entity_type, entity_id, diff_json)
+  values (
+    v_actor, v_role,
+    tg_table_name || '.' || lower(tg_op), tg_table_name,
+    coalesce((v_new->>'id')::uuid, (v_old->>'id')::uuid),
+    case tg_op
+      when 'UPDATE' then jsonb_build_object('before', v_old, 'after', v_new)
+      when 'INSERT' then jsonb_build_object('after', v_new)
+      else jsonb_build_object('before', v_old) end
+  );
+  return coalesce(new, old);
+end; $$;
+
+drop trigger if exists audit_shift_assignments on public.shift_assignments;
+create trigger audit_shift_assignments after insert or update or delete on public.shift_assignments
+  for each row execute function public._audit_attendance_change();
+
 drop trigger if exists audit_payroll on public.shift_payroll_records;
-create trigger audit_payroll
-  after insert or update or delete on public.shift_payroll_records
-  for each row execute function public._audit_row_change();
+create trigger audit_payroll after insert or update or delete on public.shift_payroll_records
+  for each row execute function public._audit_attendance_change();
 
 drop trigger if exists audit_cash_close on public.cash_close_reports;
 create trigger audit_cash_close

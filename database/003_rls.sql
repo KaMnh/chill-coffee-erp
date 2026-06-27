@@ -156,17 +156,15 @@ create policy expense_permissions_admin on public.expense_history_permissions fo
 -- shifts and payroll
 drop policy if exists shifts_staff_read on public.shift_assignments;
 create policy shifts_staff_read on public.shift_assignments for select to authenticated using (public.app_is_staff_or_above());
-drop policy if exists shifts_staff_write on public.shift_assignments;
-create policy shifts_staff_write on public.shift_assignments for insert to authenticated with check (public.app_is_staff_or_above());
-drop policy if exists shifts_staff_update on public.shift_assignments;
-create policy shifts_staff_update on public.shift_assignments for update to authenticated using (public.app_is_staff_or_above()) with check (public.app_is_staff_or_above());
 
 drop policy if exists payroll_staff_read on public.shift_payroll_records;
 create policy payroll_staff_read on public.shift_payroll_records for select to authenticated using (public.app_is_staff_or_above());
+
+-- Phase 2b: KHÔNG cho authenticated ghi trực tiếp. Mọi write qua security-definer RPC.
+drop policy if exists shifts_staff_write on public.shift_assignments;
+drop policy if exists shifts_staff_update on public.shift_assignments;
 drop policy if exists payroll_staff_write on public.shift_payroll_records;
-create policy payroll_staff_write on public.shift_payroll_records for insert to authenticated with check (public.app_is_staff_or_above());
 drop policy if exists payroll_staff_update on public.shift_payroll_records;
-create policy payroll_staff_update on public.shift_payroll_records for update to authenticated using (public.app_is_owner_manager()) with check (public.app_is_owner_manager());
 
 -- sales read-only for app users, writes only through security definer RPC
 drop policy if exists sales_sync_staff_read on public.sales_sync_runs;

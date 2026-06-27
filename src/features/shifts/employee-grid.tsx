@@ -13,7 +13,10 @@ interface EmployeeGridProps {
   employees: ReadonlyArray<Employee>;
   /** Map of employee_id -> most-recent shift today (first-wins). */
   shiftByEmployee: ReadonlyMap<string, ShiftAssignment>;
+  /** owner/manager: quản lý hồ sơ NV (Sửa, Cấp tài khoản). */
   canManage: boolean;
+  /** Phase 2b: chỉ owner mới chấm công thủ công (Vào ca/Ra ca). */
+  isOwner: boolean;
   /** employee_ids that already have a login account (owner/manager only). */
   accountedEmployeeIds: ReadonlySet<string>;
   onCheckIn(employee: Employee): void;
@@ -46,6 +49,7 @@ export function EmployeeGrid({
   employees,
   shiftByEmployee,
   canManage,
+  isOwner,
   accountedEmployeeIds,
   onCheckIn,
   onCheckOut,
@@ -123,63 +127,78 @@ export function EmployeeGrid({
               Sửa
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onCheckIn(employee)}
-            disabled={isIn}
-          >
-            Vào ca
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => shift && onCheckOut(shift)}
-            disabled={!shift || !isIn}
-          >
-            Ra ca
-          </Button>
+          {isOwner && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onCheckIn(employee)}
+                disabled={isIn}
+              >
+                Vào ca
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => shift && onCheckOut(shift)}
+                disabled={!shift || !isIn}
+              >
+                Ra ca
+              </Button>
+            </>
+          )}
         </div>
       </article>
     );
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Đang làm việc</CardTitle>
-        </CardHeader>
-        <CardBody>
-          {active.length === 0 ? (
-            <EmptyState
-              icon="users"
-              title="Chưa có ai đang làm"
-              subtitle="Nhấn 'Vào ca' ở cột bên cạnh khi nhân viên bắt đầu làm."
-            />
-          ) : (
-            <Reveal stagger className="space-y-2">{active.map(renderRow)}</Reveal>
-          )}
-        </CardBody>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Chưa vào ca</CardTitle>
-        </CardHeader>
-        <CardBody>
-          {inactive.length === 0 ? (
-            <EmptyState
-              icon="checkCircle"
-              title="Tất cả đã vào ca"
-              subtitle="Không còn nhân viên chờ xác nhận."
-            />
-          ) : (
-            <Reveal stagger className="space-y-2">{inactive.map(renderRow)}</Reveal>
-          )}
-        </CardBody>
-      </Card>
+    <div className="space-y-3">
+      {!isOwner && (
+        <p className="text-xs text-muted">
+          Nhân viên tự vào/ra ca ở màn “Chấm công”. Đính chính giờ giấc do chủ quán thực hiện.
+        </p>
+      )}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Đang làm việc</CardTitle>
+          </CardHeader>
+          <CardBody>
+            {active.length === 0 ? (
+              <EmptyState
+                icon="users"
+                title="Chưa có ai đang làm"
+                subtitle={
+                  isOwner
+                    ? "Nhấn 'Vào ca' ở cột bên cạnh khi nhân viên bắt đầu làm."
+                    : "Nhân viên tự vào ca ở màn Chấm công."
+                }
+              />
+            ) : (
+              <Reveal stagger className="space-y-2">{active.map(renderRow)}</Reveal>
+            )}
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Chưa vào ca</CardTitle>
+          </CardHeader>
+          <CardBody>
+            {inactive.length === 0 ? (
+              <EmptyState
+                icon="checkCircle"
+                title="Tất cả đã vào ca"
+                subtitle="Không còn nhân viên chờ xác nhận."
+              />
+            ) : (
+              <Reveal stagger className="space-y-2">{inactive.map(renderRow)}</Reveal>
+            )}
+          </CardBody>
+        </Card>
+      </div>
     </div>
   );
 }

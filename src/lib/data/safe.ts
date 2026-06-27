@@ -268,7 +268,12 @@ export async function safePurchaseInventory(
   payload: {
     cashAmount: number;
     transferAmount: number;
-    lines: ReadonlyArray<{ ingredient_id: string; quantity: number; unit_price: number }>;
+    lines: ReadonlyArray<{
+      ingredient_id: string;
+      quantity: number;
+      unit_price: number;
+      sync_price: boolean;
+    }>;
     description?: string;
     occurredAt?: string;
   }

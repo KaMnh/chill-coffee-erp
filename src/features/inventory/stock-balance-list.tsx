@@ -6,7 +6,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/ui/icons";
-import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { formatUnit } from "./units";
 import { rowValue } from "./stock-value";
@@ -139,16 +139,18 @@ export function StockBalanceList({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
                   {onEditPrice && (
-                    <IconButton
-                      icon="pencil"
-                      size={40}
+                    <Button
+                      type="button"
                       variant="ghost"
+                      leadingIcon={<Icon name="pencil" size={16} />}
                       aria-label={`Sửa đơn giá ${b.name}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEditPrice(b.ingredient_id);
                       }}
-                    />
+                    >
+                      {prices?.get(b.ingredient_id)?.unit_price == null ? "Đặt giá" : "Sửa giá"}
+                    </Button>
                   )}
                   <p
                     className={

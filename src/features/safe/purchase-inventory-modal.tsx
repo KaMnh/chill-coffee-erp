@@ -20,6 +20,13 @@ import type { SafeBalances } from "@/lib/types";
 import { IngredientFormModal } from "@/features/inventory/ingredient-form-modal";
 import { lineAmount, deriveQuantity } from "@/features/inventory/purchase-math";
 import { defaultFundSplit } from "./fund-split";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useIngredientPricesQuery } from "@/hooks/queries/use-inventory-queries";
+import {
+  DEFAULT_SYNC_PRICE,
+  priceDeviation,
+  buildPurchaseLine,
+} from "./purchase-price-sync";
 
 interface PurchaseInventoryModalProps {
   open: boolean;
@@ -33,11 +40,12 @@ interface PurchaseRow {
   qtyStr: string;
   priceStr: string;
   amountStr: string;
+  syncPrice: boolean;
 }
 
 let rowSeq = 1;
 function emptyRow(): PurchaseRow {
-  return { key: rowSeq++, ingredientId: "", qtyStr: "", priceStr: "", amountStr: "" };
+  return { key: rowSeq++, ingredientId: "", qtyStr: "", priceStr: "", amountStr: "", syncPrice: DEFAULT_SYNC_PRICE };
 }
 
 /**
@@ -53,6 +61,8 @@ export function PurchaseInventoryModal({ open, onOpenChange, balances }: Purchas
   const { toast } = useToast();
   const purchaseM = useSafePurchaseInventory(supabase);
   const ingredientsQuery = useIngredientsQuery(supabase, open);
+  const pricesQuery = useIngredientPricesQuery(supabase, open);
+  const prices = pricesQuery.data;
   const today = todayInVN();
 
   const [rows, setRows] = useState<PurchaseRow[]>([emptyRow()]);
@@ -195,11 +205,14 @@ export function PurchaseInventoryModal({ open, onOpenChange, balances }: Purchas
       await purchaseM.mutateAsync({
         cashAmount,
         transferAmount,
-        lines: rows.map((r) => ({
-          ingredient_id: r.ingredientId,
-          quantity: Number(r.qtyStr) || 0,
-          unit_price: moneyFromInput(r.priceStr)
-        })),
+        lines: rows.map((r) =>
+          buildPurchaseLine({
+            ingredientId: r.ingredientId,
+            quantity: Number(r.qtyStr) || 0,
+            unitPrice: moneyFromInput(r.priceStr),
+            syncPrice: r.syncPrice,
+          })
+        ),
         description: description || undefined,
         occurredAt
       });
@@ -299,6 +312,38 @@ export function PurchaseInventoryModal({ open, onOpenChange, balances }: Purchas
                       helper="Sửa được — SL tự quy đổi"
                     />
                   </div>
+                  {(() => {
+                    const oldPrice = prices?.get(row.ingredientId)?.unit_price ?? null;
+                    const dev = priceDeviation(oldPrice, moneyFromInput(row.priceStr));
+                    return (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-xs tabular-nums">
+                          {oldPrice == null ? (
+                            <span className="text-muted">Chưa có giá định giá</span>
+                          ) : (
+                            <>
+                              <span className="text-muted">Giá cũ: </span>
+                              <strong className={dev.isLarge ? "text-warning" : "text-ink-2"}>
+                                {formatVND(oldPrice)}
+                              </strong>
+                              {dev.isLarge && dev.ratio != null && (
+                                <span className="text-warning">
+                                  {" "}· lệch {dev.ratio > 0 ? "+" : ""}
+                                  {Math.round(dev.ratio * 100)}%
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                        <Checkbox
+                          label="Cập nhật giá định giá"
+                          checked={row.syncPrice}
+                          onCheckedChange={(c) => updateRow(row.key, { syncPrice: c === true })}
+                          disabled={isBusy}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

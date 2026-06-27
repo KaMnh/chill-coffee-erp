@@ -95,7 +95,12 @@ export function useAdjustSafe(supabase: SupabaseClient | null) {
 export interface SafePurchaseInventoryInput {
   cashAmount: number;
   transferAmount: number;
-  lines: ReadonlyArray<{ ingredient_id: string; quantity: number; unit_price: number }>;
+  lines: ReadonlyArray<{
+    ingredient_id: string;
+    quantity: number;
+    unit_price: number;
+    sync_price: boolean;
+  }>;
   description?: string;
   /** ISO timestamp — nhãn ngày (số dư vẫn trừ ngay). */
   occurredAt?: string;
@@ -115,6 +120,7 @@ export function useSafePurchaseInventory(supabase: SupabaseClient | null) {
       queryClient.invalidateQueries({ queryKey: queryKeys.ingredients() });
       queryClient.invalidateQueries({ queryKey: queryKeys.stockBalances() });
       queryClient.invalidateQueries({ queryKey: ["inventory", "stock_movements"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.ingredientPrices() });
     }
   });
 }

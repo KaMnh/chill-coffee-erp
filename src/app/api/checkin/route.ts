@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "error", error: "Tính năng chấm công chưa được cấu hình (proxy)." }, { status: 503 });
   } else {
     const presented = req.headers.get("x-checkin-proxy-secret") || "";
-    if (!safeEquals(presented, proxySecret)) return NextResponse.json({ status: "error", error: "Forbidden." }, { status: 403 });
+    if (!safeEquals(presented, proxySecret)) {
+      if (CHECKIN_DEBUG) console.info("[checkin] proxy-secret reject", JSON.stringify({
+        headerPresent: req.headers.has("x-checkin-proxy-secret"),
+        presentedLen: presented.length,
+        expectedLen: proxySecret.length,
+      }));
+      return NextResponse.json({ status: "error", error: "Forbidden." }, { status: 403 });
+    }
   }
 
   // (B4) employees only; operators use the existing check_in_employee flow.

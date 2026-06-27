@@ -232,3 +232,12 @@ begin
   );
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- STEP 4 — Bỏ direct-write RLS (Codex #1): mọi write qua security-definer RPC.
+-- Read policy (shifts_staff_read / payroll_staff_read) GIỮ NGUYÊN ở 003.
+-- ---------------------------------------------------------------------------
+drop policy if exists shifts_staff_write on public.shift_assignments;
+drop policy if exists shifts_staff_update on public.shift_assignments;
+drop policy if exists payroll_staff_write on public.shift_payroll_records;
+drop policy if exists payroll_staff_update on public.shift_payroll_records;

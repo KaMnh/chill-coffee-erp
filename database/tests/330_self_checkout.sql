@@ -4,7 +4,7 @@
 -- Runs on the throwaway DB (auth-mock + 001 + 002 + 003 + migrations).
 
 begin;
-select plan(19);
+select plan(22);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$
@@ -124,6 +124,23 @@ select ok(
   (select (public.get_my_checkin_status()->>'checked_out_today')::boolean) = true
   and (select (public.get_my_checkin_status()->>'self_checkout_enabled')::boolean) = true,
   'get_my_checkin_status: checked_out_today=true + self_checkout_enabled lộ ra');
+
+-- ===== Group H — vào lại ca sau khi ra ca (nhiều ca/ngày) =====
+-- check_in_self sau khi đã ra ca → tạo CA MỚI: partial unique index
+-- shift_assignments_one_open_per_day chỉ chặn ca checked_in trùng, cho phép nhiều
+-- ca checked_out/ngày. UI hiện nút "Vào ca lượt mới".
+create temp table _re as
+  select public.check_in_self('a0000000-0000-0000-0000-000000000004'::uuid, '203.0.113.8'::inet, 'UA2') as r;
+select is((select (r->>'already_checked_in')::boolean from _re), false,
+  're-check-in sau khi ra ca: tạo ca MỚI (already_checked_in=false)');
+select is(
+  (select count(*)::int from public.shift_assignments
+   where employee_id='e0000000-0000-0000-0000-000000000001' and business_date=current_date),
+  2, 'emp có 2 ca trong ngày (1 đã đóng + 1 mới mở)');
+select is(
+  (select status from public.shift_assignments
+   where id=(select (r->>'shift_assignment_id')::uuid from _re)),
+  'checked_in', 'ca mới ở trạng thái checked_in');
 
 select * from finish();
 rollback;

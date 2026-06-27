@@ -35,7 +35,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "error", error: "Chưa cấu hình (proxy)." }, { status: 503 });
   } else {
     const presented = req.headers.get("x-checkin-proxy-secret") || "";
-    if (!safeEquals(presented, proxySecret)) return NextResponse.json({ status: "error", error: "Forbidden." }, { status: 403 });
+    if (!safeEquals(presented, proxySecret)) {
+      // Safe diagnostic (no secret value): tells you WHY the 403 — header not
+      // injected by the proxy (headerPresent=false), or value mismatch
+      // (lengths differ = whitespace/quote/truncation; same length = typo).
+      if (CHECKIN_DEBUG) console.info("[heartbeat] proxy-secret reject", JSON.stringify({
+        headerPresent: req.headers.has("x-checkin-proxy-secret"),
+        presentedLen: presented.length,
+        expectedLen: proxySecret.length,
+      }));
+      return NextResponse.json({ status: "error", error: "Forbidden." }, { status: 403 });
+    }
   }
 
   let anchorId: string | undefined;

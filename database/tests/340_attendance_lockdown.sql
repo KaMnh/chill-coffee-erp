@@ -18,6 +18,16 @@ begin
   perform set_config('request.jwt.claims', json_build_object('role','service_role')::text, true);
 end; $$ language plpgsql;
 
+-- Đếm số row mà UPDATE thẳng chạm tới (RLS lọc → 0). Data-modifying CTE phải ở
+-- top-level của một câu lệnh → bọc trong function (security invoker: RLS theo
+-- role/JWT của caller lúc gọi). Không thể inline trong subquery của is().
+create or replace function pg_temp.direct_update_payroll_total()
+returns int as $$
+  with u as (update public.shift_payroll_records set total_pay = 999
+             where id='9a000000-0000-0000-0000-0000000000aa' returning 1)
+  select count(*)::int from u;
+$$ language sql;
+
 -- ===== Fixtures =====
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, instance_id) values
   ('a0000000-0000-0000-0000-000000000001','owner@t.local','',now(),'00000000-0000-0000-0000-000000000000'),
@@ -77,8 +87,7 @@ select throws_ok(
      values ('e0000000-0000-0000-0000-000000000004', current_date, now(), 'checked_out') $$,
   '42501', null, 'owner KHÔNG INSERT thẳng shift_assignments (RLS deny)');
 select is(
-  (with u as (update public.shift_payroll_records set total_pay = 999 where id='9a000000-0000-0000-0000-0000000000aa' returning 1)
-   select count(*)::int from u),
+  pg_temp.direct_update_payroll_total(),
   0, 'owner UPDATE thẳng shift_payroll_records → 0 rows (RLS deny)');
 reset role;
 select pg_temp.act_as('a0000000-0000-0000-0000-000000000002'); -- manager

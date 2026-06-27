@@ -34,12 +34,12 @@ UPDATE public.safe_transactions SET created_at = now() - interval '4 hours';
 -- ⚠️ Tổng MỖI call phải là số nguyên: RPC check `v_cash + v_transfer <> round(v_total,2)`.
 -- ⚠️ Stagger created_at THEO ID dòng vừa tạo (không theo reason_category) để balance
 --    chain (created_at desc, id desc) xác định qua nhiều call (giống 088:70).
--- Call 1: NL#1 sync=true, qty 5 × 100000.4 = 502002 (nguyên) → round(100000.4)=100000;
+-- Call 1: NL#1 sync=true, qty 5 × 100000.4 = 500002 (nguyên) → round(100000.4)=100000;
 --         NL#2 sync=false, 1 × 999999 = 999999 → KHÔNG đổi (giữ 50000).
---         Tổng = 1.502.001, trả hết cash.
+--         Tổng = 1.500.001, trả hết cash.
 CREATE TEMP TABLE _p1 AS
 SELECT public.safe_purchase_inventory(
-  1502001, 0,
+  1500001, 0,
   jsonb_build_array(
     jsonb_build_object('ingredient_id','aaaaaaaa-0000-0000-0000-000000000001','quantity',5,'unit_price',100000.4,'sync_price',true),
     jsonb_build_object('ingredient_id','aaaaaaaa-0000-0000-0000-000000000002','quantity',1,'unit_price',999999,'sync_price',false)

@@ -6,8 +6,6 @@ import {
   useEmployeesQuery,
   useShiftsQuery,
   usePayrollQuery,
-  useAccountedEmployeeIdsQuery,
-  useUnlinkedAccountsQuery,
 } from "@/hooks/queries";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -24,7 +22,6 @@ import { CheckInModal } from "./check-in-modal";
 import { CheckOutModal } from "./check-out-modal";
 import { EmployeeFormModal } from "./employee-form-modal";
 import { PayrollEditModal } from "./payroll-edit-modal";
-import { LinkAccountModal } from "./link-account-modal";
 
 interface ShiftsViewProps {
   businessDate: string;
@@ -51,19 +48,14 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   // vào/ra ca ở màn Chấm công). Quản lý/NV vẫn XEM trang ca + quản lý hồ sơ NV.
   const isOwner = role === "owner";
 
-  // Account linking (owner/manager only): which employees have a login + the
-  // pool of unlinked accounts for the "liên kết" picker.
-  const accountedQuery = useAccountedEmployeeIdsQuery(supabase, canManage);
-  const unlinkedAccountsQuery = useUnlinkedAccountsQuery(supabase, canManage);
-
-  // Modal state (6 separate slots — only one is non-null at a time,
+  // Modal state (5 separate slots — only one is non-null at a time,
   // but separate state lets each modal's own useEffect drive resets).
+  // Cấp/liên kết tài khoản đã chuyển hẳn sang trang Cài đặt (không còn ở đây).
   const [checkInTarget, setCheckInTarget] = useState<Employee | null>(null);
   const [checkOutTarget, setCheckOutTarget] = useState<ShiftAssignment | null>(null);
   const [editingPayroll, setEditingPayroll] = useState<PayrollRecord | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
-  const [grantAccountTarget, setGrantAccountTarget] = useState<Employee | null>(null);
 
   if (
     employeesQuery.isLoading ||
@@ -100,7 +92,6 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   const employees = employeesQuery.data ?? [];
   const shifts = shiftsQuery.data ?? [];
   const payroll = payrollQuery.data ?? [];
-  const accountedEmployeeIds = new Set(accountedQuery.data ?? []);
 
   // First-wins reduce: shifts come pre-sorted DESC by check_in_at from
   // loadShiftAssignments. Part-time employees may have multiple shifts
@@ -142,11 +133,9 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
         shiftByEmployee={shiftByEmployee}
         canManage={canManage}
         isOwner={isOwner}
-        accountedEmployeeIds={accountedEmployeeIds}
         onCheckIn={setCheckInTarget}
         onCheckOut={setCheckOutTarget}
         onEditEmployee={setEditingEmployee}
-        onGrantAccount={setGrantAccountTarget}
       />
       <PayrollHistoryCard
         payroll={payroll}
@@ -187,15 +176,6 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
           if (!next) setEditingPayroll(null);
         }}
         payroll={editingPayroll}
-      />
-      <LinkAccountModal
-        open={grantAccountTarget !== null}
-        onOpenChange={(next) => {
-          if (!next) setGrantAccountTarget(null);
-        }}
-        employee={grantAccountTarget}
-        unlinkedAccounts={unlinkedAccountsQuery.data ?? []}
-        approverRole={role}
       />
     </div>
   );

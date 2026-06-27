@@ -13,17 +13,13 @@ interface EmployeeGridProps {
   employees: ReadonlyArray<Employee>;
   /** Map of employee_id -> most-recent shift today (first-wins). */
   shiftByEmployee: ReadonlyMap<string, ShiftAssignment>;
-  /** owner/manager: quản lý hồ sơ NV (Sửa, Cấp tài khoản). */
+  /** owner/manager: quản lý hồ sơ NV (Sửa). */
   canManage: boolean;
   /** Phase 2b: chỉ owner mới chấm công thủ công (Vào ca/Ra ca). */
   isOwner: boolean;
-  /** employee_ids that already have a login account (owner/manager only). */
-  accountedEmployeeIds: ReadonlySet<string>;
   onCheckIn(employee: Employee): void;
   onCheckOut(shift: ShiftAssignment): void;
   onEditEmployee(employee: Employee): void;
-  /** Open the "Cấp tài khoản" modal for an employee without a login. */
-  onGrantAccount(employee: Employee): void;
 }
 
 function statusBadge(status: ShiftAssignment["status"] | undefined) {
@@ -50,11 +46,9 @@ export function EmployeeGrid({
   shiftByEmployee,
   canManage,
   isOwner,
-  accountedEmployeeIds,
   onCheckIn,
   onCheckOut,
   onEditEmployee,
-  onGrantAccount,
 }: EmployeeGridProps) {
   const active = employees.filter(
     (emp) => shiftByEmployee.get(emp.id)?.status === "checked_in"
@@ -104,19 +98,6 @@ export function EmployeeGrid({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {statusBadge(shift?.status)}
-          {canManage &&
-            (accountedEmployeeIds.has(employee.id) ? (
-              <Badge variant="soft" semantic="neutral">Đã có TK</Badge>
-            ) : (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => onGrantAccount(employee)}
-              >
-                Cấp tài khoản
-              </Button>
-            ))}
           {canManage && (
             <Button
               type="button"

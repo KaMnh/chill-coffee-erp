@@ -103,11 +103,13 @@ select ok((select count(*)::int from public.shift_payroll_records) > 0,
   'staff_operator vẫn ĐỌC được shift_payroll_records (read không bị siết)');
 reset role;
 
--- ===== Group C — self check-in/out KHÔNG vỡ (service role, definer bypass RLS) =====
+-- ===== Group C — self check-in/out KHÔNG vỡ sau khi bỏ write policy =====
+-- (RPC security-definer là đường ghi duy nhất; act_as_service() để auth.uid() null
+--  nhằm kiểm chứng audit-actor coalesce ở Group D, KHÔNG đo riêng cơ chế bypass.)
 select pg_temp.act_as_service(); -- auth.uid() null
 select lives_ok(
   $$ select public.check_in_self('a0000000-0000-0000-0000-000000000004'::uuid, '203.0.113.5'::inet, 'UA') $$,
-  'check_in_self chạy dù đã bỏ write policy (definer bypass)');
+  'check_in_self vẫn chạy sau khi bỏ write policy');
 select is(
   (select status from public.shift_assignments
    where employee_id='e0000000-0000-0000-0000-000000000004' and business_date=current_date
@@ -115,7 +117,7 @@ select is(
   'checked_in', 'self check-in tạo ca checked_in');
 select lives_ok(
   $$ select public.check_out_self('a0000000-0000-0000-0000-000000000004'::uuid, '203.0.113.5'::inet, 'UA') $$,
-  'check_out_self chạy (definer bypass)');
+  'check_out_self vẫn chạy sau khi bỏ write policy');
 select is(
   (select count(*)::int from public.shift_payroll_records where employee_id='e0000000-0000-0000-0000-000000000004'),
   1, 'self check-out tạo 1 payroll row');

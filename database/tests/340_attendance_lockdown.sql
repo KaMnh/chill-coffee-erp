@@ -2,7 +2,7 @@
 -- bỏ direct-write RLS (Codex #1); audit attendance actor-indexable (Codex #2).
 -- Throwaway DB only (auth-mock + 001 + 002 + 003 + migrations).
 begin;
-select plan(17);
+select plan(18);
 
 create or replace function pg_temp.act_as(p_user_id uuid)
 returns void as $$
@@ -134,6 +134,11 @@ select ok(exists(
   where action='shift_payroll_records.insert'
     and actor_user_id='a0000000-0000-0000-0000-000000000004'),
   'audit self check-out payroll: actor=emp4');
+select ok(exists(
+  select 1 from public.audit_log
+  where action='shift_assignments.update'
+    and actor_user_id='a0000000-0000-0000-0000-000000000004'),
+  'audit self check-out: nhánh UPDATE shift_assignments → actor=emp4 (coalesce updated_by)');
 select ok(exists(
   select 1 from public.audit_log
   where action='shift_assignments.insert'

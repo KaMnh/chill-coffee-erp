@@ -7,6 +7,7 @@ import {
   useCashCountsQuery,
   useCashOpeningQuery,
   useDashboardQuery,
+  useShiftsQuery,
 } from "@/hooks/queries";
 import {
   useSaveCashCount,
@@ -58,6 +59,9 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const cashCountsQuery = useCashCountsQuery(supabase, businessDate, true);
   const saveCountM = useSaveCashCount(supabase, businessDate);
   const finalizeM = useFinalizeCashClose(supabase, businessDate);
+  // Chống lệch lương: chỉ chốt két khi đã ra ca hết (RPC enforce; UI chặn sớm + báo).
+  const shiftsQuery = useShiftsQuery(supabase, businessDate, true);
+  const openShifts = (shiftsQuery.data ?? []).filter((s) => s.status === "checked_in");
 
   const canManage = role === "owner" || role === "manager";
 
@@ -347,6 +351,15 @@ export function CashView({ businessDate, role }: CashViewProps) {
               đếm 0 nếu nạp toàn bộ vào sổ quỹ).
             </AlertBanner>
           )}
+          {openShifts.length > 0 && (
+            <AlertBanner variant="warning">
+              Còn {openShifts.length} ca chưa ra ca
+              {openShifts.some((s) => s.employee_name)
+                ? `: ${openShifts.map((s) => s.employee_name).filter(Boolean).join(", ")}`
+                : ""}
+              . Đóng/ra hết ca (trang Ca &amp; lương) trước khi chốt két.
+            </AlertBanner>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -362,7 +375,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
               variant="primary"
               onClick={() => submit("shift_close")}
               loading={isBusy}
-              disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened}
+              disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened || openShifts.length > 0}
             >
               Chốt két &amp; tạo báo cáo
             </Button>
@@ -419,7 +432,7 @@ export function CashView({ businessDate, role }: CashViewProps) {
                 variant="primary"
                 onClick={() => submit("shift_close")}
                 loading={isBusy}
-                disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened}
+                disabled={isBusy || physical === 0 || nextDayExceeds || !step2Opened || openShifts.length > 0}
                 className="flex-1"
               >
                 Chốt két &amp; tạo báo cáo

@@ -113,6 +113,7 @@ Dual-write: paste **full thân** 4 hàm đã sửa (`finalize_cash_close_report`
 3. **Regress là rủi ro chính** (§3) — final-guard + rule có thể làm đỏ fixture cũ tạo final-rồi-checkin hoặc open-shift-rồi-finalize. Phải rà.
 4. **check-in trễ trên ngày đã final** giờ bị chặn cứng — nếu owner cần vẫn cho vào ca sau chốt (hiếm), phải void báo cáo trước. Chấp nhận (đúng nghiệp vụ: đã chốt thì không phát sinh thêm).
 5. **Lock granularity**: per-business_date → check-in/edit/finalize CÙNG ngày tuần tự; ngày khác song song. Tần suất thấp (vài check-in + 1 finalize/ngày) → contention không đáng kể, như `safe_fund`.
+6. **`void_cash_close_report` CỐ Ý nằm ngoài lock-set:** void chỉ đổi `report_status='voided'` + post reversal adjustments (KHÔNG snapshot lương) → không phải đường ghi lệch-snapshot. Đã có `for update` row-lock trên báo cáo. Không cần `cash_close:` lock. (Recovery void → check-in/sửa lương → finalize lại vẫn an toàn nhờ status visibility.)
 
 ## 6. Files
 **DB:** `database/migrations/2026-06-28-finalize-shift-lock.sql`, `database/002_functions.sql`, `database/tests/360_finalize_shift_lock.sql` (+ sửa fixture regress).

@@ -579,6 +579,10 @@ declare
   v_payroll_id uuid;
 begin
   if not public.app_is_owner() then raise exception 'Chỉ chủ quán được ra ca hộ. Nhân viên tự ra ca ở màn Chấm công.'; end if;
+  if exists (select 1 from public.cash_close_reports
+             where business_date = v_date and report_status = 'final') then
+    raise exception 'Ngày % đã chốt két (final) — không thể đóng ca. Hủy báo cáo trước.', v_date;
+  end if;
   if v_out < v_in then raise exception 'Giờ ra không được nhỏ hơn giờ vào.'; end if;
   select hourly_rate into v_rate from public.employees where id = v_employee;
   v_minutes := greatest(0, round(extract(epoch from (v_out - v_in)) / 60)::integer);

@@ -116,3 +116,38 @@ begin
   return jsonb_build_object('shift_assignment_id', v_shift, 'payroll_record_id', v_payroll_id, 'total_pay', v_total);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 3) check_in_self — chặn vào ca trước shift_start_time (mặc định 05:30). Full body.
+-- ---------------------------------------------------------------------------
+create or replace function public.check_in_self(p_auth_user_id uuid, p_ip inet, p_user_agent text)
+returns jsonb language plpgsql security definer set search_path = public, auth as $$
+declare v_employee uuid; v_name text; v_id uuid; v_already boolean := false; v_check_in timestamptz := now(); v_date date := current_date; v_start time;
+begin
+  if p_auth_user_id is null then raise exception 'Thiếu danh tính.'; end if;
+  select ea.employee_id, e.name into v_employee, v_name
+    from public.employee_accounts ea join public.employees e on e.id = ea.employee_id
+    where ea.auth_user_id = p_auth_user_id and ea.status = 'active' limit 1;
+  if v_employee is null then raise exception 'Tài khoản chưa gắn nhân viên.'; end if;
+  v_start := coalesce(
+    (select (value->>'shift_start_time')::time from public.app_settings where key = 'checkin_network'),
+    '05:30'::time);
+  if now()::time < v_start then
+    raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
+  end if;
+  insert into public.shift_assignments
+    (employee_id, business_date, check_in_at, status, created_by, updated_by, check_in_ip, check_in_user_agent)
+  values (v_employee, v_date, v_check_in, 'checked_in', p_auth_user_id, p_auth_user_id, p_ip, p_user_agent)
+  on conflict (employee_id, business_date) where status = 'checked_in' do nothing
+  returning id into v_id;
+  if v_id is null then
+    v_already := true;
+    select id into v_id from public.shift_assignments
+      where employee_id = v_employee and business_date = v_date and status = 'checked_in'
+      order by check_in_at desc limit 1;
+  end if;
+  select check_in_at into v_check_in from public.shift_assignments where id = v_id;
+  return jsonb_build_object('shift_assignment_id', v_id, 'employee_name', v_name, 'check_in_at', v_check_in, 'already_checked_in', v_already);
+end; $$;
+revoke execute on function public.check_in_self(uuid, inet, text) from public, anon, authenticated;
+grant execute on function public.check_in_self(uuid, inet, text) to service_role;

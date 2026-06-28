@@ -4523,13 +4523,19 @@ comment on view analytics.cash_variance is
 -- check_in_self — SERVICE-ROLE-ONLY (route đã verify JWT → trusted p_auth_user_id).
 create or replace function public.check_in_self(p_auth_user_id uuid, p_ip inet, p_user_agent text)
 returns jsonb language plpgsql security definer set search_path = public, auth as $$
-declare v_employee uuid; v_name text; v_id uuid; v_already boolean := false; v_check_in timestamptz := now(); v_date date := current_date;
+declare v_employee uuid; v_name text; v_id uuid; v_already boolean := false; v_check_in timestamptz := now(); v_date date := current_date; v_start time;
 begin
   if p_auth_user_id is null then raise exception 'Thiếu danh tính.'; end if;
   select ea.employee_id, e.name into v_employee, v_name
     from public.employee_accounts ea join public.employees e on e.id = ea.employee_id
     where ea.auth_user_id = p_auth_user_id and ea.status = 'active' limit 1;
   if v_employee is null then raise exception 'Tài khoản chưa gắn nhân viên.'; end if;
+  v_start := coalesce(
+    (select (value->>'shift_start_time')::time from public.app_settings where key = 'checkin_network'),
+    '05:30'::time);
+  if now()::time < v_start then
+    raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
+  end if;
   insert into public.shift_assignments
     (employee_id, business_date, check_in_at, status, created_by, updated_by, check_in_ip, check_in_user_agent)
   values (v_employee, v_date, v_check_in, 'checked_in', p_auth_user_id, p_auth_user_id, p_ip, p_user_agent)

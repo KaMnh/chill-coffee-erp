@@ -41,6 +41,12 @@ insert into public.employee_accounts (auth_user_id, employee_id, role, status) v
   ('a0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000001',     'employee_self_service', 'active'),
   ('a0000000-0000-0000-0000-000000000005', null,                                       'employee_self_service', 'active');
 
+-- Throwaway DB KHÔNG có row checkin_network (không seed 004) → gate check_in_self
+-- mặc định 05:30 (flaky theo wall-clock). Đặt shift_start_time=00:00 để mở cổng.
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"shift_start_time":"00:00"}'::jsonb, false)
+  on conflict (key) do update set value = public.app_settings.value || excluded.value;
+
 -- =========================================================================
 -- Group A — check_in_self stamps own employee/created_by/ip/ua, now(), idempotent
 -- =========================================================================

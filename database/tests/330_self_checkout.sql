@@ -36,6 +36,13 @@ values ('5a000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-0000000
         current_date, now() - interval '2 hours', 'checked_in',
         'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004');
 
+-- Throwaway DB KHÔNG có row checkin_network (không seed 004) → gate check_in_self
+-- (Group H) mặc định 05:30, flaky theo wall-clock. Đặt 00:00 để mở cổng. MERGE ở
+-- Group F (update_checkin_network_config) sẽ GIỮ key này.
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"shift_start_time":"00:00"}'::jsonb, false)
+  on conflict (key) do update set value = public.app_settings.value || excluded.value;
+
 -- ===== Group A — check_out_self closes shift + chốt lương + cash event =====
 create temp table _co as
   select public.check_out_self('a0000000-0000-0000-0000-000000000004'::uuid,

@@ -541,6 +541,13 @@ begin
     raise exception 'Giờ vào ca không được trong tương lai.';
   end if;
 
+  -- Serialize per-business_date với chốt két + chặn vào ca trên ngày đã chốt két.
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_date::text));
+  if exists (select 1 from public.cash_close_reports
+             where business_date = v_date and report_status = 'final') then
+    raise exception 'Ngày % đã chốt két — không thể vào ca.', v_date;
+  end if;
+
   -- Idempotency: nếu hôm nay đã có row checked_in cho employee này, trả về id đó
   -- (tránh tạo duplicate nếu user click "Vào ca" 2 lần). MUST filter business_date —
   -- nếu thiếu, stale checked_in row từ ngày khác (vd: hôm qua quên ra ca) sẽ match,
@@ -632,6 +639,10 @@ begin
   if not found then
     raise exception 'Không tìm thấy dòng lương cần sửa.';
   end if;
+
+  -- Serialize per-business_date với chốt két (chống race edit↔finalize làm lệch
+  -- snapshot lương; xem spec 2026-06-28-finalize-shift-lock).
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_record.business_date::text));
 
   -- Chống sửa lương của ngày đã chốt két (final): cash_close_reports giữ
   -- payroll_cash_total dưới dạng snapshot khi finalize; sửa total_pay sau khi
@@ -2841,6 +2852,16 @@ begin
     raise exception 'Ngày % đã có báo cáo chốt két (final) cho cash_count khác. Hủy báo cáo cũ trước khi chốt mới.', v_count.business_date;
   end if;
 
+  -- Serialize per-business_date (idiom safe_fund:*): chống lệch lương khi
+  -- chốt két chạy đồng thời với check-in / sửa lương cùng ngày. Đặt SỚM,
+  -- trước rule-check + snapshot. Transaction-scoped → tự nhả khi commit/rollback.
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_count.business_date::text));
+  -- rule: phải ra ca hết trước khi chốt (UX + đóng race close↔finalize)
+  if exists (select 1 from public.shift_assignments
+             where business_date = v_count.business_date and status = 'checked_in') then
+    raise exception 'Còn ca chưa ra ca trong ngày % — đóng/ra hết ca trước khi chốt két.', v_count.business_date;
+  end if;
+
   -- Nếu client gửi next_day_denominations, server tính tổng và dùng làm
   -- canonical leave_for_next_day (chống tampering qua p_leave_for_next_day).
   if p_next_day_denominations is not null then
@@ -4537,6 +4558,13 @@ begin
   -- TimeZone GUC của session (bare now()::time có thể là UTC → gate sai wall-clock).
   if (now() at time zone 'Asia/Ho_Chi_Minh')::time < v_start then
     raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
+  end if;
+  -- Serialize per-business_date với chốt két + chặn vào ca trên ngày đã chốt két
+  -- (chống lệch lương / ca kẹt; xem spec 2026-06-28-finalize-shift-lock).
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_date::text));
+  if exists (select 1 from public.cash_close_reports
+             where business_date = v_date and report_status = 'final') then
+    raise exception 'Ngày % đã chốt két — không thể vào ca. Báo quản lý/chủ quán.', v_date;
   end if;
   insert into public.shift_assignments
     (employee_id, business_date, check_in_at, status, created_by, updated_by, check_in_ip, check_in_user_agent)

@@ -186,7 +186,7 @@ export function useRepointUser(supabase: SupabaseClient | null) {
       queryClient.invalidateQueries({ queryKey: queryKeys.account() });
       queryClient.invalidateQueries({ queryKey: queryKeys.accountedEmployeeIds() });
       queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedAccounts() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees() });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     }
   });
 }

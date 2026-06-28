@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PayrollRecord, ShiftAssignment } from "@/lib/types";
+import type { ManagerCheckoutResult, PayrollRecord, ShiftAssignment } from "@/lib/types";
 import { toAppError } from "./_common";
 
 export async function loadShiftAssignments(supabase: SupabaseClient, businessDate: string) {
@@ -30,6 +30,12 @@ export async function checkOutEmployee(supabase: SupabaseClient, payload: Record
   const { data, error } = await supabase.rpc("check_out_employee", { p_payload: payload });
   if (error) throw toAppError(error, "Không ra ca được.");
   return data;
+}
+
+export async function checkOutEmployeeNow(supabase: SupabaseClient, shiftAssignmentId: string) {
+  const { data, error } = await supabase.rpc("check_out_employee_now", { p_shift_assignment_id: shiftAssignmentId });
+  if (error) throw toAppError(error, "Không đóng ca được.");
+  return data as ManagerCheckoutResult;
 }
 
 export async function loadPayrollRecords(supabase: SupabaseClient, businessDate: string) {

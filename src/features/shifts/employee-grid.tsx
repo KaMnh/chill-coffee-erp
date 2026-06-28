@@ -15,10 +15,12 @@ interface EmployeeGridProps {
   shiftByEmployee: ReadonlyMap<string, ShiftAssignment>;
   /** owner/manager: quản lý hồ sơ NV (Sửa). */
   canManage: boolean;
-  /** Phase 2b: chỉ owner mới chấm công thủ công (Vào ca/Ra ca). */
+  /** Phase 2b: chỉ owner mới chấm công thủ công (Vào ca). */
   isOwner: boolean;
   onCheckIn(employee: Employee): void;
   onCheckOut(shift: ShiftAssignment): void;
+  /** Phase 2c: quản lý đóng ca hộ (làm tròn phút, không sửa giờ). */
+  onManagerCheckout(shift: ShiftAssignment): void;
   onEditEmployee(employee: Employee): void;
 }
 
@@ -48,6 +50,7 @@ export function EmployeeGrid({
   isOwner,
   onCheckIn,
   onCheckOut,
+  onManagerCheckout,
   onEditEmployee,
 }: EmployeeGridProps) {
   const active = employees.filter(
@@ -109,26 +112,33 @@ export function EmployeeGrid({
             </Button>
           )}
           {isOwner && (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onCheckIn(employee)}
-                disabled={isIn}
-              >
-                Vào ca
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => shift && onCheckOut(shift)}
-                disabled={!shift || !isIn}
-              >
-                Ra ca
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onCheckIn(employee)}
+              disabled={isIn}
+            >
+              Vào ca
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (!shift) return;
+                if (isOwner) {
+                  onCheckOut(shift);
+                } else {
+                  onManagerCheckout(shift);
+                }
+              }}
+              disabled={!shift || !isIn}
+            >
+              Ra ca
+            </Button>
           )}
         </div>
       </article>

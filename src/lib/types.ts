@@ -587,6 +587,8 @@ export interface CheckinNetworkConfig {
   grace_hours: number;
   /** Cho phép nhân viên TỰ ra ca (Phase 2a). Độc lập với `enabled` (tự vào ca). */
   self_checkout_enabled?: boolean;
+  /** Giờ bắt đầu ca "HH:MM" — chặn check_in_self trước giờ này (mặc định 05:30). */
+  shift_start_time?: string;
 }
 
 export interface MyCheckinStatus {
@@ -603,3 +605,5 @@ export interface MyCheckinStatus {
 
 export type CheckinResult = { employee_name: string; check_in_at: string; already_checked_in: boolean };
 export type CheckoutResult = { employee_name: string; check_out_at: string; total_pay: number; already_checked_out: boolean };
+
+export type ManagerCheckoutResult = { employee_name: string; check_out_at: string; total_minutes: number; total_pay: number };

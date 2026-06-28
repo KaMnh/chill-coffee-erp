@@ -85,7 +85,9 @@ export async function POST(req: NextRequest) {
 
   const ua = req.headers.get("user-agent");
   const { data, error } = await supabase.rpc("check_in_self", { p_auth_user_id: userId, p_ip: ip, p_user_agent: ua });
-  if (error) return NextResponse.json({ status: "error", error: "Không chấm công được." }, { status: 400 });
+  // Surface check_in_self's business message (vd "Chưa tới giờ vào ca (mở lúc
+  // 05:30)", "Tài khoản chưa gắn nhân viên") — các raise này thân thiện, không PII.
+  if (error) return NextResponse.json({ status: "error", error: error.message || "Không chấm công được." }, { status: 400 });
   const r = data as { employee_name: string; check_in_at: string; already_checked_in: boolean };
   return NextResponse.json({ status: "ok", employee_name: r.employee_name, check_in_at: r.check_in_at, already_checked_in: r.already_checked_in });
 }

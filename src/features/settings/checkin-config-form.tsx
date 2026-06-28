@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: CheckinNetworkConfig = {
   reject_message: "Chỉ chấm công được khi ở tại quán (nối wifi quán).",
   grace_hours: 12,
   self_checkout_enabled: false,
+  shift_start_time: "05:30",
 };
 
 /** SHA-256 hex of a string via Web Crypto — must match the heartbeat route's hash. */
@@ -78,6 +79,7 @@ export function CheckinConfigForm() {
         grace_hours:
           typeof value?.grace_hours === "number" ? value.grace_hours : DEFAULT_CONFIG.grace_hours,
         self_checkout_enabled: value?.self_checkout_enabled ?? false,
+        shift_start_time: value?.shift_start_time ?? "05:30",
       };
     },
     enabled: !!supabase,
@@ -88,6 +90,7 @@ export function CheckinConfigForm() {
   const [rejectMessage, setRejectMessage] = useState(DEFAULT_CONFIG.reject_message);
   const [graceHours, setGraceHours] = useState(String(DEFAULT_CONFIG.grace_hours));
   const [selfCheckout, setSelfCheckout] = useState(false);
+  const [shiftStart, setShiftStart] = useState("05:30");
 
   useEffect(() => {
     if (!configQuery.data) return;
@@ -95,6 +98,7 @@ export function CheckinConfigForm() {
     setRejectMessage(configQuery.data.reject_message);
     setGraceHours(String(configQuery.data.grace_hours));
     setSelfCheckout(configQuery.data.self_checkout_enabled ?? false);
+    setShiftStart(configQuery.data.shift_start_time ?? "05:30");
   }, [configQuery.data]);
 
   // Anchor marking state.
@@ -129,6 +133,7 @@ export function CheckinConfigForm() {
   const anchors = anchorsQuery.data ?? [];
   const graceNum = Number(graceHours);
   const validGrace = Number.isFinite(graceNum) && graceNum >= 0;
+  const validStart = /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(shiftStart);
   // At least one ACTIVE anchor with a non-null IP is required before enabling.
   const hasAnchorIp = anchors.some((a) => a.is_active && a.current_public_ip);
   const canEnable = hasAnchorIp;
@@ -139,7 +144,8 @@ export function CheckinConfigForm() {
     enabled !== loadedConfig.enabled ||
     rejectMessage !== loadedConfig.reject_message ||
     graceNum !== loadedConfig.grace_hours ||
-    selfCheckout !== (loadedConfig.self_checkout_enabled ?? false);
+    selfCheckout !== (loadedConfig.self_checkout_enabled ?? false) ||
+    shiftStart !== (loadedConfig.shift_start_time ?? "05:30");
 
   async function handleMarkDevice() {
     if (!supabase || marking) return;
@@ -205,7 +211,7 @@ export function CheckinConfigForm() {
   }
 
   async function handleSaveConfig() {
-    if (!validGrace || !dirty || updateConfig.isPending) return;
+    if (!validGrace || !validStart || !dirty || updateConfig.isPending) return;
     if (enabled && !canEnable) return; // guard — RPC also enforces this
     try {
       await updateConfig.mutateAsync({
@@ -213,6 +219,7 @@ export function CheckinConfigForm() {
         reject_message: rejectMessage.trim() || DEFAULT_CONFIG.reject_message,
         grace_hours: graceNum,
         self_checkout_enabled: selfCheckout,
+        shift_start_time: shiftStart,
       });
       toast({ semantic: "success", message: "Đã lưu cấu hình chấm công." });
     } catch (err) {
@@ -393,12 +400,19 @@ export function CheckinConfigForm() {
                 error={validGrace ? undefined : "Phải là số >= 0."}
                 helper="Anchor im lặng quá số giờ này thì IP rớt khỏi danh sách (cổng khoá)."
               />
+              <TextField
+                label="Giờ bắt đầu ca (HH:MM)"
+                value={shiftStart}
+                onChange={(e) => setShiftStart(e.target.value)}
+                error={validStart ? undefined : "Định dạng HH:MM (24 giờ), vd 05:30."}
+                helper="Nhân viên không tự vào ca được trước giờ này."
+              />
               <div className="flex justify-end">
                 <Button
                   type="button"
                   variant="primary"
                   loading={updateConfig.isPending}
-                  disabled={!validGrace || !dirty || (enabled && !canEnable)}
+                  disabled={!validGrace || !validStart || !dirty || (enabled && !canEnable)}
                   onClick={handleSaveConfig}
                 >
                   Lưu cấu hình

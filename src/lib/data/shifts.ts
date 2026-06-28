@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ManagerCheckoutResult, PayrollRecord, ShiftAssignment } from "@/lib/types";
+import type { ManagerCheckoutResult, OpenShift, PayrollRecord, ShiftAssignment } from "@/lib/types";
 import { toAppError } from "./_common";
 
 export async function loadShiftAssignments(supabase: SupabaseClient, businessDate: string) {
@@ -18,6 +18,43 @@ export async function loadShiftAssignments(supabase: SupabaseClient, businessDat
       position: employee?.position ?? null
     } as ShiftAssignment;
   });
+}
+
+export async function loadOpenShifts(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from("shift_assignments")
+    .select(
+      "id, employee_id, business_date, check_in_at, check_out_at, total_minutes, status, employees(name, position, is_active)"
+    )
+    .eq("status", "checked_in")
+    .order("check_in_at", { ascending: true, nullsFirst: false });
+  if (error) throw toAppError(error, "Không tải được ca đang mở.");
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const employee = row.employees as
+      | { name?: string; position?: string | null; is_active?: boolean }
+      | null
+      | undefined;
+    return {
+      ...row,
+      employee_name: employee?.name ?? null,
+      position: employee?.position ?? null,
+      employee_is_active: employee?.is_active ?? null,
+    } as OpenShift;
+  });
+}
+
+export async function cancelShiftAssignment(
+  supabase: SupabaseClient,
+  shiftId: string,
+  reason: string
+) {
+  const { data, error } = await supabase.rpc("cancel_shift_assignment", {
+    p_shift_id: shiftId,
+    p_reason: reason,
+  });
+  if (error) throw toAppError(error, "Không huỷ được ca.");
+  return data as { shift_assignment_id: string; employee_name: string | null; status: string };
 }
 
 export async function checkInEmployee(supabase: SupabaseClient, payload: Record<string, unknown>) {

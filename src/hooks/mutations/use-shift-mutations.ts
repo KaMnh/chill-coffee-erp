@@ -137,7 +137,7 @@ export function useUpsertEmployee(supabase: SupabaseClient | null) {
       return createEmployee(supabase, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees() });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
   });
 }

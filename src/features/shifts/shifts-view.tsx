@@ -6,10 +6,12 @@ import {
   useEmployeesQuery,
   useShiftsQuery,
   usePayrollQuery,
+  useOpenShiftsQuery,
 } from "@/hooks/queries";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { IconButton } from "@/components/ui/icon-button";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   Employee,
   PayrollRecord,
@@ -23,6 +25,8 @@ import { CheckOutModal } from "./check-out-modal";
 import { ManagerCheckoutModal } from "./manager-checkout-modal";
 import { EmployeeFormModal } from "./employee-form-modal";
 import { PayrollEditModal } from "./payroll-edit-modal";
+import { OpenShiftsTable } from "./open-shifts-table";
+import { CloseShiftModal, type CloseShiftTarget } from "./close-shift-modal";
 
 interface ShiftsViewProps {
   businessDate: string;
@@ -40,9 +44,12 @@ interface ShiftsViewProps {
  */
 export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   const supabase = useSupabase();
-  const employeesQuery = useEmployeesQuery(supabase, true);
+  // "Hiện cả NV đã ngừng" — bật để bảng NV bao gồm is_active=false (mặc định ẩn).
+  const [showInactive, setShowInactive] = useState(false);
+  const employeesQuery = useEmployeesQuery(supabase, true, showInactive);
   const shiftsQuery = useShiftsQuery(supabase, businessDate, true);
   const payrollQuery = usePayrollQuery(supabase, businessDate, true);
+  const openShiftsQuery = useOpenShiftsQuery(supabase, true);
 
   const canManage = role === "owner" || role === "manager";
   // Phase 2b: chấm công/sửa lương thủ công khóa về owner-only (nhân viên tự
@@ -58,11 +65,14 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   const [editingPayroll, setEditingPayroll] = useState<PayrollRecord | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
+  // Ca treo đang được đóng (huỷ hoặc trả lương) qua CloseShiftModal.
+  const [closeTarget, setCloseTarget] = useState<CloseShiftTarget | null>(null);
 
   if (
     employeesQuery.isLoading ||
     shiftsQuery.isLoading ||
-    payrollQuery.isLoading
+    payrollQuery.isLoading ||
+    openShiftsQuery.isLoading
   ) {
     return (
       <div className="flex justify-center py-12">
@@ -94,6 +104,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   const employees = employeesQuery.data ?? [];
   const shifts = shiftsQuery.data ?? [];
   const payroll = payrollQuery.data ?? [];
+  const openShifts = openShiftsQuery.data ?? [];
 
   // First-wins reduce: shifts come pre-sorted DESC by check_in_at from
   // loadShiftAssignments. Part-time employees may have multiple shifts
@@ -130,6 +141,36 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
           />
         )}
       </div>
+      {canManage && (
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-3">
+            <CardTitle>Ca đang mở ({openShifts.length})</CardTitle>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Hiện cả NV đã ngừng
+            </label>
+          </CardHeader>
+          <CardBody>
+            <OpenShiftsTable
+              shifts={openShifts}
+              onClose={(s) =>
+                setCloseTarget({
+                  id: s.id,
+                  employee_id: (s as { employee_id?: string }).employee_id,
+                  business_date: s.business_date,
+                  check_in_at: s.check_in_at,
+                  employee_name: s.employee_name ?? null,
+                  employee_is_active: s.employee_is_active,
+                })
+              }
+            />
+          </CardBody>
+        </Card>
+      )}
       <EmployeeGrid
         employees={employees}
         shiftByEmployee={shiftByEmployee}
@@ -187,6 +228,15 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
           if (!next) setEditingPayroll(null);
         }}
         payroll={editingPayroll}
+      />
+      <CloseShiftModal
+        open={closeTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setCloseTarget(null);
+        }}
+        shift={closeTarget}
+        role={role}
+        onClosed={() => openShiftsQuery.refetch()}
       />
     </div>
   );

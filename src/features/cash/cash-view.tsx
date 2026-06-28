@@ -33,6 +33,9 @@ import { EditCashCountModal } from "./edit-cash-count-modal";
 import { EditCashCloseModal } from "./edit-cash-close-modal";
 import { VoidCashCloseModal } from "./void-cash-close-modal";
 import { computeDenominationTotal } from "./cash-math";
+import { OpenShiftsCloseBanner } from "@/features/shifts/open-shifts-close-banner";
+import { CloseShiftModal, type CloseShiftTarget } from "@/features/shifts/close-shift-modal";
+import { BulkCancelShiftsModal } from "@/features/shifts/bulk-cancel-shifts-modal";
 
 interface CashViewProps {
   businessDate: string;
@@ -61,6 +64,8 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const finalizeM = useFinalizeCashClose(supabase, businessDate);
   // Chống lệch lương: chỉ chốt két khi đã ra ca hết (RPC enforce; UI chặn sớm + báo).
   const shiftsQuery = useShiftsQuery(supabase, businessDate, true);
+  // loadShiftAssignments đã null-default employee_name; OpenShiftRow nhận
+  // string | null | undefined nên không cần .map normalize lại.
   const openShifts = (shiftsQuery.data ?? []).filter((s) => s.status === "checked_in");
 
   const canManage = role === "owner" || role === "manager";
@@ -106,6 +111,8 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const [editingCount, setEditingCount] = useState<CashCount | null>(null);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [voidingReportId, setVoidingReportId] = useState<string | null>(null);
+  const [closeTarget, setCloseTarget] = useState<CloseShiftTarget | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   if (dashboardQuery.isLoading || cashOpeningQuery.isLoading) {
     return (
@@ -353,11 +360,17 @@ export function CashView({ businessDate, role }: CashViewProps) {
           )}
           {openShifts.length > 0 && (
             <AlertBanner variant="warning">
-              Còn {openShifts.length} ca chưa ra ca
-              {openShifts.some((s) => s.employee_name)
-                ? `: ${openShifts.map((s) => s.employee_name).filter(Boolean).join(", ")}`
-                : ""}
-              . Đóng/ra hết ca (trang Ca &amp; lương) trước khi chốt két.
+              <OpenShiftsCloseBanner
+                shifts={openShifts}
+                canManage={canManage}
+                onClose={(s) => setCloseTarget({
+                  id: s.id, employee_id: (s as { employee_id?: string }).employee_id,
+                  business_date: businessDate, check_in_at: s.check_in_at,
+                  employee_name: s.employee_name ?? null,
+                  // cash banner scoped to hôm nay; nhãn "Đã ngừng" chỉ ở trang Ca&lương.
+                })}
+                onBulk={() => setBulkOpen(true)}
+              />
             </AlertBanner>
           )}
           <div className="flex flex-wrap items-center gap-2">
@@ -472,6 +485,20 @@ export function CashView({ businessDate, role }: CashViewProps) {
         }}
         reportId={voidingReportId}
         businessDate={businessDate}
+      />
+      <CloseShiftModal
+        open={closeTarget !== null}
+        onOpenChange={(next) => { if (!next) setCloseTarget(null); }}
+        shift={closeTarget}
+        role={role}
+        onClosed={() => shiftsQuery.refetch()}
+      />
+      <BulkCancelShiftsModal
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        shiftIds={openShifts.map((s) => s.id)}
+        businessDate={businessDate}
+        onDone={() => shiftsQuery.refetch()}
       />
     </div>
   );

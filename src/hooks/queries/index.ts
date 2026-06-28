@@ -4,7 +4,7 @@ export { useSignupRequestsQuery } from "./use-signup-requests-query";
 export { useAppSettingsQuery } from "./use-app-settings-query";
 export { useDashboardQuery } from "./use-dashboard-query";
 export { useExpenseCategoriesQuery, useExpenseTemplatesQuery } from "./use-expense-queries";
-export { useEmployeesQuery, useShiftsQuery, usePayrollQuery } from "./use-shift-queries";
+export { useEmployeesQuery, useShiftsQuery, usePayrollQuery, useOpenShiftsQuery } from "./use-shift-queries";
 export { useCashCountsQuery, useCashOpeningQuery, useReportsQuery, useReportsByPeriodQuery } from "./use-cash-queries";
 export { useHandoverQuery } from "./use-handover-query";
 export {

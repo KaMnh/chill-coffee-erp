@@ -1,13 +1,14 @@
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
+import react from "@vitejs/plugin-react";
 
 /**
  * Vitest config — Phase 3B.2b.ii.a + Phase 6.A.
  *
  * - `tsconfigPaths()` plugin resolves the `@/*` → `./src/*` alias declared in
  *   tsconfig.json so test files can import like the rest of the codebase.
- * - `environment: "node"` because all current tests are pure functions (no
- *   DOM). Component tests in Phase 6.B will introduce a separate jsdom config.
+ * - Default `environment: "node"` for the pure-helper suite (`*.test.ts`);
+ *   component tests (`*.test.tsx`) run under jsdom via `environmentMatchGlobs`.
  * - `env.TZ = "Asia/Ho_Chi_Minh"` pins TZ so `Intl.DateTimeFormat("vi-VN", ...)`
  *   and `Date.prototype.toLocaleDateString` produce deterministic output across
  *   machines. Without this, CI on UTC boxes would diverge from local VN dev.
@@ -31,11 +32,15 @@ import tsconfigPaths from "vite-tsconfig-paths";
  *   datetime.ts, format.ts, validation.ts (+ cash-math via features/cash).
  */
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths(), react()],
   test: {
     environment: "node",
+    // Component tests (*.test.tsx) need a DOM — run those under jsdom while the
+    // pure-helper suite (*.test.ts) stays on the faster node environment.
+    environmentMatchGlobs: [["src/**/__tests__/**/*.test.tsx", "jsdom"]],
+    setupFiles: ["./vitest.setup.ts"],
     env: { TZ: "Asia/Ho_Chi_Minh" },
-    include: ["src/**/__tests__/**/*.test.ts"],
+    include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html", "lcov"],

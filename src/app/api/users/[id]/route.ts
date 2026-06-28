@@ -208,18 +208,31 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     return badRequest(error instanceof Error ? error.message : "Không đủ quyền vô hiệu hóa tài khoản.", 403);
   }
 
-  // Soft delete: disable account + deactivate employee
+  // 1) Dọn ca mở TRƯỚC mọi mutation: nếu RPC lỗi → return ngay, CHƯA disable/vô hiệu gì
+  //    (giữ nhất quán). RPC service-role-only, set ca cancelled (không lương). KHÔNG hỏi.
+  if (account.employee_id) {
+    const { error: cancelErr } = await supabase.rpc("cancel_open_shifts_for_employee", {
+      p_employee_id: account.employee_id,
+      p_reason: "Huỷ do xoá tài khoản",
+      p_actor: caller.userId,
+    });
+    if (cancelErr) return badRequest(`Không dọn được ca mở: ${cancelErr.message}`, 500);
+  }
+
+  // 2) Disable account
   const { error: accError } = await supabase
     .from("employee_accounts")
     .update({ status: "disabled" })
     .eq("auth_user_id", authUserId);
   if (accError) return badRequest(`Không disable account: ${accError.message}`, 500);
 
+  // 3) Vô hiệu NV
   if (account.employee_id) {
-    await supabase
+    const { error: empError } = await supabase
       .from("employees")
       .update({ is_active: false })
       .eq("id", account.employee_id);
+    if (empError) return badRequest(`Không vô hiệu nhân viên: ${empError.message}`, 500);
   }
 
   return NextResponse.json({ status: "ok", message: "Đã vô hiệu hóa tài khoản." });

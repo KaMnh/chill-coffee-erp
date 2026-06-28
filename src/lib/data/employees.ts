@@ -2,12 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Employee } from "@/lib/types";
 import { toAppError } from "./_common";
 
-export async function loadEmployees(supabase: SupabaseClient) {
-  const { data, error } = await supabase
+export async function loadEmployees(supabase: SupabaseClient, includeInactive = false) {
+  let query = supabase
     .from("employees")
-    .select("id, code, name, position, hourly_rate, is_active")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+    .select("id, code, name, position, hourly_rate, is_active");
+  if (!includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query.order("name", { ascending: true });
   if (error) throw toAppError(error, "Không tải được danh sách nhân viên.");
   return (data ?? []) as Employee[];
 }

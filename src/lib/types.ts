@@ -110,6 +110,21 @@ export type ShiftAssignment = {
   position?: string | null;
 };
 
+export type OpenShift = {
+  id: string;
+  employee_id: string;
+  business_date: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  total_minutes: number | null;
+  status: string;
+  /** Tên NV; null nếu join hụt. Dùng nhãn "NV đã ngừng" khi employee_is_active=false. */
+  employee_name: string | null;
+  position: string | null;
+  /** false = NV đã ngừng (is_active=false) → vẫn hiện trong bảng ca đang mở. */
+  employee_is_active: boolean | null;
+};
+
 export type PayrollRecord = {
   id: string;
   shift_assignment_id: string | null;

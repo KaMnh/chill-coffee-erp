@@ -1,5 +1,6 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
+import react from "@vitejs/plugin-react";
 
 /**
  * Vitest config — Phase 3B.2b.ii.a + Phase 6.A.
@@ -31,11 +32,24 @@ import tsconfigPaths from "vite-tsconfig-paths";
  *   datetime.ts, format.ts, validation.ts (+ cash-math via features/cash).
  */
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths(), react()],
   test: {
     environment: "node",
+    // Component tests (*.test.tsx) need a DOM — run those under jsdom while the
+    // pure-helper suite (*.test.ts) stays on the faster node environment.
+    environmentMatchGlobs: [["src/**/__tests__/**/*.test.tsx", "jsdom"]],
+    setupFiles: ["./vitest.setup.ts"],
     env: { TZ: "Asia/Ho_Chi_Minh" },
-    include: ["src/**/__tests__/**/*.test.ts"],
+    include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
+    // Phase 6.B placeholder authored before the component-test harness existed
+    // (marked `@ts-nocheck`, missing its <ToastProvider> wrapper). It was never
+    // collected under the old `.test.ts`-only include; keep it parked until its
+    // own phase wires up the providers, so broadening to `.tsx` here doesn't
+    // surface unrelated red.
+    exclude: [
+      ...configDefaults.exclude,
+      "src/features/settings/__tests__/backup-restore-section.test.tsx",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html", "lcov"],

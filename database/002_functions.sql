@@ -4632,6 +4632,11 @@ begin
   if (p_config ? 'self_checkout_enabled') and jsonb_typeof(p_config->'self_checkout_enabled') <> 'boolean' then
     raise exception 'self_checkout_enabled phải là boolean.';
   end if;
+  if (p_config ? 'shift_start_time') and
+     (jsonb_typeof(p_config->'shift_start_time') <> 'string'
+      or (p_config->>'shift_start_time') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') then
+    raise exception 'shift_start_time phải là HH:MM (24 giờ).';
+  end if;
   -- R7/C3 guard: cannot enable until at least one active anchor has a non-null IP.
   if (p_config->>'enabled')::boolean = true
      and not exists (select 1 from public.checkin_anchor where is_active and current_public_ip is not null) then
@@ -4644,7 +4649,9 @@ begin
   end if;
   insert into public.app_settings (key, value, is_public, updated_by)
   values ('checkin_network', p_config, false, auth.uid())
-  on conflict (key) do update set value = excluded.value, is_public = false, updated_by = auth.uid(), updated_at = now();
+  on conflict (key) do update
+    set value = public.app_settings.value || excluded.value,
+        is_public = false, updated_by = auth.uid(), updated_at = now();
   return p_config;
 end; $$;
 

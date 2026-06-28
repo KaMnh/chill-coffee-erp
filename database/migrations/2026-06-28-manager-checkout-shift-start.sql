@@ -151,3 +151,41 @@ begin
 end; $$;
 revoke execute on function public.check_in_self(uuid, inet, text) from public, anon, authenticated;
 grant execute on function public.check_in_self(uuid, inet, text) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 4) update_checkin_network_config — validate shift_start_time (HH:MM) + MERGE
+--    config giữ key cũ (Codex #3). Full body dual-write.
+-- ---------------------------------------------------------------------------
+create or replace function public.update_checkin_network_config(p_config jsonb)
+returns jsonb language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not (public.app_role() = 'owner') then raise exception 'Bạn không có quyền cập nhật cấu hình check-in.'; end if;
+  if jsonb_typeof(p_config) <> 'object' or not (p_config ? 'enabled') or not (p_config ? 'reject_message')
+     or not (p_config ? 'grace_hours') or jsonb_typeof(p_config->'enabled') <> 'boolean'
+     or (p_config->>'grace_hours')::numeric < 0 then raise exception 'Cấu hình check-in không hợp lệ.'; end if;
+  -- self_checkout_enabled (tùy chọn) — bật tự ra ca độc lập với self check-in.
+  if (p_config ? 'self_checkout_enabled') and jsonb_typeof(p_config->'self_checkout_enabled') <> 'boolean' then
+    raise exception 'self_checkout_enabled phải là boolean.';
+  end if;
+  if (p_config ? 'shift_start_time') and
+     (jsonb_typeof(p_config->'shift_start_time') <> 'string'
+      or (p_config->>'shift_start_time') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$') then
+    raise exception 'shift_start_time phải là HH:MM (24 giờ).';
+  end if;
+  -- R7/C3 guard: cannot enable until at least one active anchor has a non-null IP.
+  if (p_config->>'enabled')::boolean = true
+     and not exists (select 1 from public.checkin_anchor where is_active and current_public_ip is not null) then
+    raise exception 'Chưa có thiết bị quán nào có IP — không thể bật cổng check-in.';
+  end if;
+  -- self-checkout cũng qua cổng IP/anchor → cùng guard.
+  if coalesce((p_config->>'self_checkout_enabled')::boolean, false) = true
+     and not exists (select 1 from public.checkin_anchor where is_active and current_public_ip is not null) then
+    raise exception 'Chưa có thiết bị quán nào có IP — không thể bật tự ra ca.';
+  end if;
+  insert into public.app_settings (key, value, is_public, updated_by)
+  values ('checkin_network', p_config, false, auth.uid())
+  on conflict (key) do update
+    set value = public.app_settings.value || excluded.value,
+        is_public = false, updated_by = auth.uid(), updated_at = now();
+  return p_config;
+end; $$;

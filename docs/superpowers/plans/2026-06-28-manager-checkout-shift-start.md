@@ -134,8 +134,11 @@ select throws_like(
   '%chốt két%', 'owner check_out_employee ngày final → raise (Codex #1)');
 
 -- ===== Group C — check_in_self gate 05:30 =====
--- '00:00' → không chặn (lives). Set trực tiếp (superuser bypass RLS).
-update public.app_settings set value = value || '{"shift_start_time":"00:00"}'::jsonb where key='checkin_network';
+-- LƯU Ý: throwaway DB KHÔNG apply 004_seed → KHÔNG có row checkin_network. Phải
+-- INSERT (không UPDATE). '00:00' → không chặn (lives).
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"shift_start_time":"00:00"}'::jsonb, false)
+  on conflict (key) do update set value = public.app_settings.value || excluded.value;
 select lives_ok(
   $$ select public.check_in_self('a0000000-0000-0000-0000-000000000004'::uuid, '203.0.113.5'::inet, 'UA') $$,
   'shift_start_time=00:00 → check_in_self KHÔNG bị chặn');
@@ -292,7 +295,13 @@ Trong `check_in_self`: thêm `v_start time;` vào khối `declare` đầu hàm. 
 ```
 **Dual-write:** paste FULL thân `check_in_self` (002:4479-4501, đã sửa) vào migration.
 
-- [ ] **Step 2: Chạy pgTAP** — Group C (assert 10–11) xanh. `--reset --all`. **Regress check:** 310_self_checkin + 330_self_checkout gọi check_in_self — chúng chạy ở wall-clock thực; nếu CI chạy **trước 05:30 VN** thì check_in_self trong 310/330 sẽ bị chặn → ĐỎ. **Bắt buộc:** trong 310 + 330, set `shift_start_time` về `'00:00'` ở phần fixture trước khi gọi check_in_self (thêm `update public.app_settings set value = value || '{"shift_start_time":"00:00"}'::jsonb where key='checkin_network';` sau seed, hoặc trước call). Cập nhật 310/330 nếu cần để không phụ thuộc giờ chạy.
+- [ ] **Step 2: Chạy pgTAP** — Group C (assert 10–11) xanh. `--reset --all`. **Regress check (BẮT BUỘC):** 310_self_checkin + 330_self_checkout gọi check_in_self; vì throwaway DB KHÔNG có row checkin_network (không apply 004), gate dùng default `'05:30'` → nếu CI chạy **trước 05:30 VN** thì check_in_self trong 310/330 bị chặn → ĐỎ. **Fix:** thêm dòng sau vào 310 VÀ 330, đặt ngay sau khối fixtures (TRƯỚC mọi call check_in_self — ở 330 là trước Group H; merge của Group F sẽ giữ key này):
+```sql
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"shift_start_time":"00:00"}'::jsonb, false)
+  on conflict (key) do update set value = public.app_settings.value || excluded.value;
+```
+Chạy lại `--reset --all` xác nhận 310/330 vẫn xanh bất kể giờ chạy.
 
 - [ ] **Step 3: Commit**
 ```bash

@@ -72,6 +72,12 @@ export function CloseShiftModal({ open, onOpenChange, shift, role, onClosed }: C
       toast({ semantic: "danger", message: "Phải nhập lý do huỷ ca." });
       return;
     }
+    // Owner pay path requires a real "Giờ ra": never fall back to a Z-suffixed
+    // UTC string (PG would read it as UTC, off by 7h vs VN wall-clock).
+    if (mode === "pay" && isOwner && !fromDatetimeLocal(endTime)) {
+      toast({ semantic: "danger", message: "Phải chọn giờ ra." });
+      return;
+    }
     setIsBusy(true);
     try {
       if (mode === "cancel") {
@@ -84,7 +90,8 @@ export function CloseShiftModal({ open, onOpenChange, shift, role, onClosed }: C
           business_date: shift.business_date,
           check_in_at: shift.check_in_at,
           // VN-local convention: KHÔNG tự convert UTC (giống check-out-modal.tsx:116).
-          check_out_at: fromDatetimeLocal(endTime) ?? new Date().toISOString(),
+          // Guard ở trên đảm bảo endTime non-empty → không bao giờ emit chuỗi ...Z.
+          check_out_at: fromDatetimeLocal(endTime) ?? "",
           allowance_amount: moneyFromInput(allowance),
           note: "Đóng ca từ bảng Ca đang mở",
         });

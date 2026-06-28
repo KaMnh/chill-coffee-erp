@@ -29,21 +29,36 @@ export function BulkCancelShiftsModal({ open, onOpenChange, shiftIds, businessDa
     if (!supabase || isBusy) return;
     if (reason.trim() === "") { toast({ semantic: "danger", message: "Phải nhập lý do." }); return; }
     setIsBusy(true);
-    try {
-      for (const id of shiftIds) {
+    // Resilient per-id loop: một ca lỗi KHÔNG được chặn các ca còn lại. Ca đã
+    // đóng/không tồn tại coi như đã xử lý (idempotent retry). Luôn refresh +
+    // onDone() ở cuối để parent lấy danh sách ca mới (đã loại các ca vừa huỷ).
+    let ok = 0;
+    let failed = 0;
+    for (const id of shiftIds) {
+      try {
         await cancelShiftAssignment(supabase, id, reason.trim());
+        ok += 1;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (/đã đóng|không tồn tại/i.test(msg)) {
+          ok += 1; // ca đã đóng từ lần trước → coi như thành công, đi tiếp.
+        } else {
+          failed += 1; // lỗi khác → đếm fail nhưng vẫn tiếp tục vòng lặp.
+        }
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.openShifts() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.shifts(businessDate) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
-      toast({ semantic: "success", message: `Đã huỷ ${shiftIds.length} ca (không tính lương).` });
-      onDone?.();
-      onOpenChange(false);
-    } catch (err) {
-      toast({ semantic: "danger", message: err instanceof Error ? err.message : "Không huỷ hết được." });
-    } finally {
-      setIsBusy(false);
     }
+    queryClient.invalidateQueries({ queryKey: queryKeys.openShifts() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.shifts(businessDate) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(businessDate) });
+    onDone?.();
+    if (failed === 0) {
+      toast({ semantic: "success", message: `Đã huỷ ${ok} ca (không tính lương).` });
+      onOpenChange(false);
+    } else {
+      // Giữ modal mở để user thử lại với danh sách đã refresh.
+      toast({ semantic: "danger", message: `Đã huỷ ${ok} ca, còn ${failed} ca lỗi — thử lại.` });
+    }
+    setIsBusy(false);
   }
 
   return (

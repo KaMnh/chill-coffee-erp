@@ -283,13 +283,13 @@ git commit -m "fix(checkin): final-close guard cho check_out_employee (Codex #1)
 
 Trong `check_in_self`: thêm `v_start time;` vào khối `declare` đầu hàm. Sau `if v_employee is null then raise exception 'Tài khoản chưa gắn nhân viên.'; end if;` (002:4487), thêm:
 ```sql
-  -- Chặn vào ca trước giờ mở ca (mặc định 05:30). Session timezone = Asia/Ho_Chi_Minh
-  -- → now()::time là giờ địa phương. Owner vào ca hộ (check_in_employee) không qua
-  -- hàm này nên không bị chặn (override).
+  -- Chặn vào ca trước giờ mở ca (mặc định 05:30). Dùng `at time zone
+  -- 'Asia/Ho_Chi_Minh'` lấy giờ VN tường minh (không dựa session TimeZone GUC —
+  -- xem 002:4169). Owner vào ca hộ (check_in_employee) không qua hàm này.
   v_start := coalesce(
     (select (value->>'shift_start_time')::time from public.app_settings where key = 'checkin_network'),
     '05:30'::time);
-  if now()::time < v_start then
+  if (now() at time zone 'Asia/Ho_Chi_Minh')::time < v_start then
     raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
   end if;
 ```

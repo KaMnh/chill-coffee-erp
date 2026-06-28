@@ -57,13 +57,14 @@ Dual-write 002 + migration (paste full body `check_out_employee` đã sửa). KH
 ### 1.2 `check_in_self` — chặn trước giờ bắt đầu ca (002:4479-4501)
 Khai báo thêm `v_start time;` trong `declare` đầu hàm. Sau khối `if v_employee is null …` (002:4487), TRƯỚC `insert`, thêm:
 ```sql
-  -- Chặn vào ca trước giờ mở ca (mặc định 05:30). Session timezone = Asia/Ho_Chi_Minh
-  -- (set toàn cục) → now()::time là giờ địa phương. Owner vào ca hộ (check_in_employee)
-  -- KHÔNG qua hàm này nên không bị chặn (override).
+  -- Chặn vào ca trước giờ mở ca (mặc định 05:30). Dùng `at time zone
+  -- 'Asia/Ho_Chi_Minh'` để lấy giờ VN tường minh (KHÔNG dựa vào session TimeZone
+  -- GUC — không tin cậy, xem 002:4169). Owner vào ca hộ (check_in_employee) KHÔNG
+  -- qua hàm này nên không bị chặn (override).
   v_start := coalesce(
     (select (value->>'shift_start_time')::time from public.app_settings where key = 'checkin_network'),
     '05:30'::time);
-  if now()::time < v_start then
+  if (now() at time zone 'Asia/Ho_Chi_Minh')::time < v_start then
     raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
   end if;
 ```

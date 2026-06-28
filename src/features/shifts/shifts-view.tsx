@@ -20,6 +20,7 @@ import { EmployeeGrid } from "./employee-grid";
 import { PayrollHistoryCard } from "./payroll-history-card";
 import { CheckInModal } from "./check-in-modal";
 import { CheckOutModal } from "./check-out-modal";
+import { ManagerCheckoutModal } from "./manager-checkout-modal";
 import { EmployeeFormModal } from "./employee-form-modal";
 import { PayrollEditModal } from "./payroll-edit-modal";
 
@@ -53,6 +54,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
   // Cấp/liên kết tài khoản đã chuyển hẳn sang trang Cài đặt (không còn ở đây).
   const [checkInTarget, setCheckInTarget] = useState<Employee | null>(null);
   const [checkOutTarget, setCheckOutTarget] = useState<ShiftAssignment | null>(null);
+  const [managerCheckoutTarget, setManagerCheckoutTarget] = useState<ShiftAssignment | null>(null);
   const [editingPayroll, setEditingPayroll] = useState<PayrollRecord | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
@@ -135,6 +137,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
         isOwner={isOwner}
         onCheckIn={setCheckInTarget}
         onCheckOut={setCheckOutTarget}
+        onManagerCheckout={setManagerCheckoutTarget}
         onEditEmployee={setEditingEmployee}
       />
       <PayrollHistoryCard
@@ -158,6 +161,14 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
         }}
         shift={checkOutTarget}
         employee={checkOutEmployee}
+        businessDate={businessDate}
+      />
+      <ManagerCheckoutModal
+        open={managerCheckoutTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setManagerCheckoutTarget(null);
+        }}
+        shift={managerCheckoutTarget}
         businessDate={businessDate}
       />
       <EmployeeFormModal

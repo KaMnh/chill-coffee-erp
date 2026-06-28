@@ -4533,7 +4533,9 @@ begin
   v_start := coalesce(
     (select (value->>'shift_start_time')::time from public.app_settings where key = 'checkin_network'),
     '05:30'::time);
-  if now()::time < v_start then
+  -- giờ tường minh VN: cast `at time zone 'Asia/Ho_Chi_Minh'` KHÔNG ăn theo
+  -- TimeZone GUC của session (bare now()::time có thể là UTC → gate sai wall-clock).
+  if (now() at time zone 'Asia/Ho_Chi_Minh')::time < v_start then
     raise exception 'Chưa tới giờ vào ca (mở lúc %).', to_char(v_start, 'HH24:MI');
   end if;
   insert into public.shift_assignments

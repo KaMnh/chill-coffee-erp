@@ -163,7 +163,7 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
                   employee_id: (s as { employee_id?: string }).employee_id,
                   business_date: s.business_date,
                   check_in_at: s.check_in_at,
-                  employee_name: s.employee_name,
+                  employee_name: s.employee_name ?? null,
                   employee_is_active: s.employee_is_active,
                 })
               }

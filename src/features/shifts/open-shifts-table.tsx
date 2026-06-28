@@ -13,7 +13,9 @@ export interface OpenShiftRow {
   id: string;
   business_date: string;
   check_in_at: string | null;
-  employee_name: string | null;
+  // string | null | undefined để nhận cả ShiftAssignment (employee_name optional)
+  // lẫn OpenShift (luôn set). Render null-default "NV đã ngừng".
+  employee_name?: string | null;
   employee_is_active?: boolean | null;
 }
 

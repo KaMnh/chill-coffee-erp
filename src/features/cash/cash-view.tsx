@@ -64,9 +64,9 @@ export function CashView({ businessDate, role }: CashViewProps) {
   const finalizeM = useFinalizeCashClose(supabase, businessDate);
   // Chống lệch lương: chỉ chốt két khi đã ra ca hết (RPC enforce; UI chặn sớm + báo).
   const shiftsQuery = useShiftsQuery(supabase, businessDate, true);
-  const openShifts = (shiftsQuery.data ?? [])
-    .filter((s) => s.status === "checked_in")
-    .map((s) => ({ ...s, employee_name: s.employee_name ?? null }));
+  // loadShiftAssignments đã null-default employee_name; OpenShiftRow nhận
+  // string | null | undefined nên không cần .map normalize lại.
+  const openShifts = (shiftsQuery.data ?? []).filter((s) => s.status === "checked_in");
 
   const canManage = role === "owner" || role === "manager";
 
@@ -366,8 +366,8 @@ export function CashView({ businessDate, role }: CashViewProps) {
                 onClose={(s) => setCloseTarget({
                   id: s.id, employee_id: (s as { employee_id?: string }).employee_id,
                   business_date: businessDate, check_in_at: s.check_in_at,
-                  employee_name: s.employee_name,
-                  employee_is_active: (s as { employee_is_active?: boolean | null }).employee_is_active,
+                  employee_name: s.employee_name ?? null,
+                  // cash banner scoped to hôm nay; nhãn "Đã ngừng" chỉ ở trang Ca&lương.
                 })}
                 onBulk={() => setBulkOpen(true)}
               />

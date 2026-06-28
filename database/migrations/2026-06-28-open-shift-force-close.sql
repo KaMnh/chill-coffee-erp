@@ -2,7 +2,9 @@
 -- =============================================================================
 -- Áp cho DB đã chạy bản trước (idempotent: create or replace + revoke/grant).
 -- Mỗi function body Ở ĐÂY phải BYTE-IDENTICAL với canonical trong
--- database/002_functions.sql (block CANCEL-SHIFT-BEGIN..END). Migration tự đứng độc lập.
+-- database/002_functions.sql (block CANCEL-SHIFT-BEGIN..END) — giữ đồng bộ bằng
+-- KỶ LUẬT THỦ CÔNG, không có công cụ tự kiểm. (`verify:mirror` chỉ đối soát số
+-- liệu dashboard, KHÔNG so sánh thân hàm.) Migration tự đứng độc lập.
 --
 -- Nội dung:
 --   1) _force_cancel_shift            — helper: set cancelled + check_out_at + audit reason.

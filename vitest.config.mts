@@ -7,8 +7,8 @@ import react from "@vitejs/plugin-react";
  *
  * - `tsconfigPaths()` plugin resolves the `@/*` → `./src/*` alias declared in
  *   tsconfig.json so test files can import like the rest of the codebase.
- * - `environment: "node"` because all current tests are pure functions (no
- *   DOM). Component tests in Phase 6.B will introduce a separate jsdom config.
+ * - Default `environment: "node"` for the pure-helper suite (`*.test.ts`);
+ *   component tests (`*.test.tsx`) run under jsdom via `environmentMatchGlobs`.
  * - `env.TZ = "Asia/Ho_Chi_Minh"` pins TZ so `Intl.DateTimeFormat("vi-VN", ...)`
  *   and `Date.prototype.toLocaleDateString` produce deterministic output across
  *   machines. Without this, CI on UTC boxes would diverge from local VN dev.

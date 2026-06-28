@@ -57,6 +57,12 @@ values ('9a000000-0000-0000-0000-0000000000aa','5a000000-0000-0000-0000-00000000
         current_date, 60, 30000, 30000, 30000,
         'a0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001', now());
 
+-- Throwaway DB KHÔNG có row checkin_network (không seed 004) → gate check_in_self
+-- (Group C) mặc định 05:30, flaky theo wall-clock. Đặt 00:00 để mở cổng.
+insert into public.app_settings (key, value, is_public) values
+  ('checkin_network', '{"shift_start_time":"00:00"}'::jsonb, false)
+  on conflict (key) do update set value = public.app_settings.value || excluded.value;
+
 -- ===== Group A — manual RPC owner-only =====
 select pg_temp.act_as('a0000000-0000-0000-0000-000000000002'); -- manager
 select throws_like(

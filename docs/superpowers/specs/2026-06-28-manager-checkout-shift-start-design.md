@@ -42,7 +42,17 @@ Logic:
 7. `cash_drawer_events`: delete payroll_cash_out cũ của `v_payroll_id`; nếu `v_total > 0` insert (note `'Lương theo lượt (quản lý đóng ca)'`, `created_by = auth.uid()`, `source 'app_action'`).
 8. Return `jsonb_build_object('shift_assignment_id', p_shift_assignment_id, 'employee_name', v_name, 'check_out_at', v_out, 'total_minutes', v_minutes, 'total_pay', v_total)`.
 
-> **Làm tròn CHỈ ở đây.** `check_out_self` (NV tự ra) + `check_out_employee` (owner đặt giờ) giữ **phút thực** — không đụng.
+> **Làm tròn CHỈ ở đây.** `check_out_self` (NV tự ra) + `check_out_employee` (owner đặt giờ) giữ **phút thực** — không làm tròn.
+
+### 1.1b `check_out_employee` (owner full) — thêm final-close guard (Codex #1)
+Hàm owner-full hiện tại (002:557-598) **KHÔNG** có guard final-close → owner đóng ca sau khi chốt két `final` vẫn ghi `shift_payroll_records`/`cash_drawer_events` lệch snapshot báo cáo. Thêm NGAY SAU guard quyền (002:576), TRƯỚC mọi ghi (`v_date` đã có sẵn trong hàm):
+```sql
+  if exists (select 1 from public.cash_close_reports
+             where business_date = v_date and report_status = 'final') then
+    raise exception 'Ngày % đã chốt két (final) — không thể đóng ca. Hủy báo cáo trước.', v_date;
+  end if;
+```
+Dual-write 002 + migration (paste full body `check_out_employee` đã sửa). KHÔNG làm tròn phút ở đây (owner giữ phút thực). pgTAP: owner full-checkout sau final close → rejected.
 
 ### 1.2 `check_in_self` — chặn trước giờ bắt đầu ca (002:4479-4501)
 Khai báo thêm `v_start time;` trong `declare` đầu hàm. Sau khối `if v_employee is null …` (002:4487), TRƯỚC `insert`, thêm:
@@ -58,8 +68,8 @@ Khai báo thêm `v_start time;` trong `declare` đầu hàm. Sau khối `if v_em
   end if;
 ```
 
-### 1.3 `update_checkin_network_config` — validate `shift_start_time` (002:4614-4639)
-Thêm sau khối validate `self_checkout_enabled` (002:4624):
+### 1.3 `update_checkin_network_config` — validate + MERGE giữ key cũ (002:4614-4639)
+**(a) Validate** — thêm sau khối validate `self_checkout_enabled` (002:4624):
 ```sql
   if (p_config ? 'shift_start_time') and
      (jsonb_typeof(p_config->'shift_start_time') <> 'string'
@@ -68,6 +78,16 @@ Thêm sau khối validate `self_checkout_enabled` (002:4624):
   end if;
 ```
 (Không thêm anchor-IP guard cho field này — không liên quan cổng IP.)
+
+**(b) MERGE giữ key cũ (Codex #3)** — config hiện lưu nguyên `p_config` (`value = excluded.value`, 002:4637) → client/tab cũ (shape v4.11, thiếu `shift_start_time`) lưu sẽ **xoá** giờ đã set, `check_in_self` âm thầm về 05:30. Fix: **shallow-merge** key cũ với key mới (key mới override, key cũ không gửi thì GIỮ). Đổi nhánh upsert:
+```sql
+  insert into public.app_settings (key, value, is_public, updated_by)
+  values ('checkin_network', p_config, false, auth.uid())
+  on conflict (key) do update
+    set value = public.app_settings.value || excluded.value,  -- existing || new (giữ key cũ bị thiếu)
+        is_public = false, updated_by = auth.uid(), updated_at = now();
+```
+(`||` jsonb = shallow merge; đủ vì config phẳng 1 cấp. Hệ quả chấp nhận: không thể *xoá* key qua RPC — chỉ override; các key này không cần xoá.) pgTAP: lưu config shape cũ (thiếu `shift_start_time`) sau khi đã set '06:00' → giờ vẫn '06:00'.
 
 ### 1.4 Seed (`004_seed.sql:116`)
 Thêm `"shift_start_time": "05:30"` vào row `checkin_network` seed.
@@ -122,7 +142,8 @@ Thêm input (type time hoặc text HH:MM) bind `shift_start_time`, mặc định
 - **Final-close guard:** ca thuộc ngày có `cash_close_reports.report_status='final'` → `throws_like '%chốt két%'`.
 - **Đã đóng / double:** gọi lần 2 trên ca vừa đóng → `throws_like '%đã được đóng%'`; payroll vẫn 1 dòng, cash vẫn 1.
 - **`check_in_self` gate:** set `shift_start_time='00:00'` → check_in_self `lives_ok` (không chặn). set `shift_start_time='23:59'` → `throws_like '%Chưa tới giờ vào ca%'`. *(Phụ thuộc wall-clock: cửa sổ rủi ro 23:59–00:00 mỗi ngày — chấp nhận; HOẶC tách helper so sánh `(p_now time, p_start time)` để test thuần nếu reviewer yêu cầu.)*
-- **`update_checkin_network_config`:** lưu `shift_start_time='06:00'` round-trip OK; giá trị `'25:00'`/`'6:0'`/`'abc'` → `throws_like '%HH:MM%'`.
+- **`update_checkin_network_config`:** lưu `shift_start_time='06:00'` round-trip OK; giá trị `'25:00'`/`'6:0'`/`'abc'` → `throws_like '%HH:MM%'`. **Merge (Codex #3):** sau khi set '06:00', lưu lại config shape cũ (KHÔNG có `shift_start_time`) → đọc lại vẫn '06:00'.
+- **`check_out_employee` (owner full) final-close guard (Codex #1):** ca thuộc ngày đã `final` → owner gọi `check_out_employee` → `throws_like '%chốt két%'`.
 - created_at tie-break nếu đụng số dư (xem [[pgtap-created-at-frozen-tiebreak]]).
 
 **Vitest:**
@@ -146,12 +167,14 @@ Thêm input (type time hoặc text HH:MM) bind `shift_start_time`, mặc định
 3. **Làm tròn chỉ đường quản lý:** self-checkout + owner-full giữ phút thực → cùng 1 ca, lương có thể khác tùy ai đóng. Chủ ý (quản lý đóng = ưu ái làm tròn lên).
 4. **5:30 gate test phụ thuộc wall-clock** (xem §5) — cân nhắc tách helper thuần nếu cần CI tất định tuyệt đối.
 5. **Owner vẫn có 2 đường đóng ca** (`check_out_employee` full + có thể gọi `check_out_employee_now`). UI owner dùng modal đầy đủ; `_now` dành cho manager. Không xung đột.
+6. **Codex #2 (race guard final-close ↔ `finalize_cash_close_report`) — HOÃN có chủ ý.** Guard check-rồi-write (§1.1, §1.1b) có thể bị đua: checkout đọc "chưa final" → finalize snapshot → checkout ghi lương sau snapshot → báo cáo final thiếu lượt đó. Quyết định (user, 2026-06-28): **chỉ ship guard**, KHÔNG thêm advisory lock lần này. Lý do: guard đã bịt ca **tuần tự** (đóng ca sau khi đã final → bị chặn — trường hợp thực tế phổ biến); race **đồng thời** rất hiếm ở quán nhỏ (chốt két là thao tác cuối ngày của owner) và **khôi phục được** (void báo cáo → đóng ca → finalize lại). Hardening đầy đủ = `pg_advisory_xact_lock(hashtext('cash_close:'||business_date))` ở mọi đường ghi lương/két (`check_out_employee_now`, `check_out_employee`, `check_out_self`, `edit_shift_payroll_record`) + `finalize_cash_close_report` → **task riêng** sau (đụng code chốt két + retrofit code đã ship; race khó unit-test trong pgTAP một-transaction).
 
 ## 8. Files (đại diện)
 **DB:** `database/migrations/2026-06-28-manager-checkout-shift-start.sql`, `database/002_functions.sql`, `database/004_seed.sql`, `database/tests/350_manager_checkout.sql`.
 **Data/types:** `src/lib/data/shifts.ts`, `src/lib/types.ts`.
 **UI:** `src/features/shifts/employee-grid.tsx`, `src/features/shifts/shifts-view.tsx`, `src/features/shifts/manager-checkout-modal.tsx` (mới), `src/features/settings/checkin-config-form.tsx` (+ mutation/query hooks nếu cần).
-**Không đụng:** `check_out_self`, `check_out_employee` (full), `edit_shift_payroll_record`, `003_rls.sql`, IP/anchor, self_checkout toggle.
+**Đụng thêm (Codex):** `check_out_employee` (thêm final-close guard, §1.1b); `update_checkin_network_config` (merge config, §1.3b).
+**Không đụng:** `check_out_self`, `edit_shift_payroll_record`, `003_rls.sql`, IP/anchor, self_checkout toggle.
 
 ## 9. Đánh số bước implement (TDD)
 1. (test trước) `350_manager_checkout.sql` — làm tròn, quyền, final-close, double, 5:30 gate, config validate → `--reset --all` **đỏ**.

@@ -189,3 +189,10 @@ begin
         is_public = false, updated_by = auth.uid(), updated_at = now();
   return p_config;
 end; $$;
+
+-- ---------------------------------------------------------------------------
+-- 5) Data-fix — vá shift_start_time=05:30 vào row checkin_network hiện hữu nếu thiếu.
+-- ---------------------------------------------------------------------------
+update public.app_settings
+   set value = value || '{"shift_start_time": "05:30"}'::jsonb
+ where key = 'checkin_network' and not (value ? 'shift_start_time');

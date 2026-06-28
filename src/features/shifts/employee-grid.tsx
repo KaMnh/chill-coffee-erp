@@ -78,6 +78,9 @@ export function EmployeeGrid({
           <strong className="block truncate text-sm font-semibold text-ink">
             {employee.name}
           </strong>
+          {employee.is_active === false && (
+            <Badge variant="soft" semantic="neutral">Đã ngừng</Badge>
+          )}
           <span className="text-xs text-muted">
             {employee.position ?? "Nhân viên"} ·{" "}
             {formatVND(employee.hourly_rate)}/giờ

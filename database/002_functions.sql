@@ -2298,6 +2298,7 @@ declare
   v_ing_id uuid;
   v_qty numeric;
   v_price numeric;
+  v_sync boolean;
   v_balance numeric;
   v_cash_id uuid;
   v_transfer_id uuid;
@@ -2389,11 +2390,12 @@ begin
     ) returning id into v_transfer_id;
   end if;
 
-  -- Đẩy kho + nhớ đơn giá cho từng dòng.
+  -- Đẩy kho + nhớ đơn giá + (tùy cờ) đồng bộ giá định giá cho từng dòng.
   for v_line in select * from jsonb_array_elements(p_lines) loop
     v_ing_id := (v_line->>'ingredient_id')::uuid;
     v_qty := (v_line->>'quantity')::numeric;
     v_price := (v_line->>'unit_price')::numeric;
+    v_sync := coalesce((v_line->>'sync_price')::boolean, true);
     insert into public.stock_movements (
       ingredient_id, quantity_delta, reason, occurred_at, notes, created_by
     ) values (
@@ -2401,6 +2403,13 @@ begin
     ) returning id into v_mid;
     v_movement_ids := v_movement_ids || v_mid;
     update public.ingredients set last_unit_price = v_price where id = v_ing_id;
+    if v_sync then
+      insert into public.ingredient_reference_prices (ingredient_id, unit_price, updated_at)
+      values (v_ing_id, round(v_price)::bigint, now())
+      on conflict (ingredient_id) do update
+        set unit_price = excluded.unit_price,
+            updated_at = excluded.updated_at;
+    end if;
   end loop;
 
   return jsonb_build_object(

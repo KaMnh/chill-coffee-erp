@@ -353,7 +353,7 @@ begin
   select coalesce(sum(total_pay), 0) into v_payroll_all from public.shift_payroll_records where business_date = p_business_date;
   select count(*) into v_active from public.shift_assignments where business_date = p_business_date and status = 'checked_in';
 
-  select coalesce(jsonb_agg(jsonb_build_object('check_in_at', sa.check_in_at, 'hourly_rate', coalesce(e.hourly_rate, 0)) order by sa.check_in_at), '[]'::jsonb)
+  select coalesce(jsonb_agg(jsonb_build_object('check_in_at', sa.check_in_at, 'hourly_rate', coalesce(e.hourly_rate, 0), 'pay_type', coalesce(e.pay_type, 'hourly')) order by sa.check_in_at), '[]'::jsonb)
   into v_active_shifts
   from public.shift_assignments sa
   join public.employees e on e.id = sa.employee_id
@@ -580,9 +580,14 @@ declare
   v_out timestamptz := coalesce((p_payload->>'check_out_at')::timestamptz, now());
   v_minutes integer;
   v_rate numeric(14,2);
+  v_pay_type text;
+  v_default_daily numeric(14,2);
+  v_override numeric(14,2) := (p_payload->>'override_pay')::numeric;
   v_base numeric(14,2);
   v_allowance numeric(14,2) := coalesce((p_payload->>'allowance_amount')::numeric, 0);
   v_total numeric(14,2);
+  v_snapshot_rate numeric(14,2);
+  v_snapshot_override numeric(14,2);
   v_payroll_id uuid;
 begin
   if not public.app_is_owner() then raise exception 'Chỉ chủ quán được ra ca hộ. Nhân viên tự ra ca ở màn Chấm công.'; end if;
@@ -591,16 +596,26 @@ begin
     raise exception 'Ngày % đã chốt két (final) — không thể đóng ca. Hủy báo cáo trước.', v_date;
   end if;
   if v_out < v_in then raise exception 'Giờ ra không được nhỏ hơn giờ vào.'; end if;
-  select hourly_rate into v_rate from public.employees where id = v_employee;
+  select hourly_rate, coalesce(pay_type, 'hourly'), default_daily_pay
+    into v_rate, v_pay_type, v_default_daily
+    from public.employees where id = v_employee;
   v_minutes := greatest(0, round(extract(epoch from (v_out - v_in)) / 60)::integer);
-  v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+  if v_pay_type = 'fixed' then
+    v_base := coalesce(v_override, v_default_daily, 0);
+    v_snapshot_rate := 0;
+    v_snapshot_override := v_base;
+  else
+    v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+    v_snapshot_rate := coalesce(v_rate, 0);
+    v_snapshot_override := null;
+  end if;
   v_total := v_base + v_allowance;
 
   update public.shift_assignments set check_in_at = v_in, check_out_at = v_out, total_minutes = v_minutes, status = 'checked_out', updated_by = auth.uid() where id = v_shift;
 
-  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, note, edited_by, edited_at, created_by)
-  values (v_shift, v_employee, v_date, v_in, v_out, v_minutes, coalesce(v_rate, 0), v_base, v_allowance, v_total, p_payload->>'note', auth.uid(), now(), auth.uid())
-  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, note = excluded.note, edited_by = auth.uid(), edited_at = now()
+  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, pay_type, override_pay, note, edited_by, edited_at, created_by)
+  values (v_shift, v_employee, v_date, v_in, v_out, v_minutes, v_snapshot_rate, v_base, v_allowance, v_total, v_pay_type, v_snapshot_override, p_payload->>'note', auth.uid(), now(), auth.uid())
+  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, pay_type = excluded.pay_type, override_pay = excluded.override_pay, note = excluded.note, edited_by = auth.uid(), edited_at = now()
   returning id into v_payroll_id;
 
   delete from public.cash_drawer_events where shift_payroll_record_id = v_payroll_id and event_type = 'payroll_cash_out';
@@ -625,6 +640,7 @@ declare
   v_in timestamptz;
   v_out timestamptz;
   v_minutes integer;
+  v_override numeric(14,2);
   v_base numeric(14,2);
   v_allowance numeric(14,2);
   v_total numeric(14,2);
@@ -670,7 +686,13 @@ begin
   end if;
 
   v_minutes := greatest(0, round(extract(epoch from (v_out - v_in)) / 60)::integer);
-  v_base := round(((v_minutes::numeric / 60) * coalesce(v_record.hourly_rate, 0)) / 1000) * 1000;
+  if coalesce(v_record.pay_type, 'hourly') = 'fixed' then
+    v_override := coalesce((p_payload->>'override_pay')::numeric, v_record.override_pay, 0);
+    v_base := v_override;
+  else
+    v_override := null;
+    v_base := round(((v_minutes::numeric / 60) * coalesce(v_record.hourly_rate, 0)) / 1000) * 1000;
+  end if;
   v_total := v_base + v_allowance;
 
   if v_record.shift_assignment_id is not null then
@@ -690,6 +712,7 @@ begin
       base_pay = v_base,
       allowance_amount = v_allowance,
       total_pay = v_total,
+      override_pay = v_override,
       note = v_note,
       edited_by = auth.uid(),
       edited_at = now()
@@ -4702,12 +4725,15 @@ create or replace function public.check_out_self(p_auth_user_id uuid, p_ip inet,
 returns jsonb language plpgsql security definer set search_path = public, auth as $$
 declare
   v_employee uuid; v_name text; v_rate numeric(14,2);
+  v_pay_type text; v_default_daily numeric(14,2);
+  v_snapshot_rate numeric(14,2); v_snapshot_override numeric(14,2);
   v_shift uuid; v_in timestamptz; v_out timestamptz := now(); v_date date := current_date;
   v_minutes integer; v_base numeric(14,2); v_total numeric(14,2);
   v_payroll_id uuid; v_existing_out timestamptz; v_existing_total numeric(14,2);
 begin
   if p_auth_user_id is null then raise exception 'Thiếu danh tính.'; end if;
-  select ea.employee_id, e.name, e.hourly_rate into v_employee, v_name, v_rate
+  select ea.employee_id, e.name, e.hourly_rate, coalesce(e.pay_type, 'hourly'), e.default_daily_pay
+    into v_employee, v_name, v_rate, v_pay_type, v_default_daily
     from public.employee_accounts ea join public.employees e on e.id = ea.employee_id
     where ea.auth_user_id = p_auth_user_id and ea.status = 'active' limit 1;
   if v_employee is null then raise exception 'Tài khoản chưa gắn nhân viên.'; end if;
@@ -4749,12 +4775,20 @@ begin
       'check_out_at', v_existing_out, 'total_pay', coalesce(v_existing_total, 0), 'already_checked_out', true);
   end if;
 
-  v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+  if v_pay_type = 'fixed' then
+    v_base := coalesce(v_default_daily, 0);
+    v_snapshot_rate := 0;
+    v_snapshot_override := v_base;
+  else
+    v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+    v_snapshot_rate := coalesce(v_rate, 0);
+    v_snapshot_override := null;
+  end if;
   v_total := v_base;
 
-  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, note, edited_by, edited_at, created_by)
-  values (v_shift, v_employee, v_date, v_in, v_out, v_minutes, coalesce(v_rate, 0), v_base, 0, v_total, null, p_auth_user_id, now(), p_auth_user_id)
-  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, edited_by = p_auth_user_id, edited_at = now()
+  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, pay_type, override_pay, note, edited_by, edited_at, created_by)
+  values (v_shift, v_employee, v_date, v_in, v_out, v_minutes, v_snapshot_rate, v_base, 0, v_total, v_pay_type, v_snapshot_override, null, p_auth_user_id, now(), p_auth_user_id)
+  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, pay_type = excluded.pay_type, override_pay = excluded.override_pay, edited_by = p_auth_user_id, edited_at = now()
   returning id into v_payroll_id;
 
   delete from public.cash_drawer_events where shift_payroll_record_id = v_payroll_id and event_type = 'payroll_cash_out';
@@ -4776,16 +4810,18 @@ create or replace function public.check_out_employee_now(p_shift_assignment_id u
 returns jsonb language plpgsql security definer set search_path = public, auth as $$
 declare
   v_employee uuid; v_name text; v_rate numeric(14,2); v_date date;
+  v_pay_type text; v_default_daily numeric(14,2);
   v_in timestamptz; v_out timestamptz := now();
   v_raw integer; v_minutes integer; v_base numeric(14,2); v_total numeric(14,2);
+  v_snapshot_rate numeric(14,2); v_snapshot_override numeric(14,2);
   v_payroll_id uuid;
 begin
   if not public.app_is_owner_manager() then
     raise exception 'Chỉ chủ quán hoặc quản lý được đóng ca hộ.';
   end if;
 
-  select sa.employee_id, sa.business_date, sa.check_in_at, e.name, e.hourly_rate
-    into v_employee, v_date, v_in, v_name, v_rate
+  select sa.employee_id, sa.business_date, sa.check_in_at, e.name, e.hourly_rate, coalesce(e.pay_type,'hourly'), e.default_daily_pay
+    into v_employee, v_date, v_in, v_name, v_rate, v_pay_type, v_default_daily
     from public.shift_assignments sa join public.employees e on e.id = sa.employee_id
    where sa.id = p_shift_assignment_id and sa.status = 'checked_in';
   if not found then raise exception 'Ca không tồn tại hoặc đã đóng.'; end if;
@@ -4803,12 +4839,20 @@ begin
    where id = p_shift_assignment_id and status = 'checked_in';
   if not found then raise exception 'Ca đã được đóng.'; end if;
 
-  v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+  if v_pay_type = 'fixed' then
+    v_base := coalesce(v_default_daily, 0);
+    v_snapshot_rate := 0;
+    v_snapshot_override := v_base;
+  else
+    v_base := round(((v_minutes::numeric / 60) * coalesce(v_rate, 0)) / 1000) * 1000;
+    v_snapshot_rate := coalesce(v_rate, 0);
+    v_snapshot_override := null;
+  end if;
   v_total := v_base;
 
-  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, note, edited_by, edited_at, created_by)
-  values (p_shift_assignment_id, v_employee, v_date, v_in, v_out, v_minutes, coalesce(v_rate,0), v_base, 0, v_total, null, auth.uid(), now(), auth.uid())
-  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, edited_by = auth.uid(), edited_at = now()
+  insert into public.shift_payroll_records (shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, pay_type, override_pay, note, edited_by, edited_at, created_by)
+  values (p_shift_assignment_id, v_employee, v_date, v_in, v_out, v_minutes, v_snapshot_rate, v_base, 0, v_total, v_pay_type, v_snapshot_override, null, auth.uid(), now(), auth.uid())
+  on conflict (shift_assignment_id) do update set check_in_at = excluded.check_in_at, check_out_at = excluded.check_out_at, total_minutes = excluded.total_minutes, hourly_rate = excluded.hourly_rate, base_pay = excluded.base_pay, allowance_amount = excluded.allowance_amount, total_pay = excluded.total_pay, pay_type = excluded.pay_type, override_pay = excluded.override_pay, edited_by = auth.uid(), edited_at = now()
   returning id into v_payroll_id;
 
   delete from public.cash_drawer_events where shift_payroll_record_id = v_payroll_id and event_type = 'payroll_cash_out';

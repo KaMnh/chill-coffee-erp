@@ -24,7 +24,7 @@ export async function loadOpenShifts(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("shift_assignments")
     .select(
-      "id, employee_id, business_date, check_in_at, check_out_at, total_minutes, status, employees(name, position, is_active)"
+      "id, employee_id, business_date, check_in_at, check_out_at, total_minutes, status, employees(name, position, is_active, pay_type, default_daily_pay)"
     )
     .eq("status", "checked_in")
     .order("check_in_at", { ascending: true, nullsFirst: false });
@@ -32,7 +32,13 @@ export async function loadOpenShifts(supabase: SupabaseClient) {
 
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
     const employee = row.employees as
-      | { name?: string; position?: string | null; is_active?: boolean }
+      | {
+          name?: string;
+          position?: string | null;
+          is_active?: boolean;
+          pay_type?: "hourly" | "fixed";
+          default_daily_pay?: number | null;
+        }
       | null
       | undefined;
     return {
@@ -40,6 +46,8 @@ export async function loadOpenShifts(supabase: SupabaseClient) {
       employee_name: employee?.name ?? null,
       position: employee?.position ?? null,
       employee_is_active: employee?.is_active ?? null,
+      pay_type: employee?.pay_type ?? "hourly",
+      default_daily_pay: employee?.default_daily_pay ?? null,
     } as OpenShift;
   });
 }
@@ -79,7 +87,7 @@ export async function loadPayrollRecords(supabase: SupabaseClient, businessDate:
   const { data, error } = await supabase
     .from("shift_payroll_records")
     .select(
-      "id, shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, note, created_at, edited_at, employees(name)"
+      "id, shift_assignment_id, employee_id, business_date, check_in_at, check_out_at, total_minutes, hourly_rate, base_pay, allowance_amount, total_pay, pay_type, override_pay, note, created_at, edited_at, employees(name)"
     )
     .eq("business_date", businessDate)
     .order("created_at", { ascending: false });

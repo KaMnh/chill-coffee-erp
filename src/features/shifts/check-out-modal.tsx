@@ -17,7 +17,7 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useCheckOut } from "@/hooks/mutations/use-shift-mutations";
 import { useAppSettingsQuery } from "@/hooks/queries";
 import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
-import { durationLabel, formatVND, moneyFromInput } from "@/lib/format";
+import { durationLabel, formatNumber, formatVND, moneyFromInput } from "@/lib/format";
 import type { Employee, ShiftAssignment } from "@/lib/types";
 
 const DEFAULT_BONUS_CONFIG = { threshold_hours: 7, bonus_amount: 10000 };
@@ -56,10 +56,13 @@ export function CheckOutModal({
   const appSettingsQuery = useAppSettingsQuery(supabase, true);
   const bonusConfig = appSettingsQuery.data?.shift_bonus_config ?? DEFAULT_BONUS_CONFIG;
 
+  const isFixed = employee?.pay_type === "fixed";
+
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [allowance, setAllowance] = useState("0");
   const [allowanceAutoFilled, setAllowanceAutoFilled] = useState(false);
+  const [dailyPay, setDailyPay] = useState("0");
   const [note, setNote] = useState("");
 
   // Reset state when modal opens with a new shift.
@@ -77,6 +80,7 @@ export function CheckOutModal({
       const shouldAutoFill = minutesEst >= bonusConfig.threshold_hours * 60;
       setAllowance(shouldAutoFill ? String(bonusConfig.bonus_amount) : "0");
       setAllowanceAutoFilled(shouldAutoFill);
+      setDailyPay(formatNumber(employee?.default_daily_pay ?? 0));
       setNote("");
     }
   }, [open, shift?.id, bonusConfig.threshold_hours, bonusConfig.bonus_amount]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,11 +92,13 @@ export function CheckOutModal({
     return Math.max(0, Math.round((endMs - startMs) / 60_000));
   }, [startTime, endTime]);
 
-  const basePay = useMemo(() => {
+  const hourlyBasePay = useMemo(() => {
     if (!employee) return 0;
     return Math.round(((minutes / 60) * employee.hourly_rate) / 1000) * 1000;
   }, [minutes, employee]);
 
+  const dailyPayAmount = moneyFromInput(dailyPay);
+  const basePay = isFixed ? dailyPayAmount : hourlyBasePay;
   const allowanceAmount = moneyFromInput(allowance);
   const totalPay = basePay + allowanceAmount;
   const invalidTime = Boolean(
@@ -117,6 +123,7 @@ export function CheckOutModal({
         check_out_at: fromDatetimeLocal(endTime) ?? "",
         allowance_amount: allowanceAmount,
         note: note.trim(),
+        ...(isFixed ? { override_pay: dailyPayAmount } : {}),
       });
       toast({ semantic: "success", message: "Đã ra ca và lưu lương theo lượt." });
       onOpenChange(false);
@@ -133,7 +140,9 @@ export function CheckOutModal({
       <ModalContent>
         <ModalTitle>{employee.name}</ModalTitle>
         <ModalDescription>
-          Xác nhận ra ca · {formatVND(employee.hourly_rate)}/giờ
+          {isFixed
+            ? "Xác nhận ra ca · Lương ngày"
+            : `Xác nhận ra ca · ${formatVND(employee.hourly_rate)}/giờ`}
         </ModalDescription>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -157,27 +166,37 @@ export function CheckOutModal({
               Giờ ra không được nhỏ hơn giờ vào.
             </AlertBanner>
           )}
-          {/* 3-metric mini-grid */}
-          <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-surface-muted p-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Tổng giờ</p>
-              <strong className="block font-display text-base text-ink">
-                {durationLabel(minutes)}
-              </strong>
+          {isFixed ? (
+            <TextField
+              label="Lương ngày"
+              value={dailyPay}
+              onChange={(e) => setDailyPay(e.target.value)}
+              inputMode="numeric"
+              disabled={isBusy}
+            />
+          ) : (
+            /* 3-metric mini-grid */
+            <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-surface-muted p-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Tổng giờ</p>
+                <strong className="block font-display text-base text-ink">
+                  {durationLabel(minutes)}
+                </strong>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Lương giờ</p>
+                <strong className="block font-display text-base text-ink">
+                  {formatVND(basePay)}
+                </strong>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Thực nhận</p>
+                <strong className="block font-display text-base text-ink">
+                  {formatVND(totalPay)}
+                </strong>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Lương giờ</p>
-              <strong className="block font-display text-base text-ink">
-                {formatVND(basePay)}
-              </strong>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Thực nhận</p>
-              <strong className="block font-display text-base text-ink">
-                {formatVND(totalPay)}
-              </strong>
-            </div>
-          </div>
+          )}
           {/* Payout hero — visually prominent */}
           <div className="rounded-lg bg-mint p-4 text-mint-ink">
             <p className="text-xs uppercase tracking-wide opacity-80">

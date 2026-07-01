@@ -12,6 +12,7 @@ export const limits = {
   amount: { min: 0, max: 1_000_000_000 },
   unitPrice: { min: 0, max: 1_000_000_000 },
   hourlyRate: { min: 0, max: 10_000_000 },
+  dailyPay: { min: 0, max: 100_000_000 },
   basePay: { min: 0, max: 1_000_000_000 },
   totalPay: { min: 0, max: 1_000_000_000 },
   denomCount: { min: 0, max: 10000 },
@@ -59,13 +60,21 @@ export function validateExpense(input: ExpenseInput): ValidationResult {
 export type EmployeeInput = {
   name: string;
   hourly_rate: number;
+  pay_type: "hourly" | "fixed";
+  default_daily_pay: number | null;
 };
 
 export function validateEmployee(input: EmployeeInput): ValidationResult {
   if (!input.name?.trim()) return fail("name", "Tên nhân viên không được để trống.");
   if (input.name.length > 200) return fail("name", "Tên nhân viên tối đa 200 ký tự.");
-  if (!inRange(input.hourly_rate, limits.hourlyRate))
-    return fail("hourly_rate", `Lương theo giờ phải từ ${limits.hourlyRate.min} đến ${limits.hourlyRate.max}.`);
+  if (input.pay_type !== "hourly" && input.pay_type !== "fixed")
+    return fail("pay_type", "Loại lương không hợp lệ.");
+  if (input.pay_type === "hourly") {
+    if (!inRange(input.hourly_rate, limits.hourlyRate))
+      return fail("hourly_rate", `Lương theo giờ phải từ ${limits.hourlyRate.min} đến ${limits.hourlyRate.max}.`);
+  }
+  if (input.default_daily_pay != null && !inRange(input.default_daily_pay, limits.dailyPay))
+    return fail("default_daily_pay", `Lương ngày phải từ ${limits.dailyPay.min} đến ${limits.dailyPay.max}.`);
   return ok();
 }
 
@@ -75,6 +84,9 @@ export type PayrollEditInput = {
   check_out_at: string | null;
   allowance_amount: number;
   note?: string;
+  pay_type?: "hourly" | "fixed";
+  /** "Lương ngày" NV fixed — validated against limits.dailyPay khi pay_type='fixed'. */
+  override_pay?: number | null;
 };
 
 export function validatePayrollEdit(input: PayrollEditInput): ValidationResult {
@@ -82,6 +94,8 @@ export function validatePayrollEdit(input: PayrollEditInput): ValidationResult {
   if (!input.check_out_at) return fail("check_out_at", "Cần giờ ra.");
   if (new Date(input.check_out_at).getTime() < new Date(input.check_in_at).getTime())
     return fail("check_out_at", "Giờ ra không được nhỏ hơn giờ vào.");
+  if (input.pay_type === "fixed" && input.override_pay != null && !inRange(input.override_pay, limits.dailyPay))
+    return fail("override_pay", `Lương ngày phải từ ${limits.dailyPay.min} đến ${limits.dailyPay.max}.`);
   if (!inRange(input.allowance_amount, limits.amount))
     return fail("allowance_amount", `Bồi dưỡng phải từ ${limits.amount.min} đến ${limits.amount.max}.`);
   if ((input.note?.length ?? 0) > limits.note) return fail("note", `Ghi chú tối đa ${limits.note} ký tự.`);

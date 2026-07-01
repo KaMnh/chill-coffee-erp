@@ -12,6 +12,8 @@ export interface ActiveShiftInput {
   check_in_at: string;
   /** Đơn giá giờ của nhân viên (VND). */
   hourly_rate: number;
+  /** Loại lương; 'fixed' KHÔNG tích lũy real-time (chỉ vào total_pay sau khi ra ca). */
+  pay_type?: "hourly" | "fixed";
 }
 
 export interface ShiftBonusConfig {
@@ -57,6 +59,7 @@ export function computeLiveLaborCost({
   // `?? []` phòng payload RPC thiếu active_shifts (deploy FE trước migration) —
   // tránh "activeShifts is not iterable" làm vỡ DashboardView.
   for (const shift of activeShifts ?? []) {
+    if (shift.pay_type === "fixed") continue; // NV cố định: 0 khi ca đang mở
     const checkInMs = new Date(shift.check_in_at).getTime();
     // clamp ≥ 0 để check-in tương lai không tạo accrual âm
     const minutes = Math.max(0, Math.floor((nowMs - checkInMs) / 60_000));

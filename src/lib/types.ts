@@ -91,6 +91,8 @@ export type Employee = {
   name: string;
   position: string | null;
   hourly_rate: number;
+  pay_type: "hourly" | "fixed";
+  default_daily_pay: number | null; // VND, gợi ý prefill cho NV fixed
   is_active: boolean;
 };
 
@@ -123,6 +125,10 @@ export type OpenShift = {
   position: string | null;
   /** false = NV đã ngừng (is_active=false) → vẫn hiện trong bảng ca đang mở. */
   employee_is_active: boolean | null;
+  /** Loại lương NV (snapshot đóng ca). NV fixed → hiển thị "Lương ngày" thay giờ×rate. */
+  pay_type: "hourly" | "fixed";
+  /** Lương ngày mặc định NV fixed (VND); null cho hourly. */
+  default_daily_pay: number | null;
 };
 
 export type PayrollRecord = {
@@ -137,6 +143,8 @@ export type PayrollRecord = {
   base_pay: number;
   allowance_amount: number;
   total_pay: number;
+  pay_type: "hourly" | "fixed"; // snapshot lúc ra ca
+  override_pay: number | null; // "Lương ngày" NV fixed (null cho hourly)
   note: string | null;
   created_at: string;
   edited_at?: string | null;

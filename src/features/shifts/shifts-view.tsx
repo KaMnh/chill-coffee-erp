@@ -165,6 +165,8 @@ export function ShiftsView({ businessDate, role }: ShiftsViewProps) {
                   check_in_at: s.check_in_at,
                   employee_name: s.employee_name ?? null,
                   employee_is_active: s.employee_is_active,
+                  pay_type: s.pay_type,
+                  default_daily_pay: s.default_daily_pay,
                 })
               }
             />

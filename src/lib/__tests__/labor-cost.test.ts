@@ -81,4 +81,18 @@ describe("computeLiveLaborCost", () => {
     });
     expect(result).toBe(168_000); // 100.000 + 30.000 + 38.000
   });
+
+  it("fixed NV (pay_type='fixed') → KHÔNG accrual khi ca đang mở", () => {
+    expect(
+      computeLiveLaborCost({
+        finalizedTotal: 100_000,
+        activeShifts: [
+          { check_in_at: checkInMinutesAgo(180), hourly_rate: 30_000, pay_type: "fixed" },
+          { check_in_at: checkInMinutesAgo(60), hourly_rate: 25_000, pay_type: "hourly" },
+        ],
+        now: NOW,
+        bonusConfig: BONUS,
+      })
+    ).toBe(100_000 + Math.round((1 * 25_000) / 1000) * 1000); // chỉ hourly NV accrue
+  });
 });

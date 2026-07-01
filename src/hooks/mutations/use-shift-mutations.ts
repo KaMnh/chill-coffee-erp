@@ -62,6 +62,7 @@ export interface CheckOutInput {
   check_out_at: string;
   allowance_amount: number;
   note: string;
+  override_pay?: number; // set for fixed NV; undefined for hourly
 }
 
 export function useCheckOut(
@@ -90,6 +91,7 @@ export interface UpdatePayrollInput {
   check_out_at: string;
   allowance_amount: number;
   note: string;
+  override_pay?: number; // set for fixed NV
 }
 
 export function useUpdatePayrollRecord(
@@ -115,6 +117,8 @@ export interface UpsertEmployeeInput {
   name: string;
   position: string;
   hourly_rate: number;
+  pay_type: "hourly" | "fixed";
+  default_daily_pay: number | null;
   is_active: boolean;
 }
 
@@ -129,6 +133,8 @@ export function useUpsertEmployee(supabase: SupabaseClient | null) {
         name: input.name,
         position: input.position,
         hourly_rate: input.hourly_rate,
+        pay_type: input.pay_type,
+        default_daily_pay: input.default_daily_pay,
         is_active: input.is_active,
       };
       if (input.id) {

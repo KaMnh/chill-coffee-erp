@@ -67,6 +67,8 @@ export function EmployeeFormModal({
     const validation = validateEmployee({
       name,
       hourly_rate: moneyFromInput(hourlyRate),
+      pay_type: "hourly",
+      default_daily_pay: null,
     });
     if (!validation.ok) {
       setFieldError({ field: validation.field, message: validation.message });
@@ -80,6 +82,8 @@ export function EmployeeFormModal({
         name: name.trim(),
         position: position.trim(),
         hourly_rate: moneyFromInput(hourlyRate),
+        pay_type: "hourly",
+        default_daily_pay: null,
         is_active: isActive,
       });
       toast({

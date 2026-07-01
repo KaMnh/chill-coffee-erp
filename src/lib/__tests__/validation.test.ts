@@ -59,19 +59,69 @@ describe("validateExpense", () => {
 
 describe("validateEmployee", () => {
   it("accepts valid input", () => {
-    expect(validateEmployee({ name: "Khoa", hourly_rate: 50_000 })).toEqual({ ok: true });
+    expect(
+      validateEmployee({ name: "Khoa", hourly_rate: 50_000, pay_type: "hourly", default_daily_pay: null })
+    ).toEqual({ ok: true });
   });
 
   it("rejects empty name with field=name", () => {
-    const result = validateEmployee({ name: "  ", hourly_rate: 50_000 });
+    const result = validateEmployee({ name: "  ", hourly_rate: 50_000, pay_type: "hourly", default_daily_pay: null });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.field).toBe("name");
   });
 
   it("rejects hourly_rate exceeding 10M", () => {
-    const result = validateEmployee({ name: "Khoa", hourly_rate: 10_000_001 });
+    const result = validateEmployee({ name: "Khoa", hourly_rate: 10_000_001, pay_type: "hourly", default_daily_pay: null });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.field).toBe("hourly_rate");
+  });
+});
+
+describe("validateEmployee fixed pay", () => {
+  it("fixed với default_daily_pay hợp lệ → ok", () => {
+    expect(
+      validateEmployee({ name: "A", hourly_rate: 0, pay_type: "fixed", default_daily_pay: 250_000 }).ok
+    ).toBe(true);
+  });
+
+  it("fixed với default_daily_pay âm → fail (field=default_daily_pay)", () => {
+    const result = validateEmployee({ name: "A", hourly_rate: 0, pay_type: "fixed", default_daily_pay: -1 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.field).toBe("default_daily_pay");
+  });
+
+  it("fixed với default_daily_pay vượt max → fail", () => {
+    const result = validateEmployee({
+      name: "A",
+      hourly_rate: 0,
+      pay_type: "fixed",
+      default_daily_pay: limits.dailyPay.max + 1,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.field).toBe("default_daily_pay");
+  });
+
+  it("hourly không cần default_daily_pay → ok", () => {
+    expect(
+      validateEmployee({ name: "A", hourly_rate: 30_000, pay_type: "hourly", default_daily_pay: null }).ok
+    ).toBe(true);
+  });
+
+  it("fixed KHÔNG kiểm hourly_rate (rate = 0 vẫn ok)", () => {
+    expect(
+      validateEmployee({ name: "A", hourly_rate: 0, pay_type: "fixed", default_daily_pay: 200_000 }).ok
+    ).toBe(true);
+  });
+
+  it("pay_type lạ → fail (field=pay_type)", () => {
+    const result = validateEmployee({
+      name: "A",
+      hourly_rate: 30_000,
+      pay_type: "bogus" as unknown as "hourly",
+      default_daily_pay: null,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.field).toBe("pay_type");
   });
 });
 
@@ -107,6 +157,34 @@ describe("validatePayrollEdit", () => {
     const result = validatePayrollEdit({ ...valid, note: "x".repeat(1001) });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.field).toBe("note");
+  });
+
+  it("fixed: override_pay hợp lệ → ok", () => {
+    expect(
+      validatePayrollEdit({ ...valid, pay_type: "fixed", override_pay: 280_000 }).ok
+    ).toBe(true);
+  });
+
+  it("fixed: override_pay âm → fail (field=override_pay)", () => {
+    const result = validatePayrollEdit({ ...valid, pay_type: "fixed", override_pay: -1 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.field).toBe("override_pay");
+  });
+
+  it("fixed: override_pay vượt max → fail", () => {
+    const result = validatePayrollEdit({
+      ...valid,
+      pay_type: "fixed",
+      override_pay: limits.dailyPay.max + 1,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.field).toBe("override_pay");
+  });
+
+  it("hourly: override_pay bị bỏ qua (không kiểm) → ok", () => {
+    expect(
+      validatePayrollEdit({ ...valid, pay_type: "hourly", override_pay: -999 }).ok
+    ).toBe(true);
   });
 });
 

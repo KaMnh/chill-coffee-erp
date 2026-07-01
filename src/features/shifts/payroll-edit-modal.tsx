@@ -47,9 +47,12 @@ export function PayrollEditModal({
   // payroll record has business_date field; same as the day being edited.
   const updateM = useUpdatePayrollRecord(supabase, payroll?.business_date ?? "");
 
+  const isFixed = payroll?.pay_type === "fixed";
+
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [allowance, setAllowance] = useState("0");
+  const [overridePay, setOverridePay] = useState("0");
   const [note, setNote] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -59,6 +62,7 @@ export function PayrollEditModal({
       setStartTime(toDatetimeLocal(payroll.check_in_at));
       setEndTime(toDatetimeLocal(payroll.check_out_at));
       setAllowance(formatNumber(payroll.allowance_amount));
+      setOverridePay(formatNumber(payroll.override_pay ?? 0));
       setNote(payroll.note ?? "");
       setFieldError(null);
     }
@@ -71,10 +75,14 @@ export function PayrollEditModal({
     return Math.max(0, Math.round((endMs - startMs) / 60_000));
   }, [startTime, endTime]);
 
+  const overridePayAmount = moneyFromInput(overridePay);
+
   const basePay = useMemo(() => {
     if (!payroll) return 0;
+    // Fixed NV: "Lương ngày" thay cho giờ×rate (bỏ qua total_minutes).
+    if (payroll.pay_type === "fixed") return overridePayAmount;
     return Math.round(((minutes / 60) * payroll.hourly_rate) / 1000) * 1000;
-  }, [minutes, payroll]);
+  }, [minutes, payroll, overridePayAmount]);
 
   const allowanceAmount = moneyFromInput(allowance);
   const totalPay = basePay + allowanceAmount;
@@ -96,6 +104,8 @@ export function PayrollEditModal({
       check_out_at: fromDatetimeLocal(endTime),
       allowance_amount: allowanceAmount,
       note,
+      pay_type: payroll.pay_type,
+      override_pay: isFixed ? overridePayAmount : undefined,
     });
     if (!validation.ok) {
       setFieldError(validation.message);
@@ -110,6 +120,8 @@ export function PayrollEditModal({
         check_out_at: fromDatetimeLocal(endTime) ?? "",
         allowance_amount: allowanceAmount,
         note: note.trim(),
+        // Fixed NV: gửi "Lương ngày" đã sửa; hourly bỏ qua override_pay.
+        ...(isFixed ? { override_pay: overridePayAmount } : {}),
       });
       toast({ semantic: "success", message: "Đã cập nhật lượt lương đã chốt." });
       onOpenChange(false);
@@ -148,26 +160,37 @@ export function PayrollEditModal({
               Giờ ra không được nhỏ hơn giờ vào.
             </AlertBanner>
           )}
-          <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-surface-muted p-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Tổng giờ</p>
-              <strong className="block font-display text-base text-ink">
-                {durationLabel(minutes)}
-              </strong>
+          {isFixed ? (
+            <TextField
+              label="Lương ngày"
+              value={overridePay}
+              onChange={(e) => setOverridePay(e.target.value)}
+              inputMode="numeric"
+              disabled={isBusy}
+              helper="Lương cố định theo lượt — thay cho giờ × đơn giá."
+            />
+          ) : (
+            <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-surface-muted p-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Tổng giờ</p>
+                <strong className="block font-display text-base text-ink">
+                  {durationLabel(minutes)}
+                </strong>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Lương giờ</p>
+                <strong className="block font-display text-base text-ink">
+                  {formatVND(basePay)}
+                </strong>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">Thực nhận</p>
+                <strong className="block font-display text-base text-ink">
+                  {formatVND(totalPay)}
+                </strong>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Lương giờ</p>
-              <strong className="block font-display text-base text-ink">
-                {formatVND(basePay)}
-              </strong>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted">Thực nhận</p>
-              <strong className="block font-display text-base text-ink">
-                {formatVND(totalPay)}
-              </strong>
-            </div>
-          </div>
+          )}
           <div className="rounded-lg bg-mint p-4 text-mint-ink">
             <p className="text-xs uppercase tracking-wide opacity-80">
               Tổng thực nhận sau chỉnh sửa

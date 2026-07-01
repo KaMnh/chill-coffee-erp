@@ -17,6 +17,10 @@ export interface OpenShiftRow {
   // lẫn OpenShift (luôn set). Render null-default "NV đã ngừng".
   employee_name?: string | null;
   employee_is_active?: boolean | null;
+  // Truyền qua CloseShiftTarget để modal hiển thị "Lương ngày" cho NV fixed.
+  // OpenShift luôn set; ShiftAssignment (cash-view) không có → optional.
+  pay_type?: "hourly" | "fixed";
+  default_daily_pay?: number | null;
 }
 
 function elapsedMinutes(checkIn: string | null): number | null {

@@ -25,6 +25,10 @@ export interface CloseShiftTarget {
   check_in_at: string | null;
   employee_name: string | null;
   employee_is_active?: boolean | null;
+  /** Loại lương NV (snapshot đóng ca). NV fixed → hiển thị "Lương ngày" thay giờ×rate. */
+  pay_type?: "hourly" | "fixed";
+  /** Lương ngày mặc định NV fixed (VND); null cho hourly. */
+  default_daily_pay?: number | null;
 }
 
 interface CloseShiftModalProps {
@@ -40,6 +44,8 @@ export function CloseShiftModal({ open, onOpenChange, shift, role, onClosed }: C
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isOwner = role === "owner";
+  // NV lương cố định: hiển thị "Lương ngày" read-only thay ước tính giờ×rate.
+  const isFixed = shift?.pay_type === "fixed";
   const [mode, setMode] = useState<"cancel" | "pay">("cancel");
   const [reason, setReason] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -130,7 +136,17 @@ export function CloseShiftModal({ open, onOpenChange, shift, role, onClosed }: C
               onChange={() => setMode("pay")} aria-label="Trả lương theo giờ" />
             <span><strong>Trả lương theo giờ</strong> — {isOwner ? "chọn giờ ra (mặc định bây giờ)." : "đóng ở giờ hiện tại, làm tròn 15'."}</span>
           </label>
-          {mode === "pay" && isOwner && (
+          {mode === "pay" && isFixed && (
+            <div className="rounded-md border border-border bg-surface-muted p-3 text-sm">
+              <p className="font-medium text-ink">
+                Lương ngày (cố định): {formatVND(shift.default_daily_pay ?? 0)}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                NV lương cố định — trả theo lương ngày, không tính giờ×đơn giá. Có thể điều chỉnh số tiền sau qua phiếu lương.
+              </p>
+            </div>
+          )}
+          {mode === "pay" && isOwner && !isFixed && (
             <div className="space-y-2">
               <TextField type="datetime-local" label="Giờ ra" value={endTime}
                 onChange={(e) => setEndTime(e.target.value)} disabled={isBusy} />

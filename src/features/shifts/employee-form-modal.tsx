@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, Radio } from "@/components/ui/radio";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useToast } from "@/components/ui/toast";
 import { useSupabase } from "@/hooks/use-supabase";
@@ -49,6 +50,8 @@ export function EmployeeFormModal({
   const [name, setName] = useState("");
   const [position, setPosition] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
+  const [payType, setPayType] = useState<"hourly" | "fixed">("hourly");
+  const [defaultDailyPay, setDefaultDailyPay] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
@@ -58,17 +61,30 @@ export function EmployeeFormModal({
     setName(employee?.name ?? "");
     setPosition(employee?.position ?? "");
     setHourlyRate(employee?.hourly_rate ? formatNumber(employee.hourly_rate) : "");
+    setPayType(employee?.pay_type ?? "hourly");
+    setDefaultDailyPay(
+      employee?.default_daily_pay != null ? formatNumber(employee.default_daily_pay) : ""
+    );
     setIsActive(employee?.is_active ?? true);
     setFieldError(null);
   }, [employee, open]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const isFixed = payType === "fixed";
+    // Fixed NV: pay comes from default_daily_pay; hourly_rate irrelevant (0).
+    // Hourly NV: default_daily_pay must be null (not a fixed employee).
+    const hourlyRateValue = isFixed ? 0 : moneyFromInput(hourlyRate);
+    const dailyPayValue = isFixed
+      ? defaultDailyPay.trim()
+        ? moneyFromInput(defaultDailyPay)
+        : null
+      : null;
     const validation = validateEmployee({
       name,
-      hourly_rate: moneyFromInput(hourlyRate),
-      pay_type: "hourly",
-      default_daily_pay: null,
+      hourly_rate: hourlyRateValue,
+      pay_type: payType,
+      default_daily_pay: dailyPayValue,
     });
     if (!validation.ok) {
       setFieldError({ field: validation.field, message: validation.message });
@@ -81,9 +97,9 @@ export function EmployeeFormModal({
         id: employee?.id,
         name: name.trim(),
         position: position.trim(),
-        hourly_rate: moneyFromInput(hourlyRate),
-        pay_type: "hourly",
-        default_daily_pay: null,
+        hourly_rate: hourlyRateValue,
+        pay_type: payType,
+        default_daily_pay: dailyPayValue,
         is_active: isActive,
       });
       toast({
@@ -130,14 +146,37 @@ export function EmployeeFormModal({
             placeholder="Ví dụ: Thu ngân"
             disabled={isBusy}
           />
-          <TextField
-            label="Lương theo giờ"
-            value={hourlyRate}
-            onChange={(e) => setHourlyRate(e.target.value)}
-            inputMode="numeric"
-            placeholder="26000"
-            disabled={isBusy}
-          />
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-ink-2">Loại lương</span>
+            <RadioGroup
+              className="flex-row gap-6"
+              value={payType}
+              onValueChange={(v) => setPayType(v === "fixed" ? "fixed" : "hourly")}
+            >
+              <Radio value="hourly" label="Theo giờ" disabled={isBusy} />
+              <Radio value="fixed" label="Cố định" disabled={isBusy} />
+            </RadioGroup>
+          </div>
+          {payType === "hourly" ? (
+            <TextField
+              label="Lương theo giờ"
+              value={hourlyRate}
+              onChange={(e) => setHourlyRate(e.target.value)}
+              inputMode="numeric"
+              placeholder="26000"
+              disabled={isBusy}
+            />
+          ) : (
+            <TextField
+              label="Lương ngày mặc định"
+              value={defaultDailyPay}
+              onChange={(e) => setDefaultDailyPay(e.target.value)}
+              inputMode="numeric"
+              placeholder="250000"
+              helper="Gợi ý prefill khi ra ca. Có thể chỉnh từng lượt lúc chốt lương."
+              disabled={isBusy}
+            />
+          )}
           {isEditMode && (
             <Checkbox
               label="Đang hoạt động"

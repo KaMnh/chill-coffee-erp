@@ -591,6 +591,13 @@ declare
   v_payroll_id uuid;
 begin
   if not public.app_is_owner() then raise exception 'Chỉ chủ quán được ra ca hộ. Nhân viên tự ra ca ở màn Chấm công.'; end if;
+
+  -- Serialize ghi lương/két vs finalize_cash_close_report theo business_date (advisory
+  -- xact lock, giữ tới commit). #64 đã khóa finalize/edit/check_in; bổ sung lock cho
+  -- đường ra-ca-hộ — guard final-close đã có (từ #63) nhưng THIẾU lock → vẫn race
+  -- check-then-write. Cùng key 'cash_close:<date>' với finalize.
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_date::text));
+
   if exists (select 1 from public.cash_close_reports
              where business_date = v_date and report_status = 'final') then
     raise exception 'Ngày % đã chốt két (final) — không thể đóng ca. Hủy báo cáo trước.', v_date;
@@ -859,6 +866,11 @@ begin
   if not found then
     raise exception 'Không tìm thấy cash_count % để sửa.', v_id;
   end if;
+
+  -- Serialize vs finalize_cash_close_report theo business_date (xem check_out_employee).
+  -- cash_counts là input GỐC finalize đọc bằng plain SELECT (FOR UPDATE ở trên KHÔNG
+  -- chặn finalize) → cần advisory lock chung mới serialize sửa-count vs chốt két.
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_count.business_date::text));
 
   -- Reject nếu shift_close có report final
   if v_count.count_type = 'shift_close' and exists (
@@ -2687,6 +2699,18 @@ declare
 begin
   if v_role not in ('owner','manager') then
     raise exception 'Bạn không có quyền nhập tiền đầu ngày.';
+  end if;
+
+  -- Serialize vs finalize_cash_close_report theo business_date (xem check_out_employee).
+  -- opening_cash KHÔNG time-bound trong compute_cash_theory → lock một mình KHÔNG đủ,
+  -- cần thêm GUARD chặn sửa sau khi đã chốt. #64 chưa đụng tới đường này (thiếu cả
+  -- lock lẫn guard). Lock cash_close TRƯỚC safe_fund:cash bên dưới (giữ thứ tự, tránh deadlock).
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_date::text));
+  if exists (
+    select 1 from public.cash_close_reports
+    where business_date = v_date and report_status = 'final'
+  ) then
+    raise exception 'Ngày % đã chốt két (final). Hủy báo cáo (qua flow void) trước khi sửa tiền đầu ngày.', v_date;
   end if;
 
   perform 1
@@ -4737,6 +4761,10 @@ begin
     from public.employee_accounts ea join public.employees e on e.id = ea.employee_id
     where ea.auth_user_id = p_auth_user_id and ea.status = 'active' limit 1;
   if v_employee is null then raise exception 'Tài khoản chưa gắn nhân viên.'; end if;
+
+  -- Serialize vs finalize_cash_close_report theo business_date (xem check_out_employee):
+  -- guard final-close đã có nhưng thiếu lock → bổ sung lock cho đường tự-ra-ca.
+  perform pg_advisory_xact_lock(hashtext('cash_close:' || v_date::text));
 
   -- (Codex finding #1) Chặn tự ra ca khi ngày đã chốt két final — tránh lệch
   -- snapshot lương trong cash_close_reports (đồng bộ guard ở edit_shift_payroll_record).

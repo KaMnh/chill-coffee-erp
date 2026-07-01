@@ -17,7 +17,7 @@ import { useSupabase } from "@/hooks/use-supabase";
 import { useCheckOut } from "@/hooks/mutations/use-shift-mutations";
 import { useAppSettingsQuery } from "@/hooks/queries";
 import { fromDatetimeLocal, toDatetimeLocal } from "@/lib/datetime";
-import { durationLabel, formatVND, moneyFromInput } from "@/lib/format";
+import { durationLabel, formatNumber, formatVND, moneyFromInput } from "@/lib/format";
 import type { Employee, ShiftAssignment } from "@/lib/types";
 
 const DEFAULT_BONUS_CONFIG = { threshold_hours: 7, bonus_amount: 10000 };
@@ -80,7 +80,7 @@ export function CheckOutModal({
       const shouldAutoFill = minutesEst >= bonusConfig.threshold_hours * 60;
       setAllowance(shouldAutoFill ? String(bonusConfig.bonus_amount) : "0");
       setAllowanceAutoFilled(shouldAutoFill);
-      setDailyPay(String(employee?.default_daily_pay ?? 0));
+      setDailyPay(formatNumber(employee?.default_daily_pay ?? 0));
       setNote("");
     }
   }, [open, shift?.id, bonusConfig.threshold_hours, bonusConfig.bonus_amount]); // eslint-disable-line react-hooks/exhaustive-deps

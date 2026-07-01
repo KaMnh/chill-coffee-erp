@@ -147,8 +147,9 @@ export function EmployeeFormModal({
             disabled={isBusy}
           />
           <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-ink-2">Loại lương</span>
+            <span id="pay-type-label" className="text-xs font-medium text-ink-2">Loại lương</span>
             <RadioGroup
+              aria-labelledby="pay-type-label"
               className="flex-row gap-6"
               value={payType}
               onValueChange={(v) => setPayType(v === "fixed" ? "fixed" : "hourly")}

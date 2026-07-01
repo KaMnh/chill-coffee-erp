@@ -75,9 +75,9 @@ describe("CheckOutModal — fixed vs hourly", () => {
   it("fixed NV: 'Lương ngày' prefilled từ default_daily_pay, total = daily + allowance, payload có override_pay", async () => {
     renderModal(fixedEmployee);
 
-    // "Lương ngày" input prefilled với default_daily_pay = 250000.
+    // "Lương ngày" input prefilled với default_daily_pay = 250000 (định dạng vi-VN).
     const dailyInput = screen.getByLabelText("Lương ngày") as HTMLInputElement;
-    expect(dailyInput.value).toBe("250000");
+    expect(dailyInput.value).toBe("250.000");
 
     // Hourly-only rows KHÔNG hiển thị cho NV fixed.
     expect(screen.queryByText("Tổng giờ")).not.toBeInTheDocument();

@@ -13,13 +13,34 @@
 --       snapshot persists sau khi employee.pay_type đổi,
 --       old/pre-migration row default 'hourly'.
 begin;
-select plan(26);
+select plan(27);
 
 -- ===== Schema idempotency (has_column) =====
 select has_column('public', 'employees', 'pay_type', 'employees.pay_type exists');
 select has_column('public', 'employees', 'default_daily_pay', 'employees.default_daily_pay exists');
 select has_column('public', 'shift_payroll_records', 'pay_type', 'shift_payroll_records.pay_type exists');
 select has_column('public', 'shift_payroll_records', 'override_pay', 'shift_payroll_records.override_pay exists');
+
+-- ===== Idempotency: re-applying the migration DDL is a no-op (double-apply safe) =====
+-- Wrapped in ONE do-block so lives_ok executes a single statement. All the
+-- add-column-if-not-exists + guarded constraint re-adds must be no-ops the
+-- second time (columns/constraints already present from the migration).
+select lives_ok($$
+  do $do$
+  begin
+    alter table public.employees add column if not exists pay_type text not null default 'hourly';
+    alter table public.employees add column if not exists default_daily_pay numeric(14,2);
+    alter table public.shift_payroll_records add column if not exists pay_type text not null default 'hourly';
+    alter table public.shift_payroll_records add column if not exists override_pay numeric(14,2);
+    if not exists (select 1 from pg_constraint where conname = 'employees_pay_type_check') then
+      alter table public.employees add constraint employees_pay_type_check check (pay_type in ('hourly','fixed'));
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'payroll_override_pay_check') then
+      alter table public.shift_payroll_records add constraint payroll_override_pay_check check (override_pay is null or (override_pay >= 0 and override_pay <= 100000000));
+    end if;
+  end
+  $do$
+$$, 'migration DDL re-apply is idempotent (add column if not exists + guarded constraints)');
 
 -- ===== Shared fixture: owner + manager + one fixed NV + one hourly NV =====
 create or replace function pg_temp.act_as(p_user_id uuid)

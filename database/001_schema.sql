@@ -190,6 +190,12 @@ alter table public.shift_assignments add column if not exists check_in_user_agen
 alter table public.shift_assignments add column if not exists check_out_ip inet;
 alter table public.shift_assignments add column if not exists check_out_user_agent text;
 
+-- Fixed (per-day) pay type (2026-06-29): NV lương "cố định" trả theo ngày thay vì giờ×rate.
+alter table public.employees add column if not exists pay_type text not null default 'hourly';
+alter table public.employees add column if not exists default_daily_pay numeric(14,2);
+alter table public.shift_payroll_records add column if not exists pay_type text not null default 'hourly';
+alter table public.shift_payroll_records add column if not exists override_pay numeric(14,2);
+
 -- (c) FAIL-FAST preflight + partial unique index trên ca đang mở.
 do $$
 declare v_dupe int;
@@ -774,6 +780,22 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'cash_opening_total_check') then
     alter table public.cash_day_openings add constraint cash_opening_total_check
       check (opening_total >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'employees_pay_type_check') then
+    alter table public.employees add constraint employees_pay_type_check
+      check (pay_type in ('hourly','fixed'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'employees_default_daily_pay_check') then
+    alter table public.employees add constraint employees_default_daily_pay_check
+      check (default_daily_pay is null or (default_daily_pay >= 0 and default_daily_pay <= 100000000));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'payroll_pay_type_check') then
+    alter table public.shift_payroll_records add constraint payroll_pay_type_check
+      check (pay_type in ('hourly','fixed'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'payroll_override_pay_check') then
+    alter table public.shift_payroll_records add constraint payroll_override_pay_check
+      check (override_pay is null or (override_pay >= 0 and override_pay <= 100000000));
   end if;
 end $$;
 
